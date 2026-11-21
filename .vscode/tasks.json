@@ -1,0 +1,21 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Frontend: Vite",
+      "type": "shell",
+      "command": "npm run dev",
+      "options": {"cwd": "${workspaceFolder}/apps/web"},
+      "isBackground": true,
+      "problemMatcher": []
+    },
+    {
+      "label": "Backend: FastAPI",
+      "type": "shell",
+      "command": "uvicorn app.main:app --reload --port 8000",
+      "options": {"cwd": "${workspaceFolder}/apps/api"},
+      "isBackground": true,
+      "problemMatcher": []
+    }
+  ]
+}

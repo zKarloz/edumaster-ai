@@ -1,0 +1,1158 @@
+--- a/apps/api/app/main.py
++++ b/apps/api/app/main.py
+@@ -7,6 +7,7 @@
+ from app.routers.organizations import router as organizations_router
+ from app.routers.academic import router as academic_router
+ from app.routers.user_administration import router as user_administration_router
++from app.routers.institutional_users import router as institutional_users_router
+ 
+ settings = get_settings()
+ app = FastAPI(title="EduMaster.ai API", version="0.1.0", docs_url="/docs")
+@@ -20,6 +21,7 @@
+ app.include_router(organizations_router)
+ app.include_router(academic_router)
+ app.include_router(user_administration_router)
++app.include_router(institutional_users_router)
+ 
+ 
+ @app.get("/health", tags=["system"])
+--- /dev/null
++++ b/apps/api/app/routers/institutional_users.py
+@@ -0,0 +1,432 @@
++"""Gestión de miembros por el administrador de SU institución.
++
++La identidad existe primero en Supabase Auth. Esta API únicamente asigna roles
++institucionales permitidos; nunca crea contraseñas, privilegios globales ni
++administradores. Todas las mutaciones se validan dentro de una transacción.
++"""
++import logging
++import re
++from uuid import UUID
++
++from fastapi import APIRouter, Depends, HTTPException, status
++from pydantic import BaseModel, ConfigDict, Field, field_validator
++from sqlalchemy import text
++from sqlalchemy.exc import IntegrityError, SQLAlchemyError
++from sqlalchemy.ext.asyncio import AsyncConnection, AsyncEngine
++
++from app.core.database import require_engine
++from app.core.security import authenticated_user_id
++
++router = APIRouter(prefix="/api/v1/institutional/organizations", tags=["institutional-users"])
++logger = logging.getLogger(__name__)
++
++# Roles de alcance institucional delegables. Auditor y administrador institucional
++# quedan reservados a procesos globales; el rol ML no da acceso automático a datos.
++DELEGABLE_ROLES = frozenset({"coordinator", "instructor", "student", "analyst", "ml_engineer"})
++
++
++class MemberAssignment(BaseModel):
++    """Alta de una cuenta existente de Auth, con primer rol institucional."""
++    model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
++    email: str = Field(min_length=5, max_length=254)
++    full_name: str = Field(min_length=3, max_length=180)
++    role: str
++
++    @field_validator("email")
++    @classmethod
++    def normalize_email(cls, value: str) -> str:
++        value = value.lower()
++        if not re.fullmatch(r"[^\s@]+@[^\s@]+\.[^\s@]+", value):
++            raise ValueError("Correo no válido")
++        return value
++
++    @field_validator("role")
++    @classmethod
++    def validate_role(cls, value: str) -> str:
++        if value not in DELEGABLE_ROLES:
++            raise ValueError("El rol solicitado no puede asignarse desde esta institución")
++        return value
++
++
++class RoleAssignment(BaseModel):
++    model_config = ConfigDict(extra="forbid")
++    role: str
++
++    @field_validator("role")
++    @classmethod
++    def validate_role(cls, value: str) -> str:
++        if value not in DELEGABLE_ROLES:
++            raise ValueError("Rol no delegable")
++        return value
++
++
++class MembershipStatus(BaseModel):
++    model_config = ConfigDict(extra="forbid")
++    status: str
++
++    @field_validator("status")
++    @classmethod
++    def validate_status(cls, value: str) -> str:
++        if value not in ("active", "suspended"):
++            raise ValueError("Solo se permite activar o suspender una membresía")
++        return value
++
++
++async def _require_institution_admin(conn: AsyncConnection, auth_id: UUID, organization_id: UUID) -> UUID:
++    """Autorización exclusiva del admin institucional activo de ese tenant."""
++    row = (await conn.execute(text("""
++        SELECT u.id FROM app.users u
++        JOIN app.organization_memberships m ON m.user_id=u.id
++          AND m.organization_id=:organization_id AND m.status='active'
++        JOIN app.organizations o ON o.id=m.organization_id AND o.status='active'
++        JOIN app.membership_roles mr ON mr.membership_id=m.id
++        JOIN app.roles r ON r.id=mr.role_id
++        WHERE u.auth_user_id=:auth_id AND u.status='active'
++          AND r.code='institution_admin' AND r.scope='organization'
++    """), {"auth_id": auth_id, "organization_id": organization_id})).first()
++    if row is None:
++        # No revelar si existe otra institución ni si su usuario es administrador.
++        raise HTTPException(status_code=403, detail="Se requiere administración institucional autorizada")
++    return row[0]
++
++
++async def _lock_organization(conn: AsyncConnection, organization_id: UUID) -> None:
++    """Serializa cambios de membresía realizados por la administración local."""
++    row = (await conn.execute(text("""
++        SELECT id FROM app.organizations WHERE id=:organization_id AND status='active' FOR UPDATE
++    """), {"organization_id": organization_id})).first()
++    if row is None:
++        raise HTTPException(status_code=404, detail="Institución no disponible")
++
++
++async def _member_for_update(conn: AsyncConnection, organization_id: UUID, membership_id: UUID) -> dict:
++    """Bloquea un miembro del tenant e impide tocar administradores o auditores."""
++    member = (await conn.execute(text("""
++        SELECT m.id, m.user_id, m.status, u.status AS user_status,
++               (EXISTS (
++                 SELECT 1 FROM app.membership_roles mr
++                 JOIN app.roles r ON r.id=mr.role_id
++                 WHERE mr.membership_id=m.id AND r.code IN ('institution_admin','auditor')
++               ) OR EXISTS (
++                 SELECT 1 FROM app.global_role_assignments gra
++                 JOIN app.roles gr ON gr.id=gra.role_id
++                 WHERE gra.user_id=u.id AND gr.code='superadmin'
++               )) AS protected
++        FROM app.organization_memberships m
++        JOIN app.users u ON u.id=m.user_id
++        WHERE m.id=:membership_id AND m.organization_id=:organization_id
++        FOR UPDATE OF m
++    """), {"organization_id": organization_id, "membership_id": membership_id})).mappings().first()
++    if not member:
++        raise HTTPException(status_code=404, detail="Miembro no encontrado en esta institución")
++    if member["protected"]:
++        raise HTTPException(status_code=403, detail="Este usuario tiene roles reservados a la administración global")
++    return dict(member)
++
++
++async def _role_id(conn: AsyncConnection, code: str) -> UUID:
++    role_id = (await conn.execute(text("""
++        SELECT id FROM app.roles WHERE scope='organization' AND code=:role
++    """), {"role": code})).scalar_one_or_none()
++    if not role_id:
++        raise HTTPException(status_code=503, detail="El catálogo de roles institucionales no está configurado")
++    return role_id
++
++
++async def _provision_academic_profile(conn: AsyncConnection, organization_id: UUID,
++                                      membership_id: UUID, role: str) -> None:
++    """Permite matricular estudiantes o asignar docentes sin altas duplicadas.
++
++    Se conserva el identificador del perfil si el rol se reasigna más adelante.
++    """
++    if role == "student":
++        await conn.execute(text("""
++            INSERT INTO app.students (organization_id, membership_id, status)
++            VALUES (:organization_id, :membership_id, 'active')
++            ON CONFLICT (organization_id, membership_id)
++            DO UPDATE SET status='active'
++        """), {"organization_id": organization_id, "membership_id": membership_id})
++    elif role == "instructor":
++        await conn.execute(text("""
++            INSERT INTO app.instructors (organization_id, membership_id, status)
++            VALUES (:organization_id, :membership_id, 'active')
++            ON CONFLICT (organization_id, membership_id)
++            DO UPDATE SET status='active'
++        """), {"organization_id": organization_id, "membership_id": membership_id})
++
++
++async def _audit(conn: AsyncConnection, organization_id: UUID, actor: UUID,
++                 membership_id: UUID, action: str, role: str = "") -> None:
++    await conn.execute(text("""
++        INSERT INTO app.audit_logs (organization_id, actor_id, action, resource, resource_id, metadata)
++        VALUES (:organization_id, :actor, :action, 'organization_memberships', :membership_id,
++                jsonb_build_object('role', CAST(:role AS text)))
++    """), {"organization_id": organization_id, "actor": actor,
++            "membership_id": membership_id, "action": action, "role": role})
++
++
++@router.get("/{organization_id}/members")
++async def list_members(
++    organization_id: UUID,
++    auth_id: UUID = Depends(authenticated_user_id),
++    engine: AsyncEngine = Depends(require_engine),
++) -> dict:
++    """Lista miembros del tenant, con sus roles; no expone usuarios de otros tenants."""
++    try:
++        async with engine.connect() as conn:
++            actor = await _require_institution_admin(conn, auth_id, organization_id)
++            rows = (await conn.execute(text("""
++                SELECT m.id::text AS membership_id, m.organization_id::text AS organization_id,
++                       u.full_name, u.email_normalized AS email, m.status,
++                       (u.id=:actor) AS is_self,
++                       (EXISTS (
++                         SELECT 1 FROM app.global_role_assignments gra
++                         JOIN app.roles gr ON gr.id=gra.role_id
++                         WHERE gra.user_id=u.id AND gr.code='superadmin'
++                       ) OR COALESCE(bool_or(r.code IN ('institution_admin','auditor')),false)) AS is_protected,
++                       COALESCE(array_agg(r.code ORDER BY r.code)
++                           FILTER (WHERE r.code IS NOT NULL), ARRAY[]::text[]) AS roles
++                FROM app.organization_memberships m
++                JOIN app.users u ON u.id=m.user_id
++                LEFT JOIN app.membership_roles mr ON mr.membership_id=m.id
++                LEFT JOIN app.roles r ON r.id=mr.role_id AND r.scope='organization'
++                WHERE m.organization_id=:organization_id
++                GROUP BY m.id, m.organization_id, u.id, u.full_name, u.email_normalized, m.status
++                ORDER BY u.full_name, u.email_normalized
++                LIMIT 500
++            """), {"organization_id": organization_id, "actor": actor})).mappings().all()
++        return {"items": [dict(row) for row in rows]}
++    except SQLAlchemyError as exc:
++        logger.exception("Error listando usuarios de institución")
++        raise HTTPException(status_code=503, detail="No se pudo consultar el directorio institucional") from exc
++
++
++@router.post("/{organization_id}/members", status_code=status.HTTP_201_CREATED)
++async def add_member(
++    organization_id: UUID, payload: MemberAssignment,
++    auth_id: UUID = Depends(authenticated_user_id),
++    engine: AsyncEngine = Depends(require_engine),
++) -> dict:
++    """Asigna primer rol a cuenta Auth confirmada; no reactiva suspendidos."""
++    try:
++        async with engine.begin() as conn:
++            actor = await _require_institution_admin(conn, auth_id, organization_id)
++            await _lock_organization(conn, organization_id)
++            # La revocación global también bloquea la institución: repetir la
++            # autorización bajo el mismo bloqueo evita cambios tras una baja.
++            await _require_institution_admin(conn, auth_id, organization_id)
++            auth_user = (await conn.execute(text("""
++                SELECT id, email_confirmed_at FROM auth.users WHERE lower(email)=:email
++            """), {"email": payload.email})).mappings().first()
++            if not auth_user or auth_user["email_confirmed_at"] is None:
++                raise HTTPException(status_code=422, detail="La cuenta debe existir en Supabase Auth y tener el correo confirmado")
++
++            await conn.execute(text("""
++                INSERT INTO app.users (auth_user_id, email_normalized, full_name)
++                VALUES (:auth_user_id, :email, :full_name)
++                ON CONFLICT (auth_user_id) DO NOTHING
++            """), {"auth_user_id": auth_user["id"], "email": payload.email,
++                    "full_name": payload.full_name})
++            user = (await conn.execute(text("""
++                SELECT id, status FROM app.users WHERE auth_user_id=:auth_user_id
++            """), {"auth_user_id": auth_user["id"]})).mappings().first()
++            if not user or user["status"] != "active":
++                raise HTTPException(status_code=409, detail="Cuenta no activa en EduMaster.ai")
++            if user["id"] == actor:
++                raise HTTPException(status_code=403, detail="No puedes cambiar tus propios roles")
++            # Impide administrar desde una institución una identidad global.
++            global_privilege = (await conn.execute(text("""
++                SELECT EXISTS (
++                    SELECT 1 FROM app.global_role_assignments gra
++                    JOIN app.roles r ON r.id=gra.role_id
++                    WHERE gra.user_id=:user_id AND r.code='superadmin'
++                )
++            """), {"user_id": user["id"]})).scalar_one()
++            if global_privilege:
++                raise HTTPException(status_code=403,
++                    detail="Las cuentas con privilegios globales se gestionan centralmente")
++
++            membership = (await conn.execute(text("""
++                SELECT id, status FROM app.organization_memberships
++                WHERE organization_id=:organization_id AND user_id=:user_id FOR UPDATE
++            """), {"organization_id": organization_id, "user_id": user["id"]})).mappings().first()
++            if membership and membership["status"] != "active":
++                raise HTTPException(status_code=409, detail="La membresía requiere reactivación o revisión antes de asignar roles")
++            if membership:
++                membership_id = membership["id"]
++                # Un administrador no puede alterar miembros con roles globalmente reservados.
++                await _member_for_update(conn, organization_id, membership_id)
++            else:
++                membership_id = (await conn.execute(text("""
++                    INSERT INTO app.organization_memberships
++                        (organization_id, user_id, status, joined_at)
++                    VALUES (:organization_id, :user_id, 'active', now()) RETURNING id
++                """), {"organization_id": organization_id, "user_id": user["id"]})).scalar_one()
++            role_id = await _role_id(conn, payload.role)
++            present = (await conn.execute(text("""
++                SELECT 1 FROM app.membership_roles
++                WHERE membership_id=:membership_id AND role_id=:role_id
++            """), {"membership_id": membership_id, "role_id": role_id})).first()
++            if present:
++                raise HTTPException(status_code=409, detail="La cuenta ya tiene ese rol en la institución")
++            await conn.execute(text("""
++                INSERT INTO app.membership_roles (membership_id, role_id, granted_by)
++                VALUES (:membership_id, :role_id, :actor)
++            """), {"membership_id": membership_id, "role_id": role_id, "actor": actor})
++            await _provision_academic_profile(conn, organization_id, membership_id, payload.role)
++            await _audit(conn, organization_id, actor, membership_id, "grant", payload.role)
++        return {"membership_id": str(membership_id), "message": "Usuario vinculado a la institución"}
++    except IntegrityError as exc:
++        raise HTTPException(status_code=409, detail="Conflicto de datos al registrar el usuario") from exc
++    except SQLAlchemyError as exc:
++        logger.exception("Error asignando usuario institucional")
++        raise HTTPException(status_code=503, detail="No se pudo asignar el usuario") from exc
++
++
++@router.post("/{organization_id}/members/{membership_id}/roles", status_code=200)
++async def grant_member_role(
++    organization_id: UUID, membership_id: UUID, payload: RoleAssignment,
++    auth_id: UUID = Depends(authenticated_user_id),
++    engine: AsyncEngine = Depends(require_engine),
++) -> dict:
++    """Asigna roles adicionales permitidos a un miembro activo de su institución."""
++    try:
++        async with engine.begin() as conn:
++            actor = await _require_institution_admin(conn, auth_id, organization_id)
++            await _lock_organization(conn, organization_id)
++            # La revocación global también bloquea la institución: repetir la
++            # autorización bajo el mismo bloqueo evita cambios tras una baja.
++            await _require_institution_admin(conn, auth_id, organization_id)
++            member = await _member_for_update(conn, organization_id, membership_id)
++            if member["user_id"] == actor:
++                raise HTTPException(status_code=403, detail="No puedes modificar tus propios roles")
++            if member["status"] != "active" or member["user_status"] != "active":
++                raise HTTPException(status_code=409, detail="La membresía o cuenta no está activa")
++            role_id = await _role_id(conn, payload.role)
++            duplicate = (await conn.execute(text("""
++                SELECT 1 FROM app.membership_roles WHERE membership_id=:membership_id AND role_id=:role_id
++            """), {"membership_id": membership_id, "role_id": role_id})).first()
++            if duplicate:
++                raise HTTPException(status_code=409, detail="Este usuario ya tiene el rol seleccionado")
++            await conn.execute(text("""
++                INSERT INTO app.membership_roles (membership_id, role_id, granted_by)
++                VALUES (:membership_id, :role_id, :actor)
++            """), {"membership_id": membership_id, "role_id": role_id, "actor": actor})
++            await _provision_academic_profile(conn, organization_id, membership_id, payload.role)
++            await _audit(conn, organization_id, actor, membership_id, "grant", payload.role)
++        return {"message": "Rol asignado"}
++    except IntegrityError as exc:
++        raise HTTPException(status_code=409, detail="No se pudo asignar el rol por un conflicto de datos") from exc
++    except SQLAlchemyError as exc:
++        logger.exception("Error SQL al asignar rol institucional")
++        raise HTTPException(status_code=503, detail="No se pudo asignar el rol") from exc
++
++
++@router.delete("/{organization_id}/members/{membership_id}/roles/{role}")
++async def remove_member_role(
++    organization_id: UUID, membership_id: UUID, role: str,
++    auth_id: UUID = Depends(authenticated_user_id),
++    engine: AsyncEngine = Depends(require_engine),
++) -> dict:
++    """Revoca un rol sin eliminar la identidad ni las evidencias académicas."""
++    if role not in DELEGABLE_ROLES:
++        raise HTTPException(status_code=422, detail="No se puede revocar ese rol desde esta institución")
++    try:
++        async with engine.begin() as conn:
++            actor = await _require_institution_admin(conn, auth_id, organization_id)
++            await _lock_organization(conn, organization_id)
++            # La revocación global también bloquea la institución: repetir la
++            # autorización bajo el mismo bloqueo evita cambios tras una baja.
++            await _require_institution_admin(conn, auth_id, organization_id)
++            member = await _member_for_update(conn, organization_id, membership_id)
++            if member["user_id"] == actor:
++                raise HTTPException(status_code=403, detail="No puedes modificar tus propios roles")
++            if member["status"] != "active":
++                raise HTTPException(status_code=409, detail="La membresía no está activa")
++            role_id = await _role_id(conn, role)
++            has_role = (await conn.execute(text("""
++                SELECT 1 FROM app.membership_roles WHERE membership_id=:membership_id AND role_id=:role_id
++            """), {"membership_id": membership_id, "role_id": role_id})).first()
++            if not has_role:
++                raise HTTPException(status_code=404, detail="El usuario no tiene ese rol")
++            # Una membresía activa sin roles seguiría apareciendo en /me.
++            # Para retirar el último rol, primero suspender la membresía.
++            other_roles = (await conn.execute(text("""
++                SELECT COUNT(*) FROM app.membership_roles
++                WHERE membership_id=:membership_id AND role_id<>:role_id
++            """), {"membership_id": membership_id, "role_id": role_id})).scalar_one()
++            if other_roles == 0:
++                raise HTTPException(status_code=409,
++                    detail="Para retirar el último rol, suspende la membresía y solicita su baja administrativa")
++            if role == "student":
++                active = (await conn.execute(text("""
++                    SELECT 1 FROM app.enrollments e
++                    JOIN app.students s ON s.id=e.student_id AND s.organization_id=e.organization_id
++                    WHERE s.organization_id=:organization_id AND s.membership_id=:membership_id
++                      AND e.status='active' LIMIT 1
++                """), {"organization_id": organization_id, "membership_id": membership_id})).first()
++                if active:
++                    raise HTTPException(status_code=409, detail="No se puede retirar el rol de estudiante con matrículas activas")
++            if role == "instructor":
++                assigned = (await conn.execute(text("""
++                    SELECT 1 FROM app.course_offerings off
++                    JOIN app.instructors i ON i.id=off.instructor_id AND i.organization_id=off.organization_id
++                    WHERE i.organization_id=:organization_id AND i.membership_id=:membership_id
++                      AND off.status IN ('planned','open') LIMIT 1
++                """), {"organization_id": organization_id, "membership_id": membership_id})).first()
++                if assigned:
++                    raise HTTPException(status_code=409, detail="Reasigna primero las ofertas académicas del docente")
++            await conn.execute(text("""
++                DELETE FROM app.membership_roles WHERE membership_id=:membership_id AND role_id=:role_id
++            """), {"membership_id": membership_id, "role_id": role_id})
++            if role == "student":
++                await conn.execute(text("""
++                    UPDATE app.students SET status='inactive'
++                    WHERE organization_id=:organization_id AND membership_id=:membership_id
++                """), {"organization_id": organization_id, "membership_id": membership_id})
++            elif role == "instructor":
++                await conn.execute(text("""
++                    UPDATE app.instructors SET status='inactive'
++                    WHERE organization_id=:organization_id AND membership_id=:membership_id
++                """), {"organization_id": organization_id, "membership_id": membership_id})
++            await _audit(conn, organization_id, actor, membership_id, "revoke", role)
++        return {"message": "Rol retirado (se conserva la historia académica)"}
++    except SQLAlchemyError as exc:
++        logger.exception("Error SQL al retirar rol institucional")
++        raise HTTPException(status_code=503, detail="No se pudo retirar el rol") from exc
++
++
++@router.patch("/{organization_id}/members/{membership_id}/status")
++async def change_membership_status(
++    organization_id: UUID, membership_id: UUID, payload: MembershipStatus,
++    auth_id: UUID = Depends(authenticated_user_id),
++    engine: AsyncEngine = Depends(require_engine),
++) -> dict:
++    """Suspende o reactiva membresía sin modificar otros tenants ni Auth."""
++    try:
++        async with engine.begin() as conn:
++            actor = await _require_institution_admin(conn, auth_id, organization_id)
++            await _lock_organization(conn, organization_id)
++            # La revocación global también bloquea la institución: repetir la
++            # autorización bajo el mismo bloqueo evita cambios tras una baja.
++            await _require_institution_admin(conn, auth_id, organization_id)
++            member = await _member_for_update(conn, organization_id, membership_id)
++            if member["user_id"] == actor:
++                raise HTTPException(status_code=403, detail="No puedes suspender tu propia membresía")
++            if member["user_status"] != "active":
++                raise HTTPException(status_code=409, detail="Cuenta deshabilitada globalmente")
++            if member["status"] == "revoked" or member["status"] == "invited":
++                raise HTTPException(status_code=409, detail="Esta membresía requiere revisión de la administración global")
++            if member["status"] == payload.status:
++                raise HTTPException(status_code=409, detail="La membresía ya está en ese estado")
++            await conn.execute(text("""
++                UPDATE app.organization_memberships SET status=:status
++                WHERE organization_id=:organization_id AND id=:membership_id
++            """), {"status": payload.status, "organization_id": organization_id,
++                    "membership_id": membership_id})
++            await _audit(conn, organization_id, actor, membership_id,
++                         "suspend" if payload.status == "suspended" else "reactivate")
++        return {"message": "Membresía actualizada"}
++    except SQLAlchemyError as exc:
++        logger.exception("Error SQL cambiando estado de membresía")
++        raise HTTPException(status_code=503, detail="No se pudo actualizar la membresía") from exc
+--- /dev/null
++++ b/apps/api/tests/test_institutional_users.py
+@@ -0,0 +1,309 @@
++"""Regresiones RBAC/ABAC del módulo de miembros institucionales.
++
++No depende de la base de datos real: valida decisiones de autorización, el orden
++antes de escribir y el aislamiento de organización. El E2E se prueba en Supabase.
++"""
++from uuid import UUID
++
++import pytest
++from fastapi.testclient import TestClient
++
++from app.main import app
++from app.core.security import authenticated_user_id
++from app.core.database import require_engine
++
++ACTOR = UUID('11111111-1111-4111-8111-111111111111')
++ORG = UUID('22222222-2222-4222-8222-222222222222')
++OTHER_ORG = UUID('99999999-9999-4999-8999-999999999999')
++MEMBER = UUID('33333333-3333-4333-8333-333333333333')
++ROLE = UUID('44444444-4444-4444-8444-444444444444')
++AUTH = UUID('55555555-5555-4555-8555-555555555555')
++USER = UUID('66666666-6666-4666-8666-666666666666')
++ROOT = f'/api/v1/institutional/organizations/{ORG}/members'
++
++
++class Result:
++    def __init__(self, row=None, rows=None):
++        self.row = row
++        self.rows = rows if rows is not None else []
++
++    def mappings(self):
++        return self
++
++    def first(self):
++        return self.row
++
++    def all(self):
++        return self.rows
++
++    def scalar_one(self):
++        return self.row
++
++    def scalar_one_or_none(self):
++        return self.row
++
++
++class FakeConnection:
++    def __init__(self, *, manager=True, protected=False, member_status='active',
++                 actor_is_target=False, confirmed=True, duplicate=False, other_roles=1,
++                 active_enrollments=False, assigned_offerings=False, user_status='active',
++                 member_exists=True, role_exists=True, org_exists=True, has_role=False, global_privilege=False):
++        self.manager = manager
++        self.protected = protected
++        self.member_status = member_status
++        self.actor_is_target = actor_is_target
++        self.confirmed = confirmed
++        self.duplicate = duplicate
++        self.has_role = has_role
++        self.global_privilege = global_privilege
++        self.other_roles = other_roles
++        self.active_enrollments = active_enrollments
++        self.assigned_offerings = assigned_offerings
++        self.user_status = user_status
++        self.member_exists = member_exists
++        self.role_exists = role_exists
++        self.org_exists = org_exists
++        self.statements = []
++
++    async def execute(self, stmt, params=None):
++        sql = str(stmt)
++        self.statements.append((sql, params))
++        if 'SELECT u.id FROM app.users u' in sql and "r.code='institution_admin'" in sql:
++            return Result((ACTOR,) if self.manager and params['organization_id'] == ORG else None)
++        if 'SELECT id FROM app.organizations' in sql:
++            return Result((ORG,) if self.org_exists else None)
++        if 'SELECT m.id, m.user_id, m.status' in sql:
++            return Result({ 'id': MEMBER, 'user_id': ACTOR if self.actor_is_target else USER,
++                            'status': self.member_status, 'user_status': self.user_status,
++                            'protected': self.protected } if self.member_exists else None)
++        if 'FROM auth.users WHERE lower(email)' in sql:
++            return Result({'id': AUTH, 'email_confirmed_at': '2026-01-01' if self.confirmed else None})
++        if 'SELECT id, status FROM app.users' in sql:
++            return Result({'id': ACTOR if self.actor_is_target else USER, 'status': self.user_status})
++        if 'SELECT EXISTS (' in sql and 'FROM app.global_role_assignments gra' in sql:
++            return Result(self.global_privilege)
++        if 'SELECT id, status FROM app.organization_memberships' in sql:
++            return Result({'id': MEMBER, 'status': self.member_status} if self.member_exists else None)
++        if 'INSERT INTO app.organization_memberships' in sql:
++            return Result(MEMBER)
++        if 'SELECT id FROM app.roles' in sql:
++            return Result(ROLE if self.role_exists else None)
++        if 'SELECT COUNT(*) FROM app.membership_roles' in sql:
++            return Result(self.other_roles)
++        if 'SELECT 1 FROM app.membership_roles' in sql:
++            return Result((1,) if (self.duplicate or self.has_role) else None)
++        if 'SELECT 1 FROM app.enrollments e' in sql:
++            return Result((1,) if self.active_enrollments else None)
++        if 'SELECT 1 FROM app.course_offerings off' in sql:
++            return Result((1,) if self.assigned_offerings else None)
++        if 'SELECT m.id::text AS membership_id' in sql:
++            return Result(rows=[{'membership_id': str(MEMBER), 'organization_id': str(ORG),
++                'full_name': 'Persona DEMO', 'email': 'demo@example.org',
++                'status': self.member_status, 'roles': ['student'],
++                'is_protected': False, 'is_self': False}])
++        return Result()
++
++
++class Context:
++    def __init__(self, engine):
++        self.engine = engine
++
++    async def __aenter__(self):
++        return self.engine.conn
++
++    async def __aexit__(self, exc_type, exc, tb):
++        self.engine.rolled_back = exc is not None
++        return False
++
++
++class FakeEngine:
++    def __init__(self, **kwargs):
++        self.conn = FakeConnection(**kwargs)
++        self.rolled_back = False
++
++    def begin(self):
++        return Context(self)
++
++    def connect(self):
++        return Context(self)
++
++
++def call(method='GET', path='', engine=None, body=None, auth=True):
++    engine = engine or FakeEngine(has_role=method == 'DELETE')
++    app.dependency_overrides[require_engine] = lambda: engine
++    if auth:
++        app.dependency_overrides[authenticated_user_id] = lambda: ACTOR
++    try:
++        with TestClient(app) as client:
++            response = client.request(method, ROOT + path, json=body,
++                headers={'Origin': 'http://localhost:5173'})
++    finally:
++        app.dependency_overrides.clear()
++    return response, engine
++
++
++def payload(role='student'):
++    return {'email': 'demo@example.org', 'full_name': 'Persona DEMO', 'role': role}
++
++
++def statements(engine):
++    return '\n'.join(sql for sql, _ in engine.conn.statements)
++
++
++@pytest.mark.parametrize('method,path,body', [
++    ('GET', '', None), ('POST', '', payload()),
++    ('POST', f'/{MEMBER}/roles', {'role':'analyst'}),
++    ('DELETE', f'/{MEMBER}/roles/student', None),
++    ('PATCH', f'/{MEMBER}/status', {'status': 'suspended'}),
++])
++def test_all_routes_require_jwt(method, path, body):
++    result, engine = call(method, path, body=body, auth=False)
++    assert result.status_code == 401
++    assert engine.conn.statements == []
++
++
++@pytest.mark.parametrize('method,path,body', [
++    ('GET', '', None), ('POST', '', payload()),
++    ('POST', f'/{MEMBER}/roles', {'role':'analyst'}),
++    ('DELETE', f'/{MEMBER}/roles/student', None),
++    ('PATCH', f'/{MEMBER}/status', {'status': 'suspended'}),
++])
++def test_no_institution_admin_cannot_list_or_modify(method, path, body):
++    response, engine = call(method, path, FakeEngine(manager=False), body)
++    assert response.status_code == 403
++    assert 'INSERT INTO' not in statements(engine)
++    assert 'UPDATE app.' not in statements(engine)
++    assert 'FROM auth.users' not in statements(engine)
++
++
++def test_member_list_only_scoped_to_path_organization():
++    response, engine = call()
++    assert response.status_code == 200
++    assert response.json()['items'][0]['email'] == 'demo@example.org'
++    list_calls = [(sql, params) for sql,params in engine.conn.statements if 'LIMIT 500' in sql]
++    assert len(list_calls) == 1
++    assert list_calls[0][1]['organization_id'] == ORG
++    assert 'WHERE m.organization_id=:organization_id' in list_calls[0][0]
++
++
++def test_cannot_use_foreign_institution_id():
++    other = f'/api/v1/institutional/organizations/{OTHER_ORG}/members'
++    engine = FakeEngine()
++    app.dependency_overrides[require_engine] = lambda: engine
++    app.dependency_overrides[authenticated_user_id] = lambda: ACTOR
++    try:
++        with TestClient(app) as client:
++            result = client.post(other, json=payload())
++    finally:
++        app.dependency_overrides.clear()
++    assert result.status_code == 403
++    assert 'INSERT INTO' not in statements(engine)
++
++
++@pytest.mark.parametrize('role', ['superadmin', 'institution_admin', 'auditor', 'root'])
++def test_reserved_roles_not_delegable(role):
++    response, engine = call('POST', body=payload(role))
++    assert response.status_code == 422
++    assert engine.conn.statements == []
++
++
++@pytest.mark.parametrize('role', ['coordinator', 'instructor', 'student', 'analyst', 'ml_engineer'])
++def test_allowed_first_roles_and_auditing(role):
++    response, engine = call('POST', engine=FakeEngine(member_exists=False), body=payload(role))
++    assert response.status_code == 201, response.text
++    assert 'INSERT INTO app.membership_roles' in statements(engine)
++    assert 'INSERT INTO app.audit_logs' in statements(engine)
++    if role == 'student':
++        assert 'INSERT INTO app.students' in statements(engine)
++    if role == 'instructor':
++        assert 'INSERT INTO app.instructors' in statements(engine)
++    assert not engine.rolled_back
++
++
++def test_account_must_have_confirmed_email():
++    response, engine = call('POST', engine=FakeEngine(confirmed=False), body=payload())
++    assert response.status_code == 422
++    assert 'INSERT INTO app.users' not in statements(engine)
++    assert engine.rolled_back
++
++
++def test_suspended_account_cannot_receive_role_in_add():
++    response, engine = call('POST', engine=FakeEngine(member_status='suspended'), body=payload())
++    assert response.status_code == 409
++    assert 'INSERT INTO app.membership_roles' not in statements(engine)
++
++
++def test_protected_administrator_cannot_receive_role():
++    response, engine = call('POST', engine=FakeEngine(protected=True), body=payload())
++    assert response.status_code == 403
++    assert 'INSERT INTO app.membership_roles' not in statements(engine)
++
++
++def test_same_role_cannot_be_assigned_twice():
++    response, engine = call('POST', engine=FakeEngine(duplicate=True), body=payload())
++    assert response.status_code == 409
++    assert 'INSERT INTO app.membership_roles' not in statements(engine)
++
++
++def test_grant_role_cannot_modify_self_or_protected_member():
++    for engine in (FakeEngine(actor_is_target=True), FakeEngine(protected=True)):
++        response, used = call('POST', f'/{MEMBER}/roles', engine=engine, body={'role': 'analyst'})
++        assert response.status_code == 403
++        assert 'INSERT INTO app.membership_roles' not in statements(used)
++
++
++def test_grant_secondary_role():
++    response, engine = call('POST', f'/{MEMBER}/roles', body={'role': 'student'})
++    assert response.status_code == 200
++    assert 'INSERT INTO app.students' in statements(engine)
++
++
++def test_cannot_remove_last_role():
++    response, engine = call('DELETE', f'/{MEMBER}/roles/student', engine=FakeEngine(other_roles=0, has_role=True))
++    assert response.status_code == 409
++    assert 'DELETE FROM app.membership_roles' not in statements(engine)
++
++
++def test_cannot_remove_student_with_active_enrollment():
++    response, engine = call('DELETE', f'/{MEMBER}/roles/student', engine=FakeEngine(active_enrollments=True, has_role=True))
++    assert response.status_code == 409
++    assert 'DELETE FROM app.membership_roles' not in statements(engine)
++
++
++def test_cannot_remove_instructor_with_live_offering():
++    response, engine = call('DELETE', f'/{MEMBER}/roles/instructor', engine=FakeEngine(assigned_offerings=True, has_role=True))
++    assert response.status_code == 409
++    assert 'DELETE FROM app.membership_roles' not in statements(engine)
++
++
++def test_successful_role_removal_updates_profile_and_audits():
++    response, engine = call('DELETE', f'/{MEMBER}/roles/student')
++    assert response.status_code == 200
++    assert "UPDATE app.students SET status='inactive'" in statements(engine)
++    assert 'INSERT INTO app.audit_logs' in statements(engine)
++
++
++def test_suspension_preserves_role_and_audits():
++    response, engine = call('PATCH', f'/{MEMBER}/status', body={'status': 'suspended'})
++    assert response.status_code == 200
++    assert 'UPDATE app.organization_memberships SET status=:status' in statements(engine)
++    assert 'DELETE FROM app.membership_roles' not in statements(engine)
++
++
++def test_suspended_member_can_be_reactivated():
++    response, engine = call('PATCH', f'/{MEMBER}/status', engine=FakeEngine(member_status='suspended'), body={'status': 'active'})
++    assert response.status_code == 200
++    assert 'UPDATE app.organization_memberships' in statements(engine)
++
++
++def test_admin_cannot_suspend_admin_or_self():
++    for engine in (FakeEngine(protected=True), FakeEngine(actor_is_target=True)):
++        response, used = call('PATCH', f'/{MEMBER}/status', engine, {'status': 'suspended'})
++        assert response.status_code == 403
++        assert 'UPDATE app.organization_memberships' not in statements(used)
++
++
++def test_local_admin_cannot_assign_to_global_privileged_account():
++    response, engine = call('POST', engine=FakeEngine(global_privilege=True), body=payload('student'))
++    assert response.status_code == 403
++    assert 'INSERT INTO app.organization_memberships' not in statements(engine)
+--- a/apps/web/src/App.tsx
++++ b/apps/web/src/App.tsx
+@@ -1,6 +1,6 @@
+ // Shell de Sprint 1: navegación, estado API, tema, componentes y Auth opcional.
+ // Los ejemplos académicos están rotulados DEMO; nunca simulan datos reales.
+-import { useCallback, useEffect, useState, type FormEvent } from 'react';
++import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react';
+ import { Activity, ArrowRight, BookOpen, Building2, CheckCircle2, ChevronDown, Database,
+   GraduationCap, LayoutDashboard, LockKeyhole, LogOut, Menu, Moon, RefreshCw, Users,
+   Server, ShieldCheck, Sun, XCircle, Settings, PanelLeftClose, PanelLeftOpen, Contrast, X } from 'lucide-react';
+@@ -16,6 +16,7 @@
+ import { OrganizationsPage } from './modules/organizations/OrganizationsPage';
+ import { AcademicPage } from './modules/academic/AcademicPage';
+ import { UsersPage } from './modules/users/UsersPage';
++import { InstitutionalUsersPage } from './modules/users/InstitutionalUsersPage';
+ import type { Organization, OrganizationInput } from './modules/organizations/types';
+ import { countryName } from './modules/organizations/types';
+ 
+@@ -268,6 +269,10 @@
+     notify('Sesión cerrada correctamente.', 'success');
+   }
+ 
++  const institutionalAdminOrganizations = useMemo(() => orgs.filter(org =>
++    memberships.some(item => item.organization_id === org.id && item.roles.includes('institution_admin'))),
++    [orgs, memberships]);
++  const canManageUserAdministration = globalRoles.includes('superadmin') || institutionalAdminOrganizations.length > 0;
+   const canManageAcademicOrganization = useCallback((orgId: string) => memberships.some(item => item.organization_id === orgId && item.roles.some(role => ['institution_admin', 'coordinator'].includes(role))), [memberships]);
+   const title = nav.find(x => x.id === section)?.title ?? 'Resumen';
+   const signedIn = Boolean(session);
+@@ -320,7 +325,7 @@
+         </div>
+         <span className={`mb-3 px-3 app-meta-text text-xs font-semibold uppercase tracking-widest text-slate-400 ${sidebarCollapsed ? 'md:sr-only' : ''}`}>Plataforma</span>
+         <nav aria-label="Navegación principal" className="grid gap-1">
+-          {nav.filter(link => link.id !== 'users' || globalRoles.includes('superadmin')).map(link => {
++          {nav.filter(link => link.id !== 'users' || canManageUserAdministration).map(link => {
+             const Icon = link.icon;
+             const active = section === link.id;
+             return <button key={link.id} onClick={() => navTo(link.id)} type="button" title={sidebarCollapsed ? link.title : undefined}
+@@ -395,7 +400,9 @@
+             onRefresh={() => setOrgRefreshKey(key => key + 1)}
+             onSave={saveOrganization}
+           />}
+-          {section === 'users' && accessToken && <UsersPage token={accessToken} organizations={orgs} canManage={globalRoles.includes('superadmin')}/>}
++          {section === 'users' && accessToken && (globalRoles.includes('superadmin')
++            ? <UsersPage token={accessToken} organizations={orgs} canManage/>
++            : <InstitutionalUsersPage token={accessToken} organizations={institutionalAdminOrganizations}/>)}
+           {section === 'settings' && <SettingsPage/>}
+           {(section === 'courses' || section === 'students' || section === 'enrollments') && accessToken && <AcademicPage
+             mode={section} organizations={orgs} organizationId={academicOrgId}
+--- /dev/null
++++ b/apps/web/src/modules/users/InstitutionalUsersPage.tsx
+@@ -0,0 +1,225 @@
++// Gestión institucional de usuarios. No crea contraseñas ni concede roles globales.
++// Usa los componentes compartidos y los permisos se revalidan en FastAPI.
++import { useEffect, useMemo, useState, type FormEvent } from 'react';
++import { AlertTriangle, CheckCircle2, Info, Plus, RefreshCw, Shield, UserRoundMinus, UserRoundPlus } from 'lucide-react';
++import { DataTable, type Column } from '../../components/shared/DataTable';
++import { Modal } from '../../components/shared/Modal';
++import { OptionSelect } from '../../components/shared/OptionSelect';
++import { Spinner } from '../../components/shared/Spinner';
++import { useToast } from '../../components/shared/Toast';
++import type { Organization } from '../organizations/types';
++
++interface Member {
++  membership_id: string;
++  organization_id: string;
++  full_name: string;
++  email: string;
++  status: 'active' | 'suspended' | 'invited' | 'revoked';
++  roles: string[];
++  is_protected: boolean;
++  is_self: boolean;
++}
++interface Props { token: string; organizations: Organization[] }
++type Dialog = 'add' | 'grant' | 'remove' | 'status' | null;
++type MemberRole = 'coordinator' | 'instructor' | 'student' | 'analyst' | 'ml_engineer';
++const API = import.meta.env.VITE_API_URL || 'http://localhost:8000';
++const ROLES: Array<{ value: MemberRole; label: string }> = [
++  { value: 'coordinator', label: 'Director / Coordinador' },
++  { value: 'instructor', label: 'Docente / Instructor' },
++  { value: 'student', label: 'Estudiante' },
++  { value: 'analyst', label: 'Analista de datos' },
++  { value: 'ml_engineer', label: 'Ingeniero de ML' },
++];
++const ROLE_LABELS: Record<string, string> = {
++  institution_admin: 'Administrador institucional', coordinator: 'Coordinador',
++  instructor: 'Docente', student: 'Estudiante', analyst: 'Analista',
++  ml_engineer: 'Ingeniero de ML', auditor: 'Auditor',
++};
++const inputStyle = 'app-input w-full rounded-xl border px-3 py-2.5 text-sm';
++const buttonPrimary = 'app-primary-button inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-50';
++const buttonSecondary = 'app-secondary-button inline-flex items-center justify-center gap-2 rounded-xl border px-3 py-2 text-sm font-semibold disabled:opacity-50';
++
++function readableError(data: unknown, status: number) {
++  if (data && typeof data === 'object' && 'detail' in data) {
++    const detail = (data as { detail: unknown }).detail;
++    if (typeof detail === 'string') return detail;
++    if (Array.isArray(detail)) return detail.map(value => value?.msg ?? '').filter(Boolean).join('; ');
++  }
++  return `La API respondió HTTP ${status}`;
++}
++
++export function InstitutionalUsersPage({ token, organizations }: Props) {
++  const { notify } = useToast();
++  const [organizationId, setOrganizationId] = useState('');
++  const [members, setMembers] = useState<Member[]>([]);
++  const [query, setQuery] = useState('');
++  const [loading, setLoading] = useState(false);
++  const [error, setError] = useState('');
++  const [refresh, setRefresh] = useState(0);
++  const [dialog, setDialog] = useState<Dialog>(null);
++  const [target, setTarget] = useState<Member | null>(null);
++  const [email, setEmail] = useState('');
++  const [fullName, setFullName] = useState('');
++  const [role, setRole] = useState<MemberRole>('instructor');
++  const [confirmed, setConfirmed] = useState(false);
++  const [review, setReview] = useState(false);
++  const [busy, setBusy] = useState(false);
++  const [dialogError, setDialogError] = useState('');
++
++  // El administrador nunca puede elegir una institución fuera de su listado autorizado.
++  useEffect(() => {
++    const first = organizations[0];
++    if (!organizations.some(item => item.id === organizationId)) setOrganizationId(first?.id ?? '');
++  }, [organizations, organizationId]);
++
++  useEffect(() => {
++    setMembers([]); setError('');
++    if (!organizationId || !organizations.some(item => item.id === organizationId)) { setLoading(false); return; }
++    const controller = new AbortController();
++    setLoading(true);
++    void fetch(`${API}/api/v1/institutional/organizations/${organizationId}/members`, {
++      headers: { Authorization: `Bearer ${token}` }, signal: controller.signal,
++    }).then(async response => {
++      const data: unknown = await response.json().catch(() => ({}));
++      if (!response.ok) throw new Error(readableError(data, response.status));
++      if (!controller.signal.aborted) {
++        const payload = data && typeof data === 'object' ? (data as { items?: unknown }) : {};
++        setMembers(Array.isArray(payload.items) ? payload.items as Member[] : []);
++      }
++    }).catch((cause: unknown) => {
++      if (!controller.signal.aborted) setError(cause instanceof Error ? cause.message : 'No se pudo consultar el directorio');
++    }).finally(() => { if (!controller.signal.aborted) setLoading(false); });
++    return () => controller.abort();
++  }, [token, organizationId, organizations, refresh]);
++
++  const filtered = useMemo(() => {
++    const search = query.trim().toLowerCase();
++    return members.filter(member => !search || [member.full_name, member.email, ...member.roles]
++      .some(value => value.toLowerCase().includes(search)));
++  }, [members, query]);
++  const chosenOrg = organizations.find(item => item.id === organizationId);
++  const validEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
++  const selectableRoles = ROLES.filter(option => !target?.roles.includes(option.value));
++  const removableRoles = ROLES.filter(option => target?.roles.includes(option.value));
++  const protectedMember = (item: Member) => item.is_protected || item.is_self;
++
++  function openDialog(type: Dialog, member: Member | null = null) {
++    setDialog(type); setTarget(member); setDialogError(''); setReview(false); setConfirmed(false);
++    setEmail(''); setFullName('');
++    setRole(type === 'grant' ? (ROLES.find(option => !member?.roles.includes(option.value))?.value ?? 'instructor')
++      : type === 'remove' ? (ROLES.find(option => member?.roles.includes(option.value))?.value ?? 'instructor') : 'instructor');
++  }
++
++  function closeDialog() { if (!busy) openDialog(null); }
++
++  async function mutate(method: string, path: string, body: unknown, message: string) {
++    setBusy(true); setDialogError('');
++    try {
++      const response = await fetch(`${API}${path}`, {
++        method, headers: { Authorization: `Bearer ${token}`, ...(body === undefined ? {} : { 'Content-Type': 'application/json' }) },
++        ...(body === undefined ? {} : { body: JSON.stringify(body) }),
++      });
++      const data: unknown = await response.json().catch(() => ({}));
++      if (!response.ok) throw new Error(readableError(data, response.status));
++      notify(message, 'success');
++      openDialog(null);
++      setRefresh(current => current + 1);
++    } catch (cause) {
++      setDialogError(cause instanceof Error ? cause.message : 'No se completó la operación');
++    } finally { setBusy(false); }
++  }
++
++  function submitAdd(event: FormEvent<HTMLFormElement>) {
++    event.preventDefault();
++    if (!organizationId || !validEmail || !confirmed || fullName.trim().length < 3) return;
++    if (!review) { setReview(true); return; }
++    void mutate('POST', `/api/v1/institutional/organizations/${organizationId}/members`,
++      { email: email.trim().toLowerCase(), full_name: fullName.trim(), role }, 'Usuario incorporado a la institución.');
++  }
++
++  const base = `/api/v1/institutional/organizations/${organizationId}/members`;
++  const columns: Column<Member>[] = [
++    { header: 'Usuario', key: 'full_name', render: item => <div className="min-w-40"><p className="font-semibold">{item.full_name}</p><p className="app-muted text-xs break-all">{item.email}</p></div> },
++    { header: 'Roles', key: 'roles', render: item => <div className="flex max-w-72 flex-wrap gap-1.5">{item.roles.length
++      ? item.roles.map(value => <span key={value} className="app-secondary-button rounded-lg border px-2 py-1 text-xs">{ROLE_LABELS[value] ?? value}</span>)
++      : <span className="app-muted text-xs">Sin rol</span>}</div> },
++    { header: 'Estado', key: 'status', render: item => <span className={item.status === 'active'
++      ? 'rounded-lg bg-emerald-500/10 px-2 py-1 text-xs text-emerald-700 dark:text-emerald-300'
++      : 'app-warning rounded-lg border px-2 py-1 text-xs'}>{item.status === 'active' ? 'Activo' : item.status === 'suspended' ? 'Suspendido' : item.status}</span> },
++    { header: 'Acciones', key: 'membership_id', render: item => protectedMember(item)
++      ? <span className="app-muted inline-flex items-center gap-1 text-xs"><Shield size={14}/> {item.is_self ? 'Tu cuenta' : 'Cuenta protegida'}</span>
++      : <div className="flex flex-wrap gap-2">
++          <button type="button" className={buttonSecondary} disabled={item.status !== 'active'} onClick={() => openDialog('grant', item)} title="Asignar rol"><Plus size={15}/> Rol</button>
++          <button type="button" className={buttonSecondary} disabled={item.status !== 'active' || item.roles.length < 2 || !removableRolesFor(item)} onClick={() => openDialog('remove', item)} title="Retirar rol (se exige mantener al menos uno)"><UserRoundMinus size={15}/> Retirar</button>
++          <button type="button" className={buttonSecondary} disabled={!['active', 'suspended'].includes(item.status)} onClick={() => openDialog('status', item)}>{item.status === 'active' ? 'Suspender' : 'Reactivar'}</button>
++        </div> },
++  ];
++
++  return <>
++    <section className="grid gap-4 sm:grid-cols-3">
++      {[
++        { label: 'Miembros', count: members.length },
++        { label: 'Usuarios activos', count: members.filter(item => item.status === 'active').length },
++        { label: 'Cuentas suspendidas', count: members.filter(item => item.status === 'suspended').length },
++      ].map(item => <div className="app-panel rounded-2xl border p-5" key={item.label}><p className="app-muted text-sm">{item.label}</p><p className="mt-2 text-2xl font-semibold">{item.count}</p></div>)}
++    </section>
++    <section className="app-panel space-y-4 rounded-2xl border p-5 sm:p-6">
++      <div className="flex flex-wrap items-start justify-between gap-3">
++        <div><h3 className="text-lg font-semibold">Usuarios de mi institución</h3><p className="app-muted mt-1 text-sm">Administra miembros y roles locales sin acceder a otras instituciones.</p></div>
++        <button type="button" className={buttonPrimary} disabled={!organizationId} onClick={() => openDialog('add')}><UserRoundPlus size={17}/> Incorporar usuario</button>
++      </div>
++      <div className="grid gap-3 md:grid-cols-2">
++        <div className="space-y-1.5"><label className="text-sm font-medium">Institución a gestionar</label>
++          <OptionSelect ariaLabel="Institución" value={organizationId} onChange={setOrganizationId}
++            options={organizations.map(item => ({ value: item.id, label: item.name, suffix: item.code }))}/></div>
++        <div className="space-y-1.5"><label htmlFor="member-search" className="text-sm font-medium">Buscar usuario o rol</label>
++          <input id="member-search" className={inputStyle} placeholder="Nombre, correo o rol" value={query} onChange={event => setQuery(event.target.value)}/></div>
++      </div>
++      {loading && <Spinner label="Cargando usuarios institucionales..."/>}
++      {error && <div role="alert" className="app-warning rounded-xl border p-4 text-sm">{error}</div>}
++      {!loading && !error && <DataTable<Member> key={organizationId} rows={filtered} label="Usuarios institucionales" columns={columns} pageSize={8}/>}
++      {!loading && !error && members.length === 0 && <div className="app-info flex items-start gap-2 rounded-xl border p-4 text-sm"><Info size={18}/>Incorpora una cuenta confirmada de Supabase Auth para gestionar sus roles.</div>}
++    </section>
++
++    <Modal open={dialog === 'add'} title="Incorporar usuario institucional" onClose={closeDialog}>
++      <form onSubmit={submitAdd} className="space-y-4">
++        <div className="app-info flex items-start gap-2 rounded-xl border p-3 text-sm"><Info size={17} className="mt-0.5 shrink-0"/><p>La cuenta debe existir en Supabase Auth y tener correo confirmado. Esta pantalla no crea ni solicita contraseñas.</p></div>
++        <div className="space-y-1.5"><span className="text-sm font-medium">Institución</span><div className="app-panel rounded-xl border px-3 py-2 text-sm">{chosenOrg?.name ?? '—'}</div></div>
++        <div className="space-y-1.5"><label htmlFor="new-member-email" className="text-sm font-medium">Correo electrónico *</label><input id="new-member-email" required maxLength={254} type="email" className={inputStyle} value={email} placeholder="docente@institucion.edu" onChange={event => { setEmail(event.target.value); setReview(false); }}/></div>
++        <div className="space-y-1.5"><label htmlFor="new-member-name" className="text-sm font-medium">Nombre completo *</label><input id="new-member-name" required maxLength={180} minLength={3} className={inputStyle} value={fullName} placeholder="Nombre de la cuenta" onChange={event => { setFullName(event.target.value); setReview(false); }}/></div>
++        <div className="space-y-1.5"><label className="text-sm font-medium">Primer rol *</label><OptionSelect ariaLabel="Rol de usuario" value={role} onChange={value => { setRole(value as MemberRole); setReview(false); }} options={ROLES}/></div>
++        {role === 'ml_engineer' && <div className="app-info rounded-xl border p-3 text-xs">Este rol no habilita automáticamente el acceso a datasets sensibles ni a entrenamiento de modelos.</div>}
++        <label className="flex cursor-pointer items-start gap-2 text-sm"><input className="mt-1 size-4 accent-sky-600" type="checkbox" checked={confirmed} onChange={event => { setConfirmed(event.target.checked); setReview(false); }}/><span>Confirmo que puedo gestionar esta cuenta dentro de la institución seleccionada.</span></label>
++        {review && <div className="app-panel space-y-1 rounded-xl border p-4 text-sm"><p className="flex items-center gap-2 font-semibold"><CheckCircle2 size={16}/> Confirmar incorporación</p><p><b>Cuenta:</b> {email.trim().toLowerCase()}</p><p><b>Institución:</b> {chosenOrg?.name}</p><p><b>Rol:</b> {ROLE_LABELS[role]}</p></div>}
++        {dialogError && <div role="alert" className="app-warning rounded-xl border p-3 text-sm">{dialogError}</div>}
++        <div className="flex justify-end gap-2 border-t pt-4"><button type="button" className={buttonSecondary} disabled={busy} onClick={closeDialog}>Cancelar</button><button type="submit" className={buttonPrimary} disabled={busy || !confirmed || !validEmail || fullName.trim().length < 3}>{busy ? 'Guardando...' : review ? 'Confirmar incorporación' : 'Revisar asignación'}</button></div>
++      </form>
++    </Modal>
++    <Modal open={dialog === 'grant'} title="Asignar rol adicional" onClose={closeDialog}>
++      <div className="space-y-4 text-sm"><p>Cuenta: <b>{target?.full_name}</b></p>
++        {selectableRoles.length === 0 ? <div className="app-info rounded-xl border p-3">Este usuario ya tiene todos los roles locales delegables.</div> :
++          <div className="space-y-1.5"><label className="font-medium">Rol adicional</label><OptionSelect ariaLabel="Rol adicional" value={role} options={selectableRoles} onChange={value => setRole(value as MemberRole)}/></div>}
++        {dialogError && <div role="alert" className="app-warning rounded-xl border p-3">{dialogError}</div>}
++        <div className="flex justify-end gap-2 border-t pt-4"><button type="button" className={buttonSecondary} disabled={busy} onClick={closeDialog}>Cancelar</button><button className={buttonPrimary} type="button" disabled={busy || !target || !selectableRoles.length} onClick={() => target && void mutate('POST', `${base}/${target.membership_id}/roles`, { role }, 'Rol asignado.')}>Asignar rol</button></div>
++      </div>
++    </Modal>
++    <Modal open={dialog === 'remove'} title="Retirar rol" onClose={closeDialog}>
++      <div className="space-y-4 text-sm"><div className="app-warning flex gap-2 rounded-xl border p-3"><AlertTriangle size={18} className="shrink-0"/><span>Retirar un rol de estudiante con matrículas activas, o un docente con ofertas asignadas, requiere resolver primero esos vínculos.</span></div>
++        <p>Usuario: <b>{target?.full_name}</b></p><OptionSelect ariaLabel="Rol que se retirará" value={role} onChange={value => setRole(value as MemberRole)} options={removableRoles}/>
++        {dialogError && <div role="alert" className="app-warning rounded-xl border p-3">{dialogError}</div>}
++        <div className="flex justify-end gap-2 border-t pt-4"><button type="button" className={buttonSecondary} disabled={busy} onClick={closeDialog}>Cancelar</button><button type="button" className={buttonPrimary} disabled={busy || !target || removableRoles.length === 0} onClick={() => target && void mutate('DELETE', `${base}/${target.membership_id}/roles/${encodeURIComponent(role)}`, undefined, 'Rol retirado.')}>Confirmar retirada</button></div>
++      </div>
++    </Modal>
++    <Modal open={dialog === 'status'} title={target?.status === 'active' ? 'Suspender membresía' : 'Reactivar membresía'} onClose={closeDialog}>
++      <div className="space-y-4 text-sm"><div className="app-warning flex items-start gap-2 rounded-xl border p-3"><AlertTriangle size={18} className="mt-0.5 shrink-0"/><p>Esta acción afecta solo a la institución seleccionada. No elimina la cuenta de Supabase Auth ni sus datos históricos.</p></div>
++        <p>¿Confirmas {target?.status === 'active' ? 'suspender' : 'reactivar'} la membresía de <b>{target?.full_name}</b>?</p>
++        {dialogError && <div role="alert" className="app-warning rounded-xl border p-3">{dialogError}</div>}
++        <div className="flex justify-end gap-2 border-t pt-4"><button type="button" className={buttonSecondary} disabled={busy} onClick={closeDialog}>Cancelar</button><button type="button" className={buttonPrimary} disabled={busy || !target} onClick={() => target && void mutate('PATCH', `${base}/${target.membership_id}/status`, { status: target.status === 'active' ? 'suspended' : 'active' }, 'Estado de membresía actualizado.')}>Confirmar</button></div>
++      </div>
++    </Modal>
++  </>;
++}
++
++function removableRolesFor(member: Member): boolean {
++  return member.roles.some(code => ROLES.some(role => role.value === code));
++}
+--- /dev/null
++++ b/LEEME_INCREMENTO_USUARIOS_V13.md
+@@ -0,0 +1,85 @@
++# EduMaster.ai — Incremento v13: Usuarios institucionales
++
++## Objetivo
++
++Un usuario con rol `institution_admin` podrá gestionar **únicamente los miembros de su institución**, mediante cuentas existentes y confirmadas de **Supabase Auth**. El superadministrador conserva el módulo global v12 para asignar y revocar administradores institucionales.
++
++## Instalación del parche (sobre v12)
++
++1. Haz una copia de seguridad de tu proyecto. Descomprime el ZIP de parche **en la carpeta que contiene `edumaster-ai/`**, conservando las rutas. Nunca reemplaces `.env`.
++2. No ejecutes migraciones SQL ni el script `001_initial_schema.sql`: las tablas actuales son suficientes.
++3. Reinicia FastAPI desde `edumaster-ai/apps/api`:
++
++   ```bash
++   source .venv/Scripts/activate
++   python -m pytest -q
++   python -m uvicorn app.main:app --reload --port 8000
++   ```
++
++4. Reinicia Vite desde `edumaster-ai/apps/web`:
++
++   ```bash
++   npm run build
++   npm run dev
++   ```
++
++5. Cierra sesión y vuelve a ingresar como el **administrador institucional** para recuperar los permisos actuales en `/api/v1/me`.
++
++No se agregan dependencias npm ni Python, servicios nuevos ni secretos. El backend sigue usando `DATABASE_URL` y la verificación de JWT ya configurada.
++
++## Funcionalidades
++
++- **Usuarios / superadministrador:** se mantiene la pantalla global v12, donde asigna `institution_admin` por institución.
++- **Usuarios / administrador institucional:** directorio de miembros de las instituciones que administra (lista, búsqueda y tabla paginada), con selector de institución si administra varias.
++- **Incorporar usuario:** requiere correo **confirmado y existente en Supabase Auth**, nombre y primer rol institucional. Si la cuenta ya existe en `app.users`, se reutiliza. Una cuenta puede tener varios roles y pertenecer a varias instituciones.
++- **Roles delegables:** `coordinator`, `instructor`, `student`, `analyst` y `ml_engineer` (el último **no habilita por sí mismo** acceso a datasets sensibles ni entrenamiento).
++- **Asignar y retirar roles adicionales:** se mantienen los demás roles e historial; no se permite retirar el último rol de una membresía activa ni retirar un rol de estudiante con matrículas activas o docente con ofertas activas/planificadas.
++- **Suspender/reactivar:** solo cambia la membresía de la institución elegida. No elimina credenciales de Supabase ni registros académicos. Las membresías previamente revocadas/invitadas requieren revisión adicional.
++- **Estudiantes y docentes:** al asignar `student` o `instructor`, se crea o reactiva su perfil `app.students` / `app.instructors` de forma idempotente. **No vuelvas a incorporarlos por segunda vez en el módulo Estudiantes.** Ya aparecerán en el listado de esa institución, listos para matrícula. Puedes asignarles un código académico cuando implementemos la edición del perfil.
++
++## Restricciones de seguridad
++
++- El permiso se valida **en cada endpoint FastAPI**, con usuario activo, membresía activa, rol `institution_admin` e institución activa.
++- El servidor vuelve a comprobar ese permiso bajo el bloqueo de la institución antes de modificar cualquier dato; previene carreras con revocaciones de administradores.
++- No se puede gestionar otra institución ni modificar la propia membresía del administrador.
++- Los roles `superadmin`, `institution_admin` y `auditor` **no son delegables** por administradores locales. Las cuentas administrativas o con privilegios globales se muestran como protegidas y no pueden modificarse desde la administración local.
++- Las operaciones de alta, asignación, retirada de roles y suspensión/reactivación se registran en `app.audit_logs` dentro de la misma transacción.
++- El selector de instituciones del frontend **no es la frontera de seguridad**: los permisos también se validan en FastAPI.
++- No se expone la contraseña de PostgreSQL ni claves administrativas de Supabase en el frontend. No se crean cuentas de Auth automáticamente en esta versión.
++
++## Flujo de prueba con las instituciones existentes
++
++1. En **Supabase → Authentication → Users** crea una **cuenta DEMO con correo confirmado** para un docente de tu institución de Lima. Usa un correo de prueba al que tengas permiso de acceso y evita cuentas reales de estudiantes.
++2. Inicia sesión como el administrador de **Lima** y abre **Usuarios → Incorporar usuario**.
++3. Ingresa el correo de Auth, nombre y rol **Docente / Instructor**. Revisa y confirma. Comprueba la fila y su rol en el listado.
++4. Crea otra cuenta DEMO confirmada, esta vez con rol **Estudiante**. Comprueba que aparece automáticamente en **Estudiantes**.
++5. Abre **Matrículas** y matricula al estudiante en uno de los dos cursos publicados que ya creaste. El flujo seguirá siendo académico real, con las tablas existentes.
++6. Regresa a **Usuarios**; verifica que puedes agregar un segundo rol, suspender y reactivar a un usuario de prueba sin cambiar su cuenta global. No suspendas un usuario que estés usando para otras pruebas.
++7. Comprueba el aislamiento: desde Lima no deben aparecer ni poder modificarse los miembros de México. Aunque se modifique manualmente la URL o el cuerpo de la petición a la API, debe responder **403 o 404** en los intentos no autorizados.
++8. Comprueba desde el superadministrador que **Usuarios** sigue mostrando la administración global y no permite operar académicamente sin membresía institucional.
++
++## API nueva (JWT obligatorio)
++
++Prefijo: `/api/v1/institutional/organizations/{organization_id}`
++
++| Método | Ruta | Acción |
++|---|---|---|
++| GET | `/members` | Lista miembros autorizados de esa institución |
++| POST | `/members` | Vincula cuenta confirmada y asigna primer rol |
++| POST | `/members/{membership_id}/roles` | Añade rol local permitido |
++| DELETE | `/members/{membership_id}/roles/{role}` | Retira rol local (con reglas académicas) |
++| PATCH | `/members/{membership_id}/status` | Suspende o reactiva membresía |
++
++## Limitaciones actuales
++
++- Esta versión **no envía invitaciones por correo ni crea credenciales**: Supabase Auth debe contener la cuenta antes de vincularla. El flujo de invitaciones se construirá más adelante con una credencial de servidor y configuración de correo.
++- El directorio institucional consulta hasta **500 miembros por institución** por ahora y pagina en el navegador. Para producción, añadiremos paginación en FastAPI y búsqueda en servidor.
++- No existe todavía la edición del nombre institucional, los códigos académicos o el alta automática de usuarios externos.
++- El rol de ML queda catalogado pero **no da permisos automáticos para utilizar datos sensibles**; esos flujos requieren un diseño adicional de autorización.
++- No se ha comprobado una operación contra tu Supabase real desde este entorno. Las pruebas automatizadas utilizan dobles de base de datos.
++
++## Estado de verificación
++
++- **84 pruebas de FastAPI superadas**, incluidas 35 nuevas de permisos, roles, membresías, protecciones y aislamiento.
++- **20 archivos TS/TSX** revisados sintácticamente con TypeScript.
++- La compilación completa `npm run build` y la prueba en navegador **deben ejecutarse en tu VSCode**, porque este entorno no pudo instalar las dependencias de npm.
+--- /dev/null
++++ b/docs/USUARIOS_INSTITUCIONALES_V13.md
+@@ -0,0 +1,17 @@
++# Incremento v13 — Roles locales con administración delegada
++
++Arquitectura de permisos:
++
++- **Global (`superadmin`)**: crea instituciones, asigna y revoca administradores de instituciones. No hace trabajo académico ordinario por defecto.
++- **Local (`institution_admin`)**: gestiona miembros, perfiles docentes/alumnos y roles de su **propia organización**. El mismo usuario puede administrar más de una institución, siempre de forma independiente.
++- **Roles locales delegables**: coordinador, docente, estudiante, analista, ML engineer. Auditor es una función de supervisión protegida. Superadmin y institution_admin no son delegables localmente.
++
++Persistencia: `auth.users` (cuenta confirmada), `app.users` (identidad global), `app.organization_memberships` (ámbito), `app.membership_roles` (roles), `app.students` y `app.instructors` (perfiles asociados), `app.audit_logs` (trazabilidad). Todas estas tablas ya existen en `001_initial_schema.sql`.
++
++Se preserva el aislamiento mediante comprobación en FastAPI, bloqueos de fila por organización, transacciones y restricciones compuestas de PostgreSQL. No se publican tablas privadas por Supabase Data API. No se crean ni utilizan secretos de Supabase en el cliente.
++
++Diferencia importante: crear una **cuenta Auth** no implica darle acceso a EduMaster.ai. El acceso se obtiene cuando la cuenta confirmada se vincula y recibe roles activos. Tampoco todo rol de ML concede permisos para datos de entrenamiento.
++
++Flujos: incorporación inicial → asignación de rol → creación de perfil académico si es docente/estudiante → gestión de cursos/matrículas. Un docente puede conservar un segundo rol local; suspender su membresía corta el acceso a esa institución sin afectar otros países.
++
++Política docente-IA: estos permisos no autorizan a un modelo a enviar recomendaciones automáticamente al alumno; la revisión y aprobación docente continuará como paso obligatorio cuando se implemente ese módulo.
+--- a/README.md
++++ b/README.md
+@@ -1,3 +1,5 @@
++> **Actualización v13:** usuarios institucionales (roles locales, perfiles académicos, suspensión/reactivación). Consulta [`LEEME_INCREMENTO_USUARIOS_V13.md`](LEEME_INCREMENTO_USUARIOS_V13.md).
++
+ > **Incremento v12:** Módulo Usuarios para asignar/revocar administradores institucionales. Consulta [LEEME_INCREMENTO_USUARIOS_V12.md](LEEME_INCREMENTO_USUARIOS_V12.md).
+ 
+ # EduMaster.ai — Starter VSCode / Git Bash

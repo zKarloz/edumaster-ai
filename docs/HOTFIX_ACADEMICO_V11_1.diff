@@ -1,0 +1,135 @@
+--- v11/apps/web/src/modules/academic/AcademicPage.tsx
++++ v11.1/apps/web/src/modules/academic/AcademicPage.tsx
+@@ -91,6 +91,8 @@
+   const [enrollments, setEnrollments] = useState<Enrollment[]>([]);
+   const [busy, setBusy] = useState(false);
+   const [loading, setLoading] = useState(false);
++  // Evita mostrar avisos de "sin datos" antes de terminar la primera consulta.
++  const [loadedOrganizationId, setLoadedOrganizationId] = useState<string | null>(null);
+   const [error, setError] = useState('');
+   const [dialog, setDialog] = useState<Dialog>(null);
+   const [refresh, setRefresh] = useState(0);
+@@ -107,16 +109,23 @@
+   const [studentId, setStudentId] = useState('');
+   const manager = Boolean(organizationId && canManageOrganization(organizationId));
+ 
+-  // No se elige una institución que el usuario no pueda consultar.
++  // `noUncheckedIndexedAccess` considera que organizations[0] puede ser undefined.
++  // Comprobamos explícitamente la primera institución antes de acceder a su id.
+   useEffect(() => {
+-    if (!organizations.length && organizationId) onOrganizationChange('');
+-    else if (organizations.length && !organizations.some(item => item.id === organizationId)) {
+-      onOrganizationChange(organizations[0].id);
++    const firstOrganization = organizations[0];
++    if (!firstOrganization) {
++      if (organizationId) onOrganizationChange('');
++      return;
++    }
++    // No seleccionamos una institución fuera del conjunto autorizado por FastAPI.
++    if (!organizations.some(item => item.id === organizationId)) {
++      onOrganizationChange(firstOrganization.id);
+     }
+   }, [organizations, organizationId, onOrganizationChange]);
+ 
+   useEffect(() => {
+     setCourses([]); setStudents([]); setEnrollments([]); setError('');
++    setLoadedOrganizationId(null);
+     if (!organizationId || !organizations.some(org => org.id === organizationId)) return;
+     const controller = new AbortController();
+     const root = `/api/v1/academic/organizations/${organizationId}`;
+@@ -134,6 +143,7 @@
+         setStudents((results[1] as { items: Student[] }).items);
+         setEnrollments((results[2] as { items: Enrollment[] }).items);
+       }
++      setLoadedOrganizationId(organizationId);
+     }).catch((cause: unknown) => {
+       if (!controller.signal.aborted) setError(cause instanceof Error ? cause.message : 'Error al consultar el módulo académico');
+     }).finally(() => { if (!controller.signal.aborted) setLoading(false); });
+@@ -169,6 +179,8 @@
+   }
+ 
+   const activeCourses = courses.filter(item => item.status === 'published' && item.offering_status === 'open' && item.offering_id);
++  // Solo un estudiante activo puede matricularse: contar inactivos habilitaba por error el botón.
++  const activeStudents = students.filter(item => item.status === 'active');
+   const icon = mode === 'courses' ? <BookOpen size={21}/> : mode === 'students' ? <GraduationCap size={21}/> : <UsersRound size={21}/>;
+   return <div className="space-y-5">
+     <div className="app-panel flex flex-wrap items-end justify-between gap-4 rounded-2xl border border-slate-200 bg-white p-5 dark:border-[#23456A] dark:bg-[#0A1F3D]">
+@@ -193,7 +205,7 @@
+               : 'Inscripciones en ofertas abiertas de la misma institución.'}</p>
+         </div>
+         {manager && <button type="button" onClick={() => begin(mode === 'courses' ? 'course' : mode === 'students' ? 'student' : 'enrollment')}
+-          disabled={mode === 'enrollments' && (!students.length || !activeCourses.length)} className={mainButton}>
++          disabled={mode === 'enrollments' && (!activeStudents.length || !activeCourses.length)} className={mainButton}>
+           <Plus size={17}/>{mode === 'courses' ? 'Nuevo curso' : mode === 'students' ? 'Incorporar estudiante' : 'Nueva matrícula'}
+         </button>}
+       </div>
+@@ -203,12 +215,18 @@
+       {mode === 'students' && manager && <DataTable<Student> key={organizationId} rows={students} columns={studentColumns} label="Estudiantes vinculados" pageSize={8}/>}
+       {mode === 'enrollments' && manager && <DataTable<Enrollment> key={organizationId} rows={enrollments} columns={enrollmentColumns} label="Matrículas registradas" pageSize={8}/>}
+       {mode !== 'courses' && !manager && <p role="status" className="app-panel rounded-xl border p-5 text-sm">El directorio de estudiantes y las matrículas requieren permisos de administración institucional.</p>}
+-      {mode === 'students' && manager && <p className="app-panel flex items-start gap-2 rounded-xl border p-4 text-sm app-muted">
+-        <Info size={18} className="shrink-0"/> Antes de incorporar un estudiante, crea su cuenta y confirma su correo en Supabase Authentication → Users. Este formulario NO crea credenciales de acceso.
+-      </p>}
+-      {mode === 'enrollments' && manager && (!students.length || !activeCourses.length) && <p className="app-warning rounded-xl border p-4 text-sm">
+-        Para matricular necesitas al menos un estudiante activo y un curso publicado con oferta abierta.
+-      </p>}
++      {/* Guía informativa (azul suave en Claro/Oscuro, gris en Negro):
++          aparece mientras la institución no tenga estudiantes. No es una alerta de error. */}
++      {mode === 'students' && manager && !loading && !error && loadedOrganizationId === organizationId && students.length === 0 &&
++        <p role="status" className="app-info flex items-start gap-2 rounded-xl border p-4 text-sm">
++          <Info size={18} aria-hidden="true" className="mt-0.5 shrink-0"/>
++          <span>Antes de incorporar un estudiante, crea su cuenta y confirma su correo en Supabase Authentication → Users. Este formulario no crea credenciales de acceso.</span>
++        </p>}
++      {/* Aviso de requisito pendiente: desaparece al existir estudiantes activos y ofertas abiertas. */}
++      {mode === 'enrollments' && manager && !loading && !error && loadedOrganizationId === organizationId && (!activeStudents.length || !activeCourses.length) &&
++        <p role="status" className="app-warning rounded-xl border p-4 text-sm">
++          Para matricular necesitas al menos un estudiante activo y un curso publicado con oferta abierta.
++        </p>}
+     </>}
+ 
+     <Modal open={dialog !== null} title={dialog === 'course' ? 'Registrar curso' : dialog === 'student' ? 'Incorporar estudiante' : 'Matricular estudiante'}
+@@ -225,6 +243,11 @@
+           ]}/></div>
+         </>}
+         {dialog === 'student' && <>
++          {/* La guía permanece disponible dentro del formulario, incluso si ya hay alumnos. */}
++          <p className="app-info flex items-start gap-2 rounded-xl border p-3 text-xs" role="note">
++            <Info size={16} aria-hidden="true" className="shrink-0"/>
++            <span>La cuenta debe existir y tener el correo confirmado en Supabase Authentication → Users. Aquí no se crean contraseñas.</span>
++          </p>
+           <Field label="Correo de la cuenta Supabase Auth"><input required type="email" maxLength={254} value={email} onChange={event => setEmail(event.target.value)} placeholder="estudiante@ejemplo.com" className={inputClass}/></Field>
+           <Field label="Nombre completo"><input required minLength={3} maxLength={180} value={fullName} onChange={event => setFullName(event.target.value)} placeholder="Estudiante de prueba" className={inputClass}/></Field>
+           <Field label="Código académico (opcional)"><input maxLength={60} value={externalCode} onChange={event => setExternalCode(event.target.value)} placeholder="ALU-001" className={inputClass}/></Field>
+@@ -234,7 +257,7 @@
+           <div className="space-y-1.5"><span className="text-sm font-medium">Curso y período</span><OptionSelect ariaLabel="Curso ofertado" value={offering} onChange={setOffering} placeholder="Seleccionar oferta abierta" options={activeCourses.map(item => ({
+             value: item.offering_id!, label: item.title, suffix: item.period ?? '',
+           }))}/></div>
+-          <div className="space-y-1.5"><span className="text-sm font-medium">Estudiante</span><OptionSelect ariaLabel="Estudiante a matricular" value={studentId} onChange={setStudentId} placeholder="Seleccionar estudiante" options={students.filter(item => item.status === 'active').map(item => ({
++          <div className="space-y-1.5"><span className="text-sm font-medium">Estudiante</span><OptionSelect ariaLabel="Estudiante a matricular" value={studentId} onChange={setStudentId} placeholder="Seleccionar estudiante" options={activeStudents.map(item => ({
+             value: item.id, label: item.full_name, suffix: item.external_code || '',
+           }))}/></div>
+         </>}
+--- v11/apps/web/src/styles.css
++++ v11.1/apps/web/src/styles.css
+@@ -23,6 +23,21 @@
+ .search-control { transition: border-color .18s ease, box-shadow .18s ease; }
+ .search-control:focus-within { border-color: #087fe5; box-shadow: 0 0 0 2px rgb(8 127 229 / 22%); }
+ .search-control input:focus, .search-control input:focus-visible { outline: none; box-shadow: none; }
++
++/* Colores semánticos compartidos (sin depender del fondo propio de cada módulo).
++   warning = requisito pendiente/error leve; info = orientación que no bloquea la acción. */
++.app-warning { background-color: #fffbeb; border-color: #e9d5a5; color: #805313; }
++.app-info { background-color: #eff6ff; border-color: #c6dbf4; color: #214e73; }
++html.dark:not(.black-theme) .app-info {
++  background-color: #152b40;
++  border-color: #3c5870;
++  color: #c3daec;
++}
++html.black-theme .app-info {
++  background-color: #252525;
++  border-color: #505050;
++  color: #dedede;
++}
+ 
+ /* Avisos de precaución: fondo ámbar tenue y buen contraste en ambos temas oscuros. */
+ html.dark .app-warning {

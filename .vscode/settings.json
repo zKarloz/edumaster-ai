@@ -1,0 +1,7 @@
+{
+  "editor.formatOnSave": true,
+  "files.exclude": { "**/__pycache__": true, "**/.venv": true, "**/node_modules": true },
+  "python.analysis.typeCheckingMode": "basic",
+  "typescript.tsdk": "apps/web/node_modules/typescript/lib",
+  "terminal.integrated.defaultProfile.windows": "Git Bash"
+}

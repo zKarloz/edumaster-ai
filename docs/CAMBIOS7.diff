@@ -1,0 +1,456 @@
+--- v9/README.md
++++ v10/README.md
+@@ -188,3 +188,18 @@
+ La interfaz tiene catálogo izquierdo, filtros por país, mapa con marcadores,
+ formulario de alta/edición y diseño ampliado a 1440 px. Para detalles de
+ seguridad, límites y pruebas ver `docs/MAPA_INSTITUCIONES_SPRINT1.md`.
++
++
++## CAMBIOS 7 (v10): ayuda contextual y preferencias de movimiento
++
++- En **Instituciones**, el botón `?` del código institucional abre una ayuda flotante
++  con ejemplos (sin empujar los campos). Se cierra suavemente con el botón,
++  Escape o clic fuera. Implementación reutilizable: `HelpPopover.tsx`.
++- Etiquetas y campos del formulario institucional: separación uniforme de 6 px.
++- Los modales aparecen con el mismo levantamiento sutil que el contenido de módulos.
++- **Configuración → Animaciones de la interfaz** permite habilitar o deshabilitar
++  el movimiento global. Se respeta además `prefers-reduced-motion` del sistema.
++- Las preferencias siguen en `localStorage` por usuario, sin cambios en Supabase.
++
++Para actualizar desde v9, copiar únicamente los archivos del parche v10; no ejecutar
++ SQL ni reemplazar `.env`. Ver `docs/CAMBIOS7_POPUP_ETIQUETAS_ANIMACIONES.md`.
+--- v9/apps/web/src/providers/SettingsProvider.tsx
++++ v10/apps/web/src/providers/SettingsProvider.tsx
+@@ -5,15 +5,16 @@
+ export type ThemeName = 'light' | 'dark' | 'black';
+ export type ToastPosition = 'bottom-right' | 'top-right' | 'top-center' | 'bottom-center';
+ export type ModalBackdropStyle = 'blur' | 'dim';
+-interface Preferences { theme: ThemeName; toastPosition: ToastPosition; modalBackdrop: ModalBackdropStyle }
++interface Preferences { theme: ThemeName; toastPosition: ToastPosition; modalBackdrop: ModalBackdropStyle; animationsEnabled: boolean }
+ interface SettingsContextValue extends Preferences {
+   setTheme: (theme: ThemeName) => void;
+   setToastPosition: (position: ToastPosition) => void;
+   setModalBackdrop: (style: ModalBackdropStyle) => void;
++  setAnimationsEnabled: (enabled: boolean) => void;
+   selectPreferenceScope: (userId: string | null) => void;
+ }
+ 
+-const DEFAULTS: Preferences = { theme: 'dark', toastPosition: 'bottom-right', modalBackdrop: 'blur' };
++const DEFAULTS: Preferences = { theme: 'dark', toastPosition: 'bottom-right', modalBackdrop: 'blur', animationsEnabled: true };
+ const THEMES: ThemeName[] = ['light', 'dark', 'black'];
+ const POSITIONS: ToastPosition[] = ['bottom-right', 'top-right', 'top-center', 'bottom-center'];
+ const storageKey = (scope: string) => `edumaster_preferences_v1_${scope}`;
+@@ -29,6 +30,8 @@
+           theme: candidate.theme && THEMES.includes(candidate.theme) ? candidate.theme : DEFAULTS.theme,
+           toastPosition: candidate.toastPosition && POSITIONS.includes(candidate.toastPosition) ? candidate.toastPosition : DEFAULTS.toastPosition,
+           modalBackdrop: candidate.modalBackdrop === 'dim' ? 'dim' : DEFAULTS.modalBackdrop,
++          // Preferencias anteriores no incluyen esta propiedad: conservar animaciones por defecto.
++          animationsEnabled: typeof candidate.animationsEnabled === 'boolean' ? candidate.animationsEnabled : DEFAULTS.animationsEnabled,
+         };
+       }
+     }
+@@ -57,6 +60,7 @@
+   const setTheme = useCallback((theme: ThemeName) => update({ theme }), [update]);
+   const setToastPosition = useCallback((toastPosition: ToastPosition) => update({ toastPosition }), [update]);
+   const setModalBackdrop = useCallback((modalBackdrop: ModalBackdropStyle) => update({ modalBackdrop }), [update]);
++  const setAnimationsEnabled = useCallback((animationsEnabled: boolean) => update({ animationsEnabled }), [update]);
+   const selectPreferenceScope = useCallback((userId: string | null) => {
+     const nextScope = userId ? `user_${userId}` : 'guest';
+     if (scopeRef.current === nextScope) return;
+@@ -71,7 +75,13 @@
+     root.dataset.theme = preferences.theme;
+   }, [preferences.theme]);
+ 
+-  return <SettingsContext.Provider value={{ ...preferences, setTheme, setToastPosition, setModalBackdrop, selectPreferenceScope }}>
++  // Un único atributo CSS controla transiciones y keyframes de toda la interfaz.
++  // El CSS también respeta la preferencia del sistema 'reducir movimiento'.
++  useEffect(() => {
++    document.documentElement.dataset.motion = preferences.animationsEnabled ? 'on' : 'off';
++  }, [preferences.animationsEnabled]);
++
++  return <SettingsContext.Provider value={{ ...preferences, setTheme, setToastPosition, setModalBackdrop, setAnimationsEnabled, selectPreferenceScope }}>
+     {children}
+   </SettingsContext.Provider>;
+ }
+--- v9/apps/web/src/modules/settings/SettingsPage.tsx
++++ v10/apps/web/src/modules/settings/SettingsPage.tsx
+@@ -1,5 +1,5 @@
+ // Opciones de apariencia y notificaciones. Nuevas preferencias se agregarán aquí.
+-import { Bell, Check, Layers3, MonitorCog, Send, SlidersHorizontal } from 'lucide-react';
++import { Bell, Check, Clapperboard, Layers3, MonitorCog, Send, SlidersHorizontal } from 'lucide-react';
+ import { useSettings, type ModalBackdropStyle, type ThemeName, type ToastPosition } from '../../providers/SettingsProvider';
+ import { useToast } from '../../components/shared/Toast';
+ 
+@@ -16,7 +16,7 @@
+ ];
+ 
+ export function SettingsPage() {
+-  const { theme, toastPosition, modalBackdrop, setTheme, setToastPosition, setModalBackdrop } = useSettings();
++  const { theme, toastPosition, modalBackdrop, animationsEnabled, setTheme, setToastPosition, setModalBackdrop, setAnimationsEnabled } = useSettings();
+   const { notify } = useToast();
+   return <div className="grid gap-5 xl:grid-cols-2">
+     <section className="app-panel rounded-2xl border border-slate-200 bg-white p-6 dark:border-[#23456A] dark:bg-[#0A1F3D]">
+@@ -60,6 +60,18 @@
+           </label>)}
+       </fieldset>
+     </section>
++    <section className="app-panel rounded-2xl border border-slate-200 bg-white p-6 dark:border-[#23456A] dark:bg-[#0A1F3D] xl:col-span-2">
++      <h3 className="flex items-center gap-2 text-lg font-semibold"><Clapperboard size={21}/> Animaciones de la interfaz</h3>
++      <p className="app-muted mb-5 mt-2 text-sm text-slate-500 dark:text-slate-300">Puedes desactivar el movimiento en navegación, modales, ayudas y notificaciones. Las funciones seguirán disponibles.</p>
++      <label className="app-choice flex cursor-pointer items-start gap-3 rounded-xl border border-slate-200 p-4 dark:border-[#23456A]">
++        <input type="checkbox" role="switch" checked={animationsEnabled} onChange={event => setAnimationsEnabled(event.target.checked)}
++          className="app-preference-radio mt-0.5 size-5 shrink-0 accent-sky-500"/>
++        <span className="min-w-0 flex-1">
++          <span className="block text-sm font-semibold">Activar animaciones</span>
++          <span className="app-muted mt-1 block text-xs">{animationsEnabled ? 'Transiciones suaves habilitadas.' : 'Transiciones y movimientos desactivados.'} Siempre se respeta la opción «Reducir movimiento» del sistema.</span>
++        </span>
++      </label>
++    </section>
+     <section className="app-panel rounded-2xl border border-dashed border-slate-200 bg-white p-5 dark:border-[#23456A] dark:bg-[#0A1F3D] xl:col-span-2">
+       <p className="flex items-center gap-2 text-sm font-medium"><SlidersHorizontal size={17}/> Preferencias locales</p>
+       <p className="app-muted mt-2 text-sm text-slate-500 dark:text-slate-300">Por ahora, las preferencias se guardan por usuario en este navegador. Más adelante podrán sincronizarse con el perfil de Supabase.</p>
+--- v9/apps/web/src/modules/organizations/OrganizationForm.tsx
++++ v10/apps/web/src/modules/organizations/OrganizationForm.tsx
+@@ -3,8 +3,10 @@
+ import { useEffect, useRef, useState, type FormEvent } from 'react';
+ import { MapContainer, Marker, TileLayer, useMap, useMapEvents } from 'react-leaflet';
+ import { divIcon } from 'leaflet';
+-import { Building2, CircleHelp, MapPin } from 'lucide-react';
++import { Building2, MapPin } from 'lucide-react';
+ import { OptionSelect } from '../../components/shared/OptionSelect';
++import { HelpPopover } from '../../components/shared/HelpPopover';
++import { useSettings } from '../../providers/SettingsProvider';
+ import type { Organization, OrganizationInput } from './types';
+ import { COUNTRIES } from './types';
+ 
+@@ -42,13 +44,17 @@
+ function CountryFocus({ code }: { code: string }) {
+   const map = useMap();
+   const first = useRef(true);
++  const { animationsEnabled } = useSettings();
+   useEffect(() => {
+     // En edición se respeta inicialmente la ubicación guardada.
+     if (first.current) { first.current = false; return; }
+     const center = COUNTRY_CENTERS[code];
+-    if (center) map.flyTo(center, 6, { duration: 0.5 });
+-    else map.setView([15, -20], 2);
+-  }, [code, map]);
++    const animate = animationsEnabled && !window.matchMedia('(prefers-reduced-motion: reduce)').matches;
++    if (center) {
++      if (animate) map.flyTo(center, 6, { duration: 0.5 });
++      else map.setView(center, 6, { animate: false });
++    } else map.setView([15, -20], 2, { animate: false });
++  }, [code, map, animationsEnabled]);
+   return null;
+ }
+ 
+@@ -68,7 +74,6 @@
+     latitude: initial.latitude?.toString() ?? '', longitude: initial.longitude?.toString() ?? '',
+   } : EMPTY);
+   const [formError, setFormError] = useState('');
+-  const [showCodeExamples, setShowCodeExamples] = useState(false);
+   // Si la sede está fuera del catálogo frecuente, permitimos un código ISO manual.
+   const [customCountry, setCustomCountry] = useState(() => Boolean(initial?.country_code && !COUNTRIES.some(country => country.code === initial.country_code)));
+   const change = (field: keyof FormDraft, value: string | null) =>
+@@ -118,32 +123,23 @@
+   return <form onSubmit={event => void submit(event)} className="space-y-4">
+     <div className="flex items-center gap-2 text-sm app-muted"><Building2 size={17}/> Datos y ubicación de la sede principal</div>
+     <div className="grid gap-3 sm:grid-cols-2">
+-      <div className="space-y-1 text-xs font-medium">
+-        <div className="flex items-center gap-1.5">
+-          <label htmlFor="institution-code">Código institucional</label>
+-          <button type="button" aria-label="Ver ejemplos de códigos institucionales"
+-            aria-expanded={showCodeExamples} aria-controls="institution-code-help"
+-            onClick={() => setShowCodeExamples(previous => !previous)}
+-            className="app-secondary-button inline-flex h-6 w-6 items-center justify-center rounded-full border border-slate-200 dark:border-[#345578]"
+-            title="Ver ejemplos y formato del código"><CircleHelp size={15}/></button>
+-        </div>
++      <div className="app-form-field flex flex-col gap-1.5 text-xs font-medium">
++        <HelpPopover htmlFor="institution-code" label="Código institucional" title="Formato del código institucional">
++          <p className="app-muted">Ejemplos: <code>pe-unmsm</code> (Perú), <code>co-unal</code> (Colombia), <code>mx-unam</code> (México), <code>es-ucm</code> (España).</p>
++          <p className="app-muted mt-2">Usa el prefijo del país, letras sin tildes, números, guiones o guiones bajos. Debe ser único y permanente.</p>
++        </HelpPopover>
+         <input id="institution-code" required minLength={5} maxLength={40}
+           pattern={initial ? undefined : '[a-z]{2}-[a-z0-9](?:[a-z0-9]|_|-){0,35}[a-z0-9]'}
+           value={values.code} onChange={event => change('code', event.target.value.toLowerCase())}
+-          disabled={!!initial} aria-describedby={showCodeExamples ? 'institution-code-help' : undefined}
++          disabled={!!initial}
+           placeholder={`${values.country_code.toLowerCase() || 'pe'}-institucion`} className={`${inputCls} app-institution-code`}/>
+         {initial && <p className="app-muted text-xs font-normal">Este identificador es permanente y no se puede editar.</p>}
+-        {showCodeExamples && <div id="institution-code-help" className="app-panel rounded-xl border border-slate-200 p-3 text-xs font-normal leading-5 dark:border-[#345578]">
+-          <p className="font-semibold">Formato: país-identificador</p>
+-          <p className="app-muted mt-1">Ejemplos: <code>pe-unmsm</code> (Perú), <code>co-unal</code> (Colombia), <code>mx-unam</code> (México), <code>es-ucm</code> (España).</p>
+-          <p className="app-muted mt-1">El prefijo debe coincidir con el país al registrar. Usa letras sin tildes, números, guiones o guiones bajos; el código debe ser único y no podrá modificarse después.</p>
+-        </div>}
+       </div>
+-      <label className="space-y-1 text-xs font-medium">Nombre
++      <label className="app-form-field flex flex-col gap-1.5 text-xs font-medium"><span>Nombre</span>
+         <input required minLength={3} maxLength={180} value={values.name} onChange={event => change('name', event.target.value)}
+           placeholder="Institución de ejemplo" className={inputCls}/>
+       </label>
+-      <div className="space-y-1 text-xs font-medium">
++      <div className="app-form-field flex flex-col gap-1.5 text-xs font-medium">
+         <span className="block">País (ISO 3166-1 alfa-2)</span>
+         <OptionSelect ariaLabel="País de la institución" value={customCountry ? '__other__' : values.country_code}
+           options={[...COUNTRIES.map(country => ({ value: country.code, label: country.name, suffix: country.code })),
+@@ -158,23 +154,23 @@
+           onChange={event => changeCountry(event.target.value.replace(/[^a-z]/gi, '').toUpperCase())}
+           placeholder="Código ISO, por ejemplo JP" className={`${inputCls} mt-2`}/>}
+       </div>
+-      <label className="space-y-1 text-xs font-medium">Ciudad
++      <label className="app-form-field flex flex-col gap-1.5 text-xs font-medium"><span>Ciudad</span>
+         <input required minLength={2} maxLength={120} value={values.city}
+           onChange={event => change('city', event.target.value)} placeholder="Lima" className={inputCls}/>
+       </label>
+-      <label className="space-y-1 text-xs font-medium">Zona horaria IANA
++      <label className="app-form-field flex flex-col gap-1.5 text-xs font-medium"><span>Zona horaria IANA</span>
+         <input required maxLength={80} value={values.timezone} onChange={event => change('timezone', event.target.value)}
+           placeholder="America/Lima" className={inputCls}/>
+       </label>
+-      <label className="space-y-1 text-xs font-medium">Dirección (opcional)
++      <label className="app-form-field flex flex-col gap-1.5 text-xs font-medium"><span>Dirección (opcional)</span>
+         <input maxLength={240} value={values.address ?? ''} onChange={event => change('address', event.target.value)}
+           placeholder="Av. Principal 123" className={inputCls}/>
+       </label>
+-      <label className="space-y-1 text-xs font-medium">Latitud
++      <label className="app-form-field flex flex-col gap-1.5 text-xs font-medium"><span>Latitud</span>
+         <input type="number" required min={-90} max={90} step="any" value={values.latitude}
+           onChange={event => change('latitude', event.target.value)} className={inputCls}/>
+       </label>
+-      <label className="space-y-1 text-xs font-medium">Longitud
++      <label className="app-form-field flex flex-col gap-1.5 text-xs font-medium"><span>Longitud</span>
+         <input type="number" required min={-180} max={180} step="any" value={values.longitude}
+           onChange={event => change('longitude', event.target.value)} className={inputCls}/>
+       </label>
+--- v9/apps/web/src/modules/organizations/InstitutionMap.tsx
++++ v10/apps/web/src/modules/organizations/InstitutionMap.tsx
+@@ -6,6 +6,7 @@
+ import type { Organization } from './types';
+ import { countryName } from './types';
+ import 'leaflet/dist/leaflet.css';
++import { useSettings } from '../../providers/SettingsProvider';
+ 
+ interface Props {
+   organizations: Organization[];
+@@ -22,21 +23,24 @@
+ 
+ function MapNavigation({ organizations, selectedId }: Pick<Props, 'organizations' | 'selectedId'>) {
+   const map = useMap();
++  const { animationsEnabled } = useSettings();
+   const selected = organizations.find(org => org.id === selectedId);
+   const positions = useMemo(() => organizations
+     .filter((item): item is Organization & { latitude: number; longitude: number } =>
+       item.latitude !== null && item.longitude !== null), [organizations]);
+ 
+   useEffect(() => {
++    const animate = animationsEnabled && !window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+     if (selected?.latitude != null && selected.longitude != null) {
+-      map.flyTo([selected.latitude, selected.longitude], 7, { duration: 0.6 });
++      if (animate) map.flyTo([selected.latitude, selected.longitude], 7, { duration: 0.6 });
++      else map.setView([selected.latitude, selected.longitude], 7, { animate: false });
+     } else if (positions.length) {
+       map.fitBounds(latLngBounds(positions.map(item => [item.latitude, item.longitude] as [number, number])),
+-        { padding: [45, 45], maxZoom: 7, animate: true });
++        { padding: [45, 45], maxZoom: 7, animate });
+     } else {
+-      map.setView([-7, -69], 3);
++      map.setView([-7, -69], 3, { animate: false });
+     }
+-  }, [map, positions, selected?.id, selected?.latitude, selected?.longitude]);
++  }, [map, positions, selected?.id, selected?.latitude, selected?.longitude, animationsEnabled]);
+   return null;
+ }
+ 
+--- /dev/null
++++ v10/apps/web/src/components/shared/HelpPopover.tsx
+@@ -0,0 +1,78 @@
++// Ayuda flotante reutilizable anclada a una etiqueta.
++// Animación de entrada/salida, clic exterior y Escape; no modifica el alto del formulario.
++import { useCallback, useEffect, useId, useRef, useState, type ReactNode } from 'react';
++import { CircleHelp, X } from 'lucide-react';
++import { useSettings } from '../../providers/SettingsProvider';
++
++interface HelpPopoverProps {
++  htmlFor: string;
++  label: string;
++  title: string;
++  children: ReactNode;
++}
++
++export function HelpPopover({ htmlFor, label, title, children }: HelpPopoverProps) {
++  const { animationsEnabled } = useSettings();
++  const id = useId();
++  const anchorRef = useRef<HTMLDivElement>(null);
++  const triggerRef = useRef<HTMLButtonElement>(null);
++  const [open, setOpen] = useState(false);
++  const [mounted, setMounted] = useState(false);
++  const close = useCallback(() => setOpen(false), []);
++
++  // Mantener un instante el panel montado permite animar también la salida.
++  useEffect(() => {
++    if (open || !mounted) return;
++    const prefersReducedMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false;
++    if (!animationsEnabled || prefersReducedMotion) {
++      setMounted(false);
++      return;
++    }
++    const timer = window.setTimeout(() => setMounted(false), 180);
++    return () => window.clearTimeout(timer);
++  }, [animationsEnabled, mounted, open]);
++
++  useEffect(() => {
++    if (!open) return;
++    function onOutside(event: PointerEvent) {
++      if (event.target instanceof Node && !anchorRef.current?.contains(event.target)) close();
++    }
++    function onEscape(event: KeyboardEvent) {
++      if (event.key !== 'Escape') return;
++      // La ayuda se cierra primero; el Escape no debe cerrar el modal principal.
++      event.preventDefault();
++      event.stopPropagation();
++      close();
++      triggerRef.current?.focus();
++    }
++    document.addEventListener('pointerdown', onOutside);
++    document.addEventListener('keydown', onEscape, true);
++    return () => {
++      document.removeEventListener('pointerdown', onOutside);
++      document.removeEventListener('keydown', onEscape, true);
++    };
++  }, [open, close]);
++
++  return <div ref={anchorRef} className="relative z-30 flex w-full items-center gap-1.5">
++    <label htmlFor={htmlFor}>{label}</label>
++    <button ref={triggerRef} type="button" title={`Ayuda: ${label}`}
++      aria-label={`Ver ayuda sobre ${label.toLowerCase()}`} aria-haspopup="dialog"
++      aria-expanded={open} aria-controls={mounted ? id : undefined}
++      onClick={() => {
++        if (open) close();
++        else { setMounted(true); setOpen(true); }
++      }}
++      className="app-secondary-button inline-flex size-6 shrink-0 items-center justify-center rounded-full border border-slate-200 dark:border-[#345578]">
++      <CircleHelp aria-hidden="true" size={15}/>
++    </button>
++    {mounted && <div id={id} role="dialog" aria-label={title} aria-hidden={!open}
++      className={`app-help-popover absolute left-0 top-[calc(100%+0.5rem)] z-50 max-h-[min(15rem,50vh)] w-[min(19rem,calc(100vw-5rem))] overflow-y-auto rounded-xl border border-slate-200 bg-white p-3 text-xs font-normal leading-5 text-slate-800 shadow-xl dark:border-[#345578] dark:bg-[#0D2B52] dark:text-slate-100 ${open ? 'app-help-popover-enter' : 'app-help-popover-leave'}`}>
++      <div className="mb-1 flex items-center justify-between gap-2">
++        <strong className="font-semibold">{title}</strong>
++        <button type="button" tabIndex={open ? 0 : -1} onClick={() => { close(); triggerRef.current?.focus(); }}
++          aria-label="Cerrar ayuda" className="app-secondary-button rounded-lg p-1"><X size={15}/></button>
++      </div>
++      {children}
++    </div>}
++  </div>;
++}
+--- v9/apps/web/src/styles.css
++++ v10/apps/web/src/styles.css
+@@ -43,6 +43,8 @@
+ /* La navegación entra desde abajo sin reanimar toda la aplicación. */
+ @keyframes module-rise { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: translateY(0); } }
+ .module-enter { animation: module-rise .25s cubic-bezier(.22,1,.36,1) both; }
++/* Los modales usan el mismo levantamiento sutil que los módulos. */
++.app-modal { animation: module-rise .25s cubic-bezier(.22,1,.36,1) both; }
+ @keyframes toast-top { from { opacity: 0; transform: translateY(-12px); } to { opacity: 1; transform: translateY(0); } }
+ @keyframes toast-bottom { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: translateY(0); } }
+ @keyframes toast-away-top { from { opacity: 1; transform: translateY(0); } to { opacity: 0; transform: translateY(-8px); } }
+@@ -230,3 +232,34 @@
+ 
+ /* Códigos ISO y abreviaturas del selector compartido: señal secundaria discreta. */
+ html.black-theme .app-select-suffix { color: #b7b7b7; }
++
++/* CAMBIOS 7: ayuda contextual flotante, sin reflujo del formulario.
++   Apertura y cierre con desvanecimiento (sin desplazamientos). */
++@keyframes help-popover-fade-in { from { opacity: 0; } to { opacity: 1; } }
++@keyframes help-popover-fade-out { from { opacity: 1; } to { opacity: 0; } }
++.app-help-popover-enter { animation: help-popover-fade-in 180ms ease-out both; }
++.app-help-popover-leave { animation: help-popover-fade-out 180ms ease-in both; pointer-events: none; }
++html.black-theme .app-help-popover { background: #222; color: #eee; border-color: #505050; }
++/* El espacio se aplica realmente entre etiqueta y control gracias a flex-gap. */
++.app-form-field > label, .app-form-field > span { line-height: 1.35; }
++
++/* Ajuste de accesibilidad global. No afecta el estado de los componentes,
++   solamente movimiento/tiempos visuales. También aplica a Leaflet y popovers. */
++html[data-motion='off'] *,
++html[data-motion='off'] *::before,
++html[data-motion='off'] *::after {
++  animation-duration: 0ms !important;
++  animation-delay: 0ms !important;
++  transition-duration: 0ms !important;
++  transition-delay: 0ms !important;
++  scroll-behavior: auto !important;
++}
++@media (prefers-reduced-motion: reduce) {
++  *, *::before, *::after {
++    animation-duration: 0ms !important;
++    animation-delay: 0ms !important;
++    transition-duration: 0ms !important;
++    transition-delay: 0ms !important;
++    scroll-behavior: auto !important;
++  }
++}
+--- /dev/null
++++ v10/docs/CAMBIOS7_POPUP_ETIQUETAS_ANIMACIONES.md
+@@ -0,0 +1,63 @@
++# EduMaster.ai — CAMBIOS 7 (v10)
++
++## Cambios incluidos
++
++1. **Ayuda del código institucional.** `HelpPopover` es un componente reutilizable
++   que se abre junto al título del campo. El panel se posiciona de forma flotante
++   (`position: absolute`) y NO modifica el alto del formulario ni el tamaño del modal.
++   Tiene animación de opacidad al abrir/cerrar (180 ms), botón X, cierre mediante
++   clic fuera y Escape. Escape cierra primero la ayuda, no el modal principal.
++   Ejemplos visibles: `pe-unmsm`, `co-unal`, `mx-unam` y `es-ucm`.
++2. **Espacio entre títulos y campos.** Se aplicó separación uniforme de 6 px
++   mediante `gap-1.5` y etiquetas de texto explícitas `<span>` a los campos
++   institucionales; el comportamiento antes dependía del espaciado entre hijos,
++   pero algunas etiquetas eran nodos de texto.
++3. **Entrada de modales.** `.app-modal` reutiliza `module-rise` (250 ms),
++   sin modificar portal, backdrop, scroll, foco ni bloqueo del fondo.
++4. **Configuración de animaciones.** Nueva preferencia `animationsEnabled`
++   (predeterminada `true`) en `SettingsProvider`, con interruptor en `SettingsPage`.
++   La configuración se guarda por ámbito de usuario en `localStorage`, y es
++   compatible con las preferencias guardadas de versiones anteriores.
++   CSS: `html[data-motion="off"]` desactiva animaciones y transiciones.
++   `prefers-reduced-motion: reduce` del sistema también se respeta, incluso
++   si el interruptor está activado. Los mapas evitan `flyTo` cuando se desactiva.
++
++## Instalación desde v9 (Windows / Git Bash)
++
++1. Haz respaldo de `apps/web/src`.
++2. Descomprime `EduMaster_CAMBIOS7_Parche_Frontend_v10.zip` sobre la carpeta
++   contenedora de `edumaster-ai` y reemplaza los archivos indicados.
++3. En una terminal dentro de `edumaster-ai/apps/web` ejecuta:
++
++```bash
++npm run build
++npm run dev
++```
++
++**No se modifica** PostgreSQL, FastAPI, las credenciales, los archivos `.env`
++ni las dependencias de `package.json`. No necesitas reinstalar paquetes.
++
++## Checklist de aceptación
++
++- [ ] Abrir **Instituciones → Nueva institución → ?** y comprobar que aparece
++      la ventanita, sin mover los demás campos.
++- [ ] Cerrar la ayuda con `?`, X, clic fuera y Escape. Debe desvanecerse
++      sin cerrar el modal al usar Escape para la ayuda.
++- [ ] Comprobar la separación entre título y control de todos los campos.
++- [ ] Abrir/cerrar **Nueva institución** y **Editar institución**: entrada
++      ascendente del modal; mantiene overlay completo y bloqueo del scroll.
++- [ ] En **Configuración**, desactivar animaciones; volver al módulo y
++      comprobar que el modal, el sidebar, las ayudas, los cambios de módulo
++      y notificaciones dejan de animarse. Rehabilitarlas para comprobar.
++- [ ] Recargar la página con sesión activa y comprobar que la preferencia
++      se conserva; verificar en claro, oscuro y negro y en pantalla móvil.
++- [ ] Con el sistema configurado en **Reducir movimiento**, comprobar que
++      la preferencia del SO también suprime las animaciones.
++
++## Validación técnica en el entorno de preparación
++
++- Sintaxis TypeScript/TSX analizada con el compilador de TypeScript: sin errores
++  de sintaxis en los 17 archivos revisados.
++- No se pudo ejecutar `npm install` (agotó el tiempo por red), por lo que
++  `npm run build` y los controles visuales quedan pendientes en VSCode.
++- No se requiere ninguna migración SQL.

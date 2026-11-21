@@ -1,0 +1,201 @@
+--- a/apps/web/src/App.tsx
++++ b/apps/web/src/App.tsx
+@@ -334,7 +334,7 @@
+             </button>}
+           </div>
+         </header>
+-        <main key={section} className="module-enter mx-auto w-full max-w-[1440px] space-y-6 px-5 py-6 sm:px-6 lg:px-8 2xl:px-10">
++        <main key={section} className="module-enter mx-auto w-full max-w-[1680px] space-y-6 px-4 py-6 sm:px-4 lg:px-5 2xl:px-7">
+           <section className="flex flex-wrap items-center justify-between gap-3">
+             <div><span className="app-status-chip inline-flex rounded-full bg-[#087FE5]/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-wider text-[#087FE5] dark:bg-[#087FE5]/20 dark:text-[#20C8F5]">Sprint 1 · Base inicial</span>
+               <h2 className="mt-3 text-2xl font-bold">{section === 'dashboard' ? 'Centro de administración' : `${title} · EduMaster.ai`}</h2>
+--- a/apps/web/src/components/shared/Modal.tsx
++++ b/apps/web/src/components/shared/Modal.tsx
+@@ -1,5 +1,7 @@
+-// Diálogo genérico controlado: Escape, foco inicial y retorno del foco.
+-import { useEffect, useRef, type ReactNode } from 'react';
++// Modal compartido: portal a <body> para evitar contextos de apilamiento de Leaflet,
++// bloqueo de scroll del documento y navegación por teclado (Escape y foco contenido).
++import { useEffect, useId, useRef, type ReactNode } from 'react';
++import { createPortal } from 'react-dom';
+ import { X } from 'lucide-react';
+ 
+ interface ModalProps {
+@@ -8,37 +10,88 @@
+   onClose: () => void;
+   children: ReactNode;
+ }
++
++const FOCUSABLE = [
++  'a[href]', 'button:not([disabled])', 'input:not([disabled])',
++  'select:not([disabled])', 'textarea:not([disabled])',
++  '[tabindex]:not([tabindex="-1"])',
++].join(',');
++
+ export function Modal({ open, title, onClose, children }: ModalProps) {
++  const titleId = useId();
+   const closeRef = useRef<HTMLButtonElement>(null);
+-  const previousRef = useRef<HTMLElement | null>(null);
++  const dialogRef = useRef<HTMLElement>(null);
++  const onCloseRef = useRef(onClose);
++  onCloseRef.current = onClose;
++
+   useEffect(() => {
+     if (!open) return;
+-    previousRef.current = document.activeElement as HTMLElement | null;
++    const previousFocus = document.activeElement as HTMLElement | null;
++    const html = document.documentElement;
++    const body = document.body;
++    const oldHtmlOverflow = html.style.overflow;
++    const oldBodyOverflow = body.style.overflow;
++
++    // Se bloquea solo el documento de fondo. El contenido del diálogo
++    // tiene su propia zona scrollable para pantallas pequeñas.
++    html.style.overflow = 'hidden';
++    body.style.overflow = 'hidden';
+     closeRef.current?.focus();
++
+     const onKeyDown = (event: KeyboardEvent) => {
+-      if (event.key === 'Escape') onClose();
+-      // En el Sprint 1 se incorporará trap de foco de una biblioteca accesible.
++      if (event.key === 'Escape') {
++        event.preventDefault();
++        onCloseRef.current();
++        return;
++      }
++      if (event.key !== 'Tab' || !dialogRef.current) return;
++      const nodes = Array.from(dialogRef.current.querySelectorAll<HTMLElement>(FOCUSABLE))
++        .filter(element => element.getClientRects().length > 0);
++      if (!nodes.length) {
++        event.preventDefault();
++        closeRef.current?.focus();
++        return;
++      }
++      const first = nodes[0];
++      const last = nodes[nodes.length - 1];
++      if (event.shiftKey && (document.activeElement === first || !dialogRef.current.contains(document.activeElement))) {
++        event.preventDefault();
++        last?.focus();
++      } else if (!event.shiftKey && (document.activeElement === last || !dialogRef.current.contains(document.activeElement))) {
++        event.preventDefault();
++        first?.focus();
++      }
+     };
++
+     document.addEventListener('keydown', onKeyDown);
+     return () => {
+       document.removeEventListener('keydown', onKeyDown);
+-      previousRef.current?.focus();
++      html.style.overflow = oldHtmlOverflow;
++      body.style.overflow = oldBodyOverflow;
++      previousFocus?.focus();
+     };
+-  }, [open, onClose]);
++  }, [open]);
++
+   if (!open) return null;
+-  return (
+-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/65 px-4" onMouseDown={event => {
+-      if (event.target === event.currentTarget) onClose();
+-    }}>
+-      <section role="dialog" aria-modal="true" aria-labelledby="modal-title"
+-        className="app-modal w-full max-w-lg rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl dark:border-slate-700 dark:bg-[#0D2B52]">
+-        <div className="mb-4 flex items-start justify-between gap-4">
+-          <h2 id="modal-title" className="text-lg font-semibold text-slate-900 dark:text-white">{title}</h2>
+-          <button ref={closeRef} type="button" onClick={onClose} aria-label="Cerrar diálogo"
+-            className="rounded-lg p-1 text-slate-500 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-700"><X size={20}/></button>
+-        </div>
+-        {children}
+-      </section>
+-    </div>
++
++  return createPortal(
++    <div className="app-modal-overlay fixed inset-0 z-[10000] overflow-y-auto overscroll-contain bg-slate-950/70 px-4 py-4 backdrop-blur-[2px] sm:py-6">
++      <div className="flex min-h-full items-center justify-center" onMouseDown={event => {
++        if (event.target === event.currentTarget) onCloseRef.current();
++      }}>
++        <section ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby={titleId}
++          className="app-modal flex max-h-[calc(100dvh-2rem)] w-full max-w-xl flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl dark:border-slate-700 dark:bg-[#0D2B52] sm:max-h-[calc(100dvh-3rem)]">
++          <div className="flex shrink-0 items-start justify-between gap-4 border-b border-slate-200 px-5 py-4 dark:border-[#345578] sm:px-6">
++            <h2 id={titleId} className="text-lg font-semibold text-slate-900 dark:text-white">{title}</h2>
++            <button ref={closeRef} type="button" onClick={onClose} aria-label="Cerrar diálogo"
++              className="app-modal-close shrink-0 rounded-lg p-1 text-slate-500 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-700"><X size={20}/></button>
++          </div>
++          <div className="app-modal-content min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 py-5 sm:px-6">
++            {children}
++          </div>
++        </section>
++      </div>
++    </div>,
++    document.body,
+   );
+ }
+--- a/apps/web/src/modules/organizations/InstitutionMap.tsx
++++ b/apps/web/src/modules/organizations/InstitutionMap.tsx
+@@ -2,7 +2,7 @@
+ // Sin geolocalización del visitante; solo sedes registradas y autorizadas.
+ import { useEffect, useMemo } from 'react';
+ import { divIcon, latLngBounds } from 'leaflet';
+-import { MapContainer, Marker, Popup, TileLayer, useMap } from 'react-leaflet';
++import { MapContainer, Marker, Popup, TileLayer, ZoomControl, useMap } from 'react-leaflet';
+ import type { Organization } from './types';
+ import { countryName } from './types';
+ import 'leaflet/dist/leaflet.css';
+@@ -44,7 +44,8 @@
+   const located = organizations.filter(org => org.latitude !== null && org.longitude !== null);
+   return (
+     <div className="institution-map relative h-full min-h-[360px] w-full overflow-hidden rounded-2xl border border-slate-200 dark:border-[#23456A]">
+-      <MapContainer center={[-7, -69]} zoom={3} minZoom={2} className="h-full w-full" scrollWheelZoom={true}>
++      <MapContainer center={[-7, -69]} zoom={3} minZoom={2} zoomControl={false} className="h-full w-full" scrollWheelZoom={true}>
++        <ZoomControl position="bottomleft"/>
+         <TileLayer url="https://tile.openstreetmap.org/{z}/{x}/{y}.png"
+           attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors' />
+         <MapNavigation organizations={organizations} selectedId={selectedId}/>
+@@ -62,7 +63,7 @@
+           </Popup>
+         </Marker>)}
+       </MapContainer>
+-      {located.length === 0 && <div className="pointer-events-none absolute inset-x-4 top-4 z-[400] rounded-lg border border-slate-200 bg-white/95 px-4 py-3 text-sm font-medium text-slate-700 shadow-md">
++      {located.length === 0 && <div className="pointer-events-none absolute left-4 right-4 top-4 z-[400] rounded-lg border border-slate-200 bg-white/95 px-4 py-3 text-sm font-medium text-slate-700 shadow-md sm:left-auto sm:max-w-sm">
+         No hay instituciones con coordenadas en este filtro. Registra una sede para colocar el primer marcador.
+       </div>}
+     </div>
+--- a/apps/web/src/modules/organizations/OrganizationForm.tsx
++++ b/apps/web/src/modules/organizations/OrganizationForm.tsx
+@@ -101,7 +101,7 @@
+     ? [initial.latitude, initial.longitude]
+     : COUNTRY_CENTERS[values.country_code] ?? [10, -20];
+   const inputCls = 'app-input w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none focus:border-blue-500 dark:border-[#345578] dark:bg-[#112A48] dark:text-white';
+-  return <form onSubmit={event => void submit(event)} className="max-h-[75dvh] space-y-4 overflow-y-auto pr-1">
++  return <form onSubmit={event => void submit(event)} className="space-y-4">
+     <div className="flex items-center gap-2 text-sm app-muted"><Building2 size={17}/> Datos y ubicación de la sede principal</div>
+     <div className="grid gap-3 sm:grid-cols-2">
+       <label className="space-y-1 text-xs font-medium">Código institucional
+--- a/apps/web/src/styles.css
++++ b/apps/web/src/styles.css
+@@ -165,3 +165,14 @@
+ html.black-theme .institution-list-row[aria-pressed='true'] { background: #333; border-color: #aaa; }
+ html.black-theme .app-input { background: #242424; color: #eee; border-color: #555; }
+ html.black-theme .app-input:focus { border-color: #aaa; }
++
++/* CAMBIOS 4: el diálogo se renderiza en <body>, fuera de la animación
++   de página y fuera de las capas de Leaflet. El scroll queda dentro del modal. */
++.app-modal-overlay { isolation: isolate; }
++.app-modal-content { scrollbar-gutter: stable; }
++html.black-theme .app-modal-close:hover { background: #303030; }
++html.black-theme .app-modal > div:first-child { border-color: #404040; }
++/* Leaflet mantiene sus controles detrás del modal; el zoom se encuentra
++   en la esquina inferior izquierda para no tapar los avisos superiores. */
++.institution-map { isolation: isolate; }
++.institution-map .leaflet-control-zoom { border: 1px solid rgb(100 116 139 / 35%); }
+--- a/docs/MAPA_INSTITUCIONES_SPRINT1.md
++++ b/docs/MAPA_INSTITUCIONES_SPRINT1.md
+@@ -5,7 +5,7 @@
+ ## Decisiones aprobadas
+ 
+ - **Opción A:** catálogo/filtros en panel lateral izquierdo y mapa interactivo grande a la derecha; en móvil se apilan verticalmente.
+-- **Opción 2:** ampliar `main` de `max-w-7xl` (1280 px) a `max-w-[1440px]`, con padding adaptable (`px-5 sm:px-6 lg:px-8 2xl:px-10`).
++- **Opción 2:** ampliar `main` de `max-w-7xl` (1280 px) a `max-w-[1440px]` en la v5; ampliado a `max-w-[1680px]` con márgenes adaptables en la v6 (ver `CAMBIOS4_MODAL_MAPA_Y_ANCHO.md`).
+ - **Internacional:** país (código ISO de dos letras), ciudad, dirección opcional, coordenadas, zona horaria IANA.
+ - **Seguridad:** solo `superadmin` activo crea/edita; lectura limitada a instituciones autorizadas por FastAPI.
+ 

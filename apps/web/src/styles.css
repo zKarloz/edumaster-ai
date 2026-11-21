@@ -1,0 +1,369 @@
+/* EduMaster.ai: 3 temas, transiciones discretas y accesibilidad. */
+@import "tailwindcss";
+@custom-variant dark (&:where(.dark, .dark *));
+
+:root { color-scheme: light; font-family: Inter, ui-sans-serif, system-ui, sans-serif; }
+:root.dark { color-scheme: dark; }
+html { scrollbar-gutter: stable; overflow-y: scroll; }
+body { min-width: 320px; margin: 0; }
+button { cursor: pointer; }
+button:disabled { cursor: not-allowed; }
+*:focus-visible { outline: 2px solid #20C8F5; outline-offset: 2px; }
+
+/* Los scrollbars mantienen el ancho del contenido al cambiar de módulo. */
+:root { --scroll-track: #eef2f7; --scroll-thumb: #b5c3d5; }
+html.dark { --scroll-track: #081b35; --scroll-thumb: #315a7b; }
+html.black-theme { --scroll-track: #131313; --scroll-thumb: #595959; }
+* { scrollbar-width: thin; scrollbar-color: var(--scroll-thumb) var(--scroll-track); }
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-track { background: var(--scroll-track); }
+::-webkit-scrollbar-thumb { background: var(--scroll-thumb); border: 2px solid var(--scroll-track); border-radius: 99px; }
+
+/* Una sola señal de foco para el campo completo, no para la caja interna. */
+.search-control { transition: border-color .18s ease, box-shadow .18s ease; }
+.search-control:focus-within { border-color: #087fe5; box-shadow: 0 0 0 2px rgb(8 127 229 / 22%); }
+.search-control input:focus, .search-control input:focus-visible { outline: none; box-shadow: none; }
+
+/* Superficies y controles compartidos: valores base para los tres temas.
+   La capa components permite que Tailwind sobrescriba estos valores en las
+   pantallas que ya tienen variantes específicas. Negro mantiene sus overrides. */
+:root {
+  --app-panel-bg: #ffffff;
+  --app-panel-border: #e2e8f0;
+  --app-text: #0f172a;
+  --app-muted-text: #64748b;
+  --app-control-bg: #ffffff;
+  --app-control-border: #cbd5e1;
+  --app-control-hover: #f1f5f9;
+  --app-primary-bg: #087fe5;
+  --app-primary-hover: #0669bd;
+}
+html.dark {
+  --app-panel-bg: #0a1f3d;
+  --app-panel-border: #23456a;
+  --app-text: #f1f5f9;
+  --app-muted-text: #cbd5e1;
+  --app-control-bg: #112a48;
+  --app-control-border: #345578;
+  --app-control-hover: #173658;
+}
+html.black-theme {
+  --app-panel-bg: #191919;
+  --app-panel-border: #383838;
+  --app-text: #ededed;
+  --app-muted-text: #b7b7b7;
+  --app-control-bg: #242424;
+  --app-control-border: #484848;
+  --app-control-hover: #303030;
+  --app-primary-bg: #5b5b5b;
+  --app-primary-hover: #737373;
+}
+@layer components {
+  .app-panel {
+    background-color: var(--app-panel-bg);
+    border-color: var(--app-panel-border);
+    color: var(--app-text);
+  }
+  .app-muted { color: var(--app-muted-text); }
+  .app-divider { border-color: var(--app-panel-border); }
+  .app-input, .app-secondary-button {
+    background-color: var(--app-control-bg);
+    border-color: var(--app-control-border);
+    color: var(--app-text);
+  }
+  .app-input::placeholder { color: var(--app-muted-text); }
+  button.app-secondary-button:hover:not(:disabled) {
+    background-color: var(--app-control-hover);
+  }
+  .app-primary-button {
+    background-color: var(--app-primary-bg);
+    color: #fff;
+  }
+  button.app-primary-button:hover:not(:disabled) {
+    background-color: var(--app-primary-hover);
+  }
+}
+
+/* Colores semánticos compartidos (sin depender del fondo propio de cada módulo).
+   warning = requisito pendiente/error leve; info = orientación que no bloquea la acción. */
+.app-warning { background-color: #fffbeb; border-color: #e9d5a5; color: #805313; }
+.app-info { background-color: #eff6ff; border-color: #c6dbf4; color: #214e73; }
+html.dark:not(.black-theme) .app-info {
+  background-color: #152b40;
+  border-color: #3c5870;
+  color: #c3daec;
+}
+html.black-theme .app-info {
+  background-color: #252525;
+  border-color: #505050;
+  color: #dedede;
+}
+
+/* Avisos de precaución: fondo ámbar tenue y buen contraste en ambos temas oscuros. */
+html.dark .app-warning {
+  background: #29251e;
+  border-color: #655637;
+  color: #e4d0aa;
+}
+html.black-theme .app-warning {
+  background: #25231f;
+  border-color: #575044;
+  color: #d6c9b3;
+}
+html.dark .app-status-warning { background: #2d281e; color: #d6bb86; }
+html.black-theme .app-status-warning { background: #27241f; color: #cbbd9f; }
+html.dark .app-status-warning > span { background-color: #c29c57; }
+html.black-theme .app-status-warning > span { background-color: #aa9673; }
+
+/* La navegación entra desde abajo sin reanimar toda la aplicación. */
+@keyframes module-rise { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: translateY(0); } }
+.module-enter { animation: module-rise .25s cubic-bezier(.22,1,.36,1) both; }
+/* Los modales usan el mismo levantamiento sutil que los módulos. */
+.app-modal { animation: module-rise .25s cubic-bezier(.22,1,.36,1) both; }
+@keyframes toast-top { from { opacity: 0; transform: translateY(-12px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes toast-bottom { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes toast-away-top { from { opacity: 1; transform: translateY(0); } to { opacity: 0; transform: translateY(-8px); } }
+@keyframes toast-away-bottom { from { opacity: 1; transform: translateY(0); } to { opacity: 0; transform: translateY(8px); } }
+.toast-enter-top { animation: toast-top .24s ease-out both; }
+.toast-enter-bottom { animation: toast-bottom .24s ease-out both; }
+.toast-leave-top { animation: toast-away-top .24s ease-in both; }
+.toast-leave-bottom { animation: toast-away-bottom .24s ease-in both; }
+
+/* Navegación móvil: el panel se desplaza lateralmente, sin efecto de desvanecimiento.
+   Al cerrar, visibility cambia solo después de la transición, para no cortarla. */
+.app-mobile-drawer {
+  visibility: hidden;
+  transform: translate3d(-102%, 0, 0);
+  transition: transform 320ms cubic-bezier(.22, 1, .36, 1),
+              visibility 0s linear 320ms, width 300ms ease;
+}
+.app-mobile-drawer[data-open='true'] {
+  visibility: visible;
+  transform: translate3d(0, 0, 0);
+  transition: transform 320ms cubic-bezier(.22, 1, .36, 1),
+              visibility 0s linear 0s, width 300ms ease;
+}
+@media (min-width: 768px) {
+  /* El sidebar de escritorio permanece visible y conserva su plegado horizontal. */
+  .app-mobile-drawer, .app-mobile-drawer[data-open='true'] {
+    visibility: visible;
+    transform: none;
+    transition: width 300ms ease;
+  }
+}
+
+/* Estado de selección de opciones; el tema Negro lo neutraliza más abajo. */
+.app-choice-selected { border-color: #0ea5e9; box-shadow: 0 0 0 1px #0ea5e9; }
+
+/* Tema Negro: escala neutral, sin azul marino. Se utiliza sobre las clases dark existentes. */
+html.black-theme { color-scheme: dark; }
+html.black-theme .app-shell { color: #ebebeb; background: #080808; }
+html.black-theme .app-sidebar { background: #101010; border-color: #303030; }
+html.black-theme .app-brand-symbol { background: #5b5b5b; }
+html.black-theme .app-brand-accent { color: #dedede; }
+html.black-theme .app-status-chip { background: #282828; color: #d5d5d5; }
+html.black-theme .app-header { background: rgb(17 17 17 / 96%); border-color: #303030; }
+html.black-theme .app-panel, html.black-theme .app-table, html.black-theme .app-modal, html.black-theme .app-toast { background: #191919; color: #ededed; border-color: #383838; }
+html.black-theme .app-muted { color: #b7b7b7; }
+html.black-theme .app-accent { color: #dedede; }
+html.black-theme .app-nav-active { background: #303030; color: #f5f5f5; }
+html.black-theme .app-nav-inactive { color: #c5c5c5; }
+html.black-theme .app-nav-inactive:hover { background: #292929; }
+html.black-theme .app-secondary-button { background: #242424; color: #f0f0f0; border-color: #484848; }
+html.black-theme .app-secondary-button:hover { background: #303030; }
+html.black-theme .app-primary-button { background: #5b5b5b; color: #fff; }
+html.black-theme .app-primary-button:hover { background: #737373; }
+html.black-theme .app-choice { border-color: #404040; }
+html.black-theme .app-choice:has(input:checked) { background: #282828; border-color: #9b9b9b; box-shadow: 0 0 0 1px #9b9b9b; }
+html.black-theme .app-choice input { accent-color: #d1d1d1; }
+html.black-theme .app-table thead { background: #292929; color: #dedede; }
+html.black-theme .app-table tr, html.black-theme .app-table footer, html.black-theme .app-table header { border-color: #363636; }
+/* En Negro, el campo de búsqueda es enteramente neutro, incluso al enfocarlo. */
+html.black-theme .search-control {
+  background-color: #252525;
+  border-color: #575757;
+  color: #e6e6e6;
+}
+html.black-theme .search-control svg { color: #b6b6b6; }
+html.black-theme .search-control input { color: #ededed; caret-color: #ededed; }
+html.black-theme .search-control input::placeholder { color: #adadad; }
+html.black-theme .search-control:focus-within { border-color: #b4b4b4; box-shadow: 0 0 0 2px rgb(180 180 180 / 22%); }
+/* En el tema Negro, los controles de navegación NO heredan bordes azulados del oscuro.
+   Los indicadores semánticos (conectada, alertas, errores) conservan su color. */
+html.black-theme .app-page-footer,
+html.black-theme .app-table-footer { border-color: #3d3d3d; color: #adadad; }
+html.black-theme .app-pagination-button {
+  color: #dedede;
+  background-color: #222;
+  border-color: #505050;
+}
+html.black-theme .app-pagination-button:not(:disabled):hover {
+  background-color: #323232;
+  border-color: #777;
+}
+/* Las etiquetas de texto neutrales de Tailwind no deben conservar tinte azulado.
+   No se alteran success/warning/error/info, ya que son estados semánticos. */
+html.black-theme .text-slate-400,
+html.black-theme .text-slate-500,
+html.black-theme .dark\:text-slate-400,
+html.black-theme .dark\:text-slate-300,
+html.black-theme .dark\:text-slate-200 { color: #b9b9b9; }
+html.black-theme .app-meta-text { color: #a6a6a6; }
+html.black-theme .app-choice-check { color: #d3d3d3; }
+html.black-theme .app-choice-selected { border-color: #9b9b9b; box-shadow: 0 0 0 1px #9b9b9b; }
+html.black-theme .app-preference-radio { accent-color: #c4c4c4; }
+html.black-theme .app-mobile-close:hover { background-color: #292929; }
+html.black-theme *:focus-visible { outline-color: #aaa; }
+
+@media (prefers-reduced-motion: reduce) {
+  .module-enter, .toast-enter-top, .toast-enter-bottom, .toast-leave-top, .toast-leave-bottom { animation: none !important; }
+  .app-sidebar, .app-sidebar *, .app-shell { transition-duration: 0ms !important; }
+  .app-mobile-drawer, .app-mobile-drawer[data-open='true'] {
+    transition: none !important;
+  }
+}
+
+/* Sprint demo: mapa de instituciones y contenedor de 1440 px con separación lateral. */
+.institution-map .leaflet-container,
+.institution-form-map .leaflet-container { background: #e8edf1; z-index: 0; }
+.institution-map .leaflet-control-attribution,
+.institution-form-map .leaflet-control-attribution { font-size: 10px; }
+.edumaster-location-marker { border: 0; background: transparent; }
+.edumaster-location-marker span {
+  display: block; width: 20px; height: 20px; margin: 2px;
+  border: 3px solid #fff; border-radius: 50% 50% 50% 4px;
+  background: #087FE5; box-shadow: 0 2px 12px rgb(0 0 0 / .28);
+  transform: rotate(-45deg);
+}
+.institution-list-row:focus-visible { outline-offset: -3px; }
+/* Tema Negro: listado y select sin el azul heredado del tema Oscuro. */
+html.black-theme .institution-list-row { background: #222; color: #eee; border-color: #434343; }
+html.black-theme .institution-list-row:hover { background: #303030; }
+html.black-theme .institution-list-row[aria-pressed='true'] { background: #333; border-color: #aaa; }
+html.black-theme .app-input { background: #242424; color: #eee; border-color: #555; }
+html.black-theme .app-input:focus { border-color: #aaa; }
+
+/* CAMBIOS 4: el diálogo se renderiza en <body>, fuera de la animación
+   de página y fuera de las capas de Leaflet. El scroll queda dentro del modal. */
+.app-modal-overlay { isolation: isolate; }
+.app-modal-content { scrollbar-gutter: stable; }
+html.black-theme .app-modal-close:hover { background: #303030; }
+html.black-theme .app-modal > div:first-child { border-color: #404040; }
+/* Leaflet mantiene sus controles detrás del modal; el zoom se encuentra
+   en la esquina inferior izquierda para no tapar los avisos superiores. */
+.institution-map { isolation: isolate; }
+.institution-map .leaflet-control-zoom { border: 1px solid rgb(100 116 139 / 35%); }
+
+/* CAMBIOS 5: márgenes regulables desde estas DOS variables.
+   Sube --module-side-gap para aumentar el espacio libre a ambos lados;
+   baja --module-max-width si quieres un bloque visualmente más centrado.
+   Ejemplo: 1600px y 48px (equilibrado); 1540px y 56px (más aire). */
+:root {
+  --module-max-width: 1600px;
+  --module-side-gap: clamp(28px, 3.5vw, 56px);
+}
+.app-content-container {
+  width: 100%;
+  max-width: var(--module-max-width);
+  margin-inline: auto;
+  padding-inline: var(--module-side-gap);
+}
+@media (max-width: 639px) {
+  :root { --module-side-gap: 16px; }
+}
+
+/* Menús de selección uniformes, con SOLO tres opciones visibles y scroll interno.
+   La lista está en un portal, por lo que no se corta dentro de modales. */
+.app-select-trigger:focus-visible { outline-offset: 2px; }
+.app-select-popup { scrollbar-gutter: stable; }
+.app-select-option { color: #334155; }
+.app-select-option:hover, .app-select-option-active { background: #eef6ff; color: #07599e; }
+html.dark .app-select-option { color: #e6edf7; }
+html.dark .app-select-option:hover, html.dark .app-select-option-active { background: #204467; color: #fff; }
+html.black-theme .app-select-trigger,
+html.black-theme .app-select-popup { background: #242424; border-color: #555; color: #ededed; }
+html.black-theme .app-select-option { color: #e6e6e6; }
+html.black-theme .app-select-option:hover,
+html.black-theme .app-select-option-active { color: #fff; background: #414141; }
+html.black-theme .app-select-trigger:focus-visible { outline-color: #aaa; }
+
+/* El divisor del listado de instituciones no hereda el azul del modo oscuro. */
+html.black-theme .institution-filter-header,
+html.black-theme .institution-selection-details { border-color: #444; }
+
+/* CAMBIOS 6: el velo del modal utiliza negro real, nunca azul pizarra, en
+   el tema Negro. Mantiene la opción global de blur o sombreado básico. */
+html.black-theme .app-modal-overlay { background-color: rgb(0 0 0 / 78%); }
+
+/* Separador inferior del minimapa y barra de acciones neutros en tema Negro. */
+html.black-theme .institution-form-map,
+html.black-theme .institution-form-actions { border-color: #484848; }
+
+/* Código institucional inmutable después del alta: estado visiblemente atenuado
+   en los tres temas, sin reducir demasiado el contraste del texto. */
+.app-institution-code:disabled { cursor: not-allowed; background-color: #f1f5f9; color: #64748b; border-color: #cbd5e1; opacity: 1; }
+html.dark:not(.black-theme) .app-institution-code:disabled { background-color: #172b43; color: #9eafc4; border-color: #37536c; }
+html.black-theme .app-institution-code:disabled { background-color: #303030; color: #a0a0a0; border-color: #4b4b4b; }
+
+/* Códigos ISO y abreviaturas del selector compartido: señal secundaria discreta. */
+html.black-theme .app-select-suffix { color: #b7b7b7; }
+
+/* CAMBIOS 7: ayuda contextual flotante, sin reflujo del formulario.
+   Apertura y cierre con desvanecimiento (sin desplazamientos). */
+@keyframes help-popover-fade-in { from { opacity: 0; } to { opacity: 1; } }
+@keyframes help-popover-fade-out { from { opacity: 1; } to { opacity: 0; } }
+.app-help-popover-enter { animation: help-popover-fade-in 180ms ease-out both; }
+.app-help-popover-leave { animation: help-popover-fade-out 180ms ease-in both; pointer-events: none; }
+html.black-theme .app-help-popover { background: #222; color: #eee; border-color: #505050; }
+/* El espacio se aplica realmente entre etiqueta y control gracias a flex-gap. */
+.app-form-field > label, .app-form-field > span { line-height: 1.35; }
+
+/* Ajuste de accesibilidad global. No afecta el estado de los componentes,
+   solamente movimiento/tiempos visuales. También aplica a Leaflet y popovers. */
+html[data-motion='off'] *,
+html[data-motion='off'] *::before,
+html[data-motion='off'] *::after {
+  animation-duration: 0ms !important;
+  animation-delay: 0ms !important;
+  transition-duration: 0ms !important;
+  transition-delay: 0ms !important;
+  scroll-behavior: auto !important;
+}
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0ms !important;
+    animation-delay: 0ms !important;
+    transition-duration: 0ms !important;
+    transition-delay: 0ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* Menú de cuenta: apertura/cierre suaves sin mover el contenido del módulo.
+   Las reglas globales de reducción de movimiento siguen siendo efectivas. */
+.app-account-menu {
+  visibility: hidden;
+  opacity: 0;
+  transform: translateY(-5px);
+  pointer-events: none;
+  transition: opacity 180ms ease, transform 180ms ease, visibility 0s linear 180ms;
+  max-height: calc(100dvh - 100px);
+  overflow-y: auto;
+}
+.app-account-menu[data-open='true'] {
+  visibility: visible;
+  opacity: 1;
+  transform: translateY(0);
+  pointer-events: auto;
+  transition-delay: 0s;
+}
+.app-account-action:hover { background: var(--app-control-hover); }
+.app-account-theme[aria-pressed='true'] { background: var(--app-control-hover); border-color: var(--app-primary-bg); font-weight: 600; }
+.app-account-theme { min-height: 76px; }
+html.black-theme .app-account-theme[aria-pressed='true'] { background: #414141; border-color: #aaa; }
+
+/* CAMBIOS 8: imagen cargada con entrada suave; la preferencia global puede anularla. */
+@keyframes app-avatar-reveal { from { opacity: 0; } to { opacity: 1; } }
+.app-avatar-image { animation: app-avatar-reveal 230ms ease-out both; }
+:root[data-motion='off'] .app-avatar-image { animation: none !important; }
+@media (prefers-reduced-motion: reduce) { .app-avatar-image { animation: none !important; } }

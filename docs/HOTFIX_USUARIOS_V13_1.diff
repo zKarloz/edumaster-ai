@@ -1,0 +1,152 @@
+--- a/apps/web/src/modules/users/InstitutionalUsersPage.tsx
++++ b/apps/web/src/modules/users/InstitutionalUsersPage.tsx
+@@ -1,7 +1,7 @@
+ // Gestión institucional de usuarios. No crea contraseñas ni concede roles globales.
+ // Usa los componentes compartidos y los permisos se revalidan en FastAPI.
+ import { useEffect, useMemo, useState, type FormEvent } from 'react';
+-import { AlertTriangle, CheckCircle2, Info, Plus, RefreshCw, Shield, UserRoundMinus, UserRoundPlus } from 'lucide-react';
++import { AlertTriangle, CheckCircle2, Info, Plus, Shield, UserRoundMinus, UserRoundPlus } from 'lucide-react';
+ import { DataTable, type Column } from '../../components/shared/DataTable';
+ import { Modal } from '../../components/shared/Modal';
+ import { OptionSelect } from '../../components/shared/OptionSelect';
+@@ -192,7 +192,7 @@
+         <label className="flex cursor-pointer items-start gap-2 text-sm"><input className="mt-1 size-4 accent-sky-600" type="checkbox" checked={confirmed} onChange={event => { setConfirmed(event.target.checked); setReview(false); }}/><span>Confirmo que puedo gestionar esta cuenta dentro de la institución seleccionada.</span></label>
+         {review && <div className="app-panel space-y-1 rounded-xl border p-4 text-sm"><p className="flex items-center gap-2 font-semibold"><CheckCircle2 size={16}/> Confirmar incorporación</p><p><b>Cuenta:</b> {email.trim().toLowerCase()}</p><p><b>Institución:</b> {chosenOrg?.name}</p><p><b>Rol:</b> {ROLE_LABELS[role]}</p></div>}
+         {dialogError && <div role="alert" className="app-warning rounded-xl border p-3 text-sm">{dialogError}</div>}
+-        <div className="flex justify-end gap-2 border-t pt-4"><button type="button" className={buttonSecondary} disabled={busy} onClick={closeDialog}>Cancelar</button><button type="submit" className={buttonPrimary} disabled={busy || !confirmed || !validEmail || fullName.trim().length < 3}>{busy ? 'Guardando...' : review ? 'Confirmar incorporación' : 'Revisar asignación'}</button></div>
++        <div className="flex justify-end gap-2 app-divider border-t pt-4"><button type="button" className={buttonSecondary} disabled={busy} onClick={closeDialog}>Cancelar</button><button type="submit" className={buttonPrimary} disabled={busy || !confirmed || !validEmail || fullName.trim().length < 3}>{busy ? 'Guardando...' : review ? 'Confirmar incorporación' : 'Revisar asignación'}</button></div>
+       </form>
+     </Modal>
+     <Modal open={dialog === 'grant'} title="Asignar rol adicional" onClose={closeDialog}>
+@@ -200,21 +200,21 @@
+         {selectableRoles.length === 0 ? <div className="app-info rounded-xl border p-3">Este usuario ya tiene todos los roles locales delegables.</div> :
+           <div className="space-y-1.5"><label className="font-medium">Rol adicional</label><OptionSelect ariaLabel="Rol adicional" value={role} options={selectableRoles} onChange={value => setRole(value as MemberRole)}/></div>}
+         {dialogError && <div role="alert" className="app-warning rounded-xl border p-3">{dialogError}</div>}
+-        <div className="flex justify-end gap-2 border-t pt-4"><button type="button" className={buttonSecondary} disabled={busy} onClick={closeDialog}>Cancelar</button><button className={buttonPrimary} type="button" disabled={busy || !target || !selectableRoles.length} onClick={() => target && void mutate('POST', `${base}/${target.membership_id}/roles`, { role }, 'Rol asignado.')}>Asignar rol</button></div>
++        <div className="flex justify-end gap-2 app-divider border-t pt-4"><button type="button" className={buttonSecondary} disabled={busy} onClick={closeDialog}>Cancelar</button><button className={buttonPrimary} type="button" disabled={busy || !target || !selectableRoles.length} onClick={() => target && void mutate('POST', `${base}/${target.membership_id}/roles`, { role }, 'Rol asignado.')}>Asignar rol</button></div>
+       </div>
+     </Modal>
+     <Modal open={dialog === 'remove'} title="Retirar rol" onClose={closeDialog}>
+       <div className="space-y-4 text-sm"><div className="app-warning flex gap-2 rounded-xl border p-3"><AlertTriangle size={18} className="shrink-0"/><span>Retirar un rol de estudiante con matrículas activas, o un docente con ofertas asignadas, requiere resolver primero esos vínculos.</span></div>
+         <p>Usuario: <b>{target?.full_name}</b></p><OptionSelect ariaLabel="Rol que se retirará" value={role} onChange={value => setRole(value as MemberRole)} options={removableRoles}/>
+         {dialogError && <div role="alert" className="app-warning rounded-xl border p-3">{dialogError}</div>}
+-        <div className="flex justify-end gap-2 border-t pt-4"><button type="button" className={buttonSecondary} disabled={busy} onClick={closeDialog}>Cancelar</button><button type="button" className={buttonPrimary} disabled={busy || !target || removableRoles.length === 0} onClick={() => target && void mutate('DELETE', `${base}/${target.membership_id}/roles/${encodeURIComponent(role)}`, undefined, 'Rol retirado.')}>Confirmar retirada</button></div>
++        <div className="flex justify-end gap-2 app-divider border-t pt-4"><button type="button" className={buttonSecondary} disabled={busy} onClick={closeDialog}>Cancelar</button><button type="button" className={buttonPrimary} disabled={busy || !target || removableRoles.length === 0} onClick={() => target && void mutate('DELETE', `${base}/${target.membership_id}/roles/${encodeURIComponent(role)}`, undefined, 'Rol retirado.')}>Confirmar retirada</button></div>
+       </div>
+     </Modal>
+     <Modal open={dialog === 'status'} title={target?.status === 'active' ? 'Suspender membresía' : 'Reactivar membresía'} onClose={closeDialog}>
+       <div className="space-y-4 text-sm"><div className="app-warning flex items-start gap-2 rounded-xl border p-3"><AlertTriangle size={18} className="mt-0.5 shrink-0"/><p>Esta acción afecta solo a la institución seleccionada. No elimina la cuenta de Supabase Auth ni sus datos históricos.</p></div>
+         <p>¿Confirmas {target?.status === 'active' ? 'suspender' : 'reactivar'} la membresía de <b>{target?.full_name}</b>?</p>
+         {dialogError && <div role="alert" className="app-warning rounded-xl border p-3">{dialogError}</div>}
+-        <div className="flex justify-end gap-2 border-t pt-4"><button type="button" className={buttonSecondary} disabled={busy} onClick={closeDialog}>Cancelar</button><button type="button" className={buttonPrimary} disabled={busy || !target} onClick={() => target && void mutate('PATCH', `${base}/${target.membership_id}/status`, { status: target.status === 'active' ? 'suspended' : 'active' }, 'Estado de membresía actualizado.')}>Confirmar</button></div>
++        <div className="flex justify-end gap-2 app-divider border-t pt-4"><button type="button" className={buttonSecondary} disabled={busy} onClick={closeDialog}>Cancelar</button><button type="button" className={buttonPrimary} disabled={busy || !target} onClick={() => target && void mutate('PATCH', `${base}/${target.membership_id}/status`, { status: target.status === 'active' ? 'suspended' : 'active' }, 'Estado de membresía actualizado.')}>Confirmar</button></div>
+       </div>
+     </Modal>
+   </>;
+--- a/apps/web/src/modules/users/UsersPage.tsx
++++ b/apps/web/src/modules/users/UsersPage.tsx
+@@ -1,7 +1,7 @@
+ // Administración global de usuarios: asignación y revocación de administradores.
+ // Nunca se envían contraseñas ni claves de Supabase desde esta pantalla.
+ import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react';
+-import { AlertTriangle, Building2, CheckCircle2, Info, RefreshCw, ShieldCheck, UserPlus, UserRoundX } from 'lucide-react';
++import { AlertTriangle, CheckCircle2, Info, RefreshCw, ShieldCheck, UserPlus, UserRoundX } from 'lucide-react';
+ import { DataTable, type Column } from '../../components/shared/DataTable';
+ import { Modal } from '../../components/shared/Modal';
+ import { OptionSelect } from '../../components/shared/OptionSelect';
+@@ -98,7 +98,7 @@
+     { header: 'Administrador', key: 'full_name', render: item => <div className="min-w-40"><p className="font-semibold">{item.full_name}</p><p className="app-muted mt-0.5 text-xs break-all">{item.email}</p></div> },
+     { header: 'Institución', key: 'organization_name' },
+     { header: 'Rol', key: 'user_id', render: () => <span className="inline-flex items-center gap-1.5 text-xs"><ShieldCheck size={15}/> Administrador institucional</span> },
+-    { header: 'Estado', key: 'status', render: item => <span className={item.status === 'active' ? 'inline-flex rounded-lg bg-emerald-500/10 px-2 py-1 text-xs text-emerald-700 dark:text-emerald-300' : 'app-muted inline-flex rounded-lg border px-2 py-1 text-xs'}>{item.status === 'active' ? 'Activo' : item.status}</span> },
++    { header: 'Estado', key: 'status', render: item => <span className={item.status === 'active' ? 'inline-flex rounded-lg bg-emerald-500/10 px-2 py-1 text-xs text-emerald-700 dark:text-emerald-300' : 'app-muted app-divider inline-flex rounded-lg border px-2 py-1 text-xs'}>{item.status === 'active' ? 'Activo' : item.status}</span> },
+     { header: 'Acciones', key: 'membership_id', render: item => <button type="button" disabled={item.status !== 'active' || (activePerOrganization[item.organization_id] ?? 0) <= 1} title={(activePerOrganization[item.organization_id] ?? 0) <= 1 ? 'No se puede revocar al último administrador activo' : 'Revocar rol'}
+       onClick={() => { setTarget(item); setDialog('revoke'); setDialogError(''); }}
+       className="app-secondary-button inline-flex items-center gap-1 rounded-lg border px-2.5 py-2 text-xs disabled:cursor-not-allowed disabled:opacity-40"><UserRoundX size={15}/> Revocar</button> },
+@@ -174,7 +174,7 @@
+         <label className="flex cursor-pointer items-start gap-2 text-sm"><input type="checkbox" checked={confirmed} onChange={event => { setConfirmed(event.target.checked); setReview(false); }} className="mt-1 size-4 accent-sky-600"/><span>Confirmo que esta cuenta estará autorizada a administrar la institución seleccionada.</span></label>
+         {review && <div className="app-panel rounded-xl border p-4 text-sm"><p className="mb-2 flex items-center gap-2 font-semibold"><CheckCircle2 size={17}/> Confirmar la asignación</p><p><strong>Institución:</strong> {chosenOrg?.name ?? '—'}</p><p className="mt-1 break-all"><strong>Cuenta:</strong> {email.trim().toLowerCase()}</p><p className="mt-1"><strong>Rol:</strong> Administrador institucional</p><p className="app-muted mt-2 text-xs">La operación se guardará con auditoría. No modifica otras membresías del usuario.</p></div>}
+         {dialogError && <div role="alert" className="app-warning rounded-xl border p-3 text-sm">{dialogError}</div>}
+-        <div className="flex flex-wrap justify-end gap-2 border-t pt-4"><button type="button" disabled={busy} className={secondaryButton} onClick={closeDialog}>Cancelar</button><button type="submit" disabled={busy || !dialogOrg || !emailValid || !confirmed} className={primaryButton}>{busy ? 'Guardando...' : review ? 'Confirmar asignación' : 'Revisar asignación'}</button></div>
++        <div className="flex flex-wrap justify-end gap-2 app-divider border-t pt-4"><button type="button" disabled={busy} className={secondaryButton} onClick={closeDialog}>Cancelar</button><button type="submit" disabled={busy || !dialogOrg || !emailValid || !confirmed} className={primaryButton}>{busy ? 'Guardando...' : review ? 'Confirmar asignación' : 'Revisar asignación'}</button></div>
+       </form>
+     </Modal>
+ 
+@@ -182,7 +182,7 @@
+       <div className="space-y-4 text-sm"><div className="app-warning flex items-start gap-2 rounded-xl border p-4"><AlertTriangle size={19} className="mt-0.5 shrink-0"/><span>Esta operación eliminará el rol de administrador institucional, no la cuenta de Supabase Auth ni sus otros roles.</span></div>
+         <p>¿Deseas revocar el rol de <strong>{target?.full_name}</strong> en <strong>{target?.organization_name}</strong>?</p>
+         {dialogError && <p role="alert" className="app-warning rounded-xl border p-3">{dialogError}</p>}
+-        <div className="flex flex-wrap justify-end gap-2 border-t pt-4"><button type="button" disabled={busy} className={secondaryButton} onClick={closeDialog}>Cancelar</button><button type="button" disabled={busy || !target} onClick={() => target && void mutate(`${ENDPOINT}/${encodeURIComponent(target.membership_id)}`, { method: 'DELETE' }, 'Administrador institucional revocado.')} className="inline-flex items-center gap-2 rounded-xl bg-rose-700 px-4 py-2.5 font-semibold text-white hover:bg-rose-800 disabled:opacity-50"><UserRoundX size={16}/>{busy ? 'Revocando...' : 'Confirmar revocación'}</button></div>
++        <div className="flex flex-wrap justify-end gap-2 app-divider border-t pt-4"><button type="button" disabled={busy} className={secondaryButton} onClick={closeDialog}>Cancelar</button><button type="button" disabled={busy || !target} onClick={() => target && void mutate(`${ENDPOINT}/${encodeURIComponent(target.membership_id)}`, { method: 'DELETE' }, 'Administrador institucional revocado.')} className="inline-flex items-center gap-2 rounded-xl bg-rose-700 px-4 py-2.5 font-semibold text-white hover:bg-rose-800 disabled:opacity-50"><UserRoundX size={16}/>{busy ? 'Revocando...' : 'Confirmar revocación'}</button></div>
+       </div>
+     </Modal>
+   </>;
+--- a/apps/web/src/styles.css
++++ b/apps/web/src/styles.css
+@@ -23,6 +23,66 @@
+ .search-control { transition: border-color .18s ease, box-shadow .18s ease; }
+ .search-control:focus-within { border-color: #087fe5; box-shadow: 0 0 0 2px rgb(8 127 229 / 22%); }
+ .search-control input:focus, .search-control input:focus-visible { outline: none; box-shadow: none; }
++
++/* Superficies y controles compartidos: valores base para los tres temas.
++   La capa components permite que Tailwind sobrescriba estos valores en las
++   pantallas que ya tienen variantes específicas. Negro mantiene sus overrides. */
++:root {
++  --app-panel-bg: #ffffff;
++  --app-panel-border: #e2e8f0;
++  --app-text: #0f172a;
++  --app-muted-text: #64748b;
++  --app-control-bg: #ffffff;
++  --app-control-border: #cbd5e1;
++  --app-control-hover: #f1f5f9;
++  --app-primary-bg: #087fe5;
++  --app-primary-hover: #0669bd;
++}
++html.dark {
++  --app-panel-bg: #0a1f3d;
++  --app-panel-border: #23456a;
++  --app-text: #f1f5f9;
++  --app-muted-text: #cbd5e1;
++  --app-control-bg: #112a48;
++  --app-control-border: #345578;
++  --app-control-hover: #173658;
++}
++html.black-theme {
++  --app-panel-bg: #191919;
++  --app-panel-border: #383838;
++  --app-text: #ededed;
++  --app-muted-text: #b7b7b7;
++  --app-control-bg: #242424;
++  --app-control-border: #484848;
++  --app-control-hover: #303030;
++  --app-primary-bg: #5b5b5b;
++  --app-primary-hover: #737373;
++}
++@layer components {
++  .app-panel {
++    background-color: var(--app-panel-bg);
++    border-color: var(--app-panel-border);
++    color: var(--app-text);
++  }
++  .app-muted { color: var(--app-muted-text); }
++  .app-divider { border-color: var(--app-panel-border); }
++  .app-input, .app-secondary-button {
++    background-color: var(--app-control-bg);
++    border-color: var(--app-control-border);
++    color: var(--app-text);
++  }
++  .app-input::placeholder { color: var(--app-muted-text); }
++  button.app-secondary-button:hover:not(:disabled) {
++    background-color: var(--app-control-hover);
++  }
++  .app-primary-button {
++    background-color: var(--app-primary-bg);
++    color: #fff;
++  }
++  button.app-primary-button:hover:not(:disabled) {
++    background-color: var(--app-primary-hover);
++  }
++}
+ 
+ /* Colores semánticos compartidos (sin depender del fondo propio de cada módulo).
+    warning = requisito pendiente/error leve; info = orientación que no bloquea la acción. */

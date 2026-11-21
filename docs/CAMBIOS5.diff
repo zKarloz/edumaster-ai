@@ -1,0 +1,577 @@
+--- a/README.md
++++ b/README.md
+@@ -1,16 +1,17 @@
+ # EduMaster.ai — Starter VSCode / Git Bash
+ 
+-**Sprint 0 → Sprint 1 · Multiinstitución desde la V1**
++**Plataforma multiinstitución · implementación incremental**
+ 
+-Este starter contiene un **frontend React funcional en modo DEMO**, una API
+-FastAPI mínima (health, status y lecturas multiinstitucionales protegidas) y el
+-**SQL inicial para Supabase**. Es una base de desarrollo, **no una aplicación
+-Enterprise terminada ni un servicio preparado para manejar datos personales reales**.
++Este repositorio reúne un **frontend React con login obligatorio por Supabase Auth**,
++una API FastAPI con permisos y un mapa interactivo de instituciones internacionales
++con datos almacenados en PostgreSQL. Incluye SQL para crear la base y la migración
++de ubicaciones. Es una base de desarrollo, **no una aplicación Enterprise terminada
++ni un servicio preparado para manejar datos personales reales**.
+ 
+ ## Tecnologías
+ 
+ - React 19 + TypeScript estricto + Vite + Tailwind CSS v4 + lucide-react.
+-- Componentes compartidos: `DataTable` paginada, `Modal`, `Spinner`, `Toast`.
++- Componentes compartidos: `DataTable` paginada, `Modal`, `ModalBackdrop`, `OptionSelect`, `Spinner`, `Toast`.
+ - Temas claro/oscuro/negro, preferencias locales y diseño responsive basado en los colores del documento maestro.
+ - FastAPI + SQLAlchemy async + PostgreSQL/Supabase + Auth JWT vía JWKS.
+ - Monorepo + Git Bash + GitHub Actions + `render.yaml` + `vercel.json`.
+@@ -34,8 +35,9 @@
+ npm run dev
+ ```
+ 
+-Abrir **http://localhost:5173**. Se muestra un dashboard rotulado DEMO, con
+-búsqueda, tabla paginada, modal, notificaciones flotantes y tema claro/oscuro.
++Abrir **http://localhost:5173**. Se muestra el login de Supabase Auth. Tras
++validar el JWT y el perfil de usuario en FastAPI, aparecen los módulos, el mapa
++institucional y las preferencias de interfaz (temas Claro, Oscuro y Negro).
+ 
+ ## 3. Iniciar backend (terminal 2 en Git Bash)
+ 
+@@ -63,8 +65,8 @@
+ ruff check app tests
+ ```
+ 
+-El frontend comprobará el backend automáticamente. Sin Supabase configurado, la
+-sección de instituciones mostrará datos DEMO claramente identificados.
++El frontend comprobará el backend automáticamente. Para acceder a los módulos es
++necesario configurar Supabase Auth y disponer de una cuenta habilitada en `app.users`.
+ 
+ ## 4. Conectar Supabase Free
+ 
+--- a/apps/web/src/App.tsx
++++ b/apps/web/src/App.tsx
+@@ -334,10 +334,9 @@
+             </button>}
+           </div>
+         </header>
+-        <main key={section} className="module-enter mx-auto w-full max-w-[1680px] space-y-6 px-4 py-6 sm:px-4 lg:px-5 2xl:px-7">
++        <main key={section} className="module-enter mx-auto w-full app-content-container space-y-6 py-6">
+           <section className="flex flex-wrap items-center justify-between gap-3">
+-            <div><span className="app-status-chip inline-flex rounded-full bg-[#087FE5]/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-wider text-[#087FE5] dark:bg-[#087FE5]/20 dark:text-[#20C8F5]">Sprint 1 · Base inicial</span>
+-              <h2 className="mt-3 text-2xl font-bold">{section === 'dashboard' ? 'Centro de administración' : `${title} · EduMaster.ai`}</h2>
++            <div><h2 className="text-2xl font-bold">{section === 'dashboard' ? 'Centro de administración' : `${title} · EduMaster.ai`}</h2>
+               <p className="mt-1 text-sm app-muted text-slate-500 dark:text-slate-300">{signedIn ? `Sesión: ${session?.user.email ?? 'usuario'} · Datos limitados a tus instituciones` : 'Vista DEMO: sin datos institucionales reales'}</p>
+             </div>
+             <button onClick={() => void checkApi()} type="button" className="app-secondary-button flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold hover:bg-slate-50 dark:border-[#23456A] dark:bg-[#0A1F3D] dark:hover:bg-[#173658]"><RefreshCw size={16}/> Probar API</button>
+@@ -345,7 +344,7 @@
+           {section === 'dashboard' && <>
+             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+               {[
+-                { label: 'Arquitectura', value: 'Multi-tenant', icon: Building2, help: 'Desde Sprint 1' },
++                { label: 'Arquitectura', value: 'Multi-tenant', icon: Building2, help: 'Arquitectura multiinstitución' },
+                 { label: 'Base de datos', value: 'PostgreSQL', icon: Database, help: 'Supabase · esquema app' },
+                 { label: 'Backend', value: 'FastAPI', icon: Server, help: 'Render / entorno local' },
+                 { label: 'Modo de datos', value: isDemo ? 'DEMO' : 'Conectado', icon: Activity, help: isDemo ? 'No hay KPIs oficiales' : 'Sesión autenticada' },
+@@ -382,7 +381,7 @@
+           {section === 'settings' && <SettingsPage/>}
+           {section === 'courses' && <div className="app-panel rounded-2xl border border-slate-200 bg-white p-6 dark:border-[#23456A] dark:bg-[#0A1F3D]">
+             <BookOpen size={24} className="app-accent text-[#20C8F5]"/><h3 className="mt-3 text-lg font-semibold">Catálogo de cursos</h3>
+-            <p className="mt-2 max-w-xl text-sm app-muted text-slate-500 dark:text-slate-300">El esquema incluye cursos, módulos, lecciones y ofertas. Su gestión y autorización por rol se integrarán durante el Sprint 2; todavía no hay operaciones CRUD habilitadas.</p>
++            <p className="mt-2 max-w-xl text-sm app-muted text-slate-500 dark:text-slate-300">El esquema incluye cursos, módulos, lecciones y ofertas. Su gestión y autorización por rol se integrarán más adelante; todavía no hay operaciones CRUD habilitadas.</p>
+           </div>}
+           {section === 'security' && <div className="app-panel rounded-2xl border border-slate-200 bg-white p-6 dark:border-[#23456A] dark:bg-[#0A1F3D]">
+             <LockKeyhole size={24} className="app-accent text-[#20C8F5]"/><h3 className="mt-3 text-lg font-semibold">Aislamiento por institución</h3>
+--- a/apps/web/src/styles.css
++++ b/apps/web/src/styles.css
+@@ -176,3 +176,40 @@
+    en la esquina inferior izquierda para no tapar los avisos superiores. */
+ .institution-map { isolation: isolate; }
+ .institution-map .leaflet-control-zoom { border: 1px solid rgb(100 116 139 / 35%); }
++
++/* CAMBIOS 5: márgenes regulables desde estas DOS variables.
++   Sube --module-side-gap para aumentar el espacio libre a ambos lados;
++   baja --module-max-width si quieres un bloque visualmente más centrado.
++   Ejemplo: 1600px y 48px (equilibrado); 1540px y 56px (más aire). */
++:root {
++  --module-max-width: 1600px;
++  --module-side-gap: clamp(28px, 3.5vw, 56px);
++}
++.app-content-container {
++  width: 100%;
++  max-width: var(--module-max-width);
++  margin-inline: auto;
++  padding-inline: var(--module-side-gap);
++}
++@media (max-width: 639px) {
++  :root { --module-side-gap: 16px; }
++}
++
++/* Menús de selección uniformes, con SOLO tres opciones visibles y scroll interno.
++   La lista está en un portal, por lo que no se corta dentro de modales. */
++.app-select-trigger:focus-visible { outline-offset: 2px; }
++.app-select-popup { scrollbar-gutter: stable; }
++.app-select-option { color: #334155; }
++.app-select-option:hover, .app-select-option-active { background: #eef6ff; color: #07599e; }
++html.dark .app-select-option { color: #e6edf7; }
++html.dark .app-select-option:hover, html.dark .app-select-option-active { background: #204467; color: #fff; }
++html.black-theme .app-select-trigger,
++html.black-theme .app-select-popup { background: #242424; border-color: #555; color: #ededed; }
++html.black-theme .app-select-option { color: #e6e6e6; }
++html.black-theme .app-select-option:hover,
++html.black-theme .app-select-option-active { color: #fff; background: #414141; }
++html.black-theme .app-select-trigger:focus-visible { outline-color: #aaa; }
++
++/* El divisor del listado de instituciones no hereda el azul del modo oscuro. */
++html.black-theme .institution-filter-header,
++html.black-theme .institution-selection-details { border-color: #444; }
+--- a/apps/web/src/providers/SettingsProvider.tsx
++++ b/apps/web/src/providers/SettingsProvider.tsx
+@@ -4,14 +4,16 @@
+ 
+ export type ThemeName = 'light' | 'dark' | 'black';
+ export type ToastPosition = 'bottom-right' | 'top-right' | 'top-center' | 'bottom-center';
+-interface Preferences { theme: ThemeName; toastPosition: ToastPosition }
++export type ModalBackdropStyle = 'blur' | 'dim';
++interface Preferences { theme: ThemeName; toastPosition: ToastPosition; modalBackdrop: ModalBackdropStyle }
+ interface SettingsContextValue extends Preferences {
+   setTheme: (theme: ThemeName) => void;
+   setToastPosition: (position: ToastPosition) => void;
++  setModalBackdrop: (style: ModalBackdropStyle) => void;
+   selectPreferenceScope: (userId: string | null) => void;
+ }
+ 
+-const DEFAULTS: Preferences = { theme: 'dark', toastPosition: 'bottom-right' };
++const DEFAULTS: Preferences = { theme: 'dark', toastPosition: 'bottom-right', modalBackdrop: 'blur' };
+ const THEMES: ThemeName[] = ['light', 'dark', 'black'];
+ const POSITIONS: ToastPosition[] = ['bottom-right', 'top-right', 'top-center', 'bottom-center'];
+ const storageKey = (scope: string) => `edumaster_preferences_v1_${scope}`;
+@@ -26,6 +28,7 @@
+         return {
+           theme: candidate.theme && THEMES.includes(candidate.theme) ? candidate.theme : DEFAULTS.theme,
+           toastPosition: candidate.toastPosition && POSITIONS.includes(candidate.toastPosition) ? candidate.toastPosition : DEFAULTS.toastPosition,
++          modalBackdrop: candidate.modalBackdrop === 'dim' ? 'dim' : DEFAULTS.modalBackdrop,
+         };
+       }
+     }
+@@ -53,6 +56,7 @@
+   }, []);
+   const setTheme = useCallback((theme: ThemeName) => update({ theme }), [update]);
+   const setToastPosition = useCallback((toastPosition: ToastPosition) => update({ toastPosition }), [update]);
++  const setModalBackdrop = useCallback((modalBackdrop: ModalBackdropStyle) => update({ modalBackdrop }), [update]);
+   const selectPreferenceScope = useCallback((userId: string | null) => {
+     const nextScope = userId ? `user_${userId}` : 'guest';
+     if (scopeRef.current === nextScope) return;
+@@ -67,7 +71,7 @@
+     root.dataset.theme = preferences.theme;
+   }, [preferences.theme]);
+ 
+-  return <SettingsContext.Provider value={{ ...preferences, setTheme, setToastPosition, selectPreferenceScope }}>
++  return <SettingsContext.Provider value={{ ...preferences, setTheme, setToastPosition, setModalBackdrop, selectPreferenceScope }}>
+     {children}
+   </SettingsContext.Provider>;
+ }
+--- a/apps/web/src/modules/settings/SettingsPage.tsx
++++ b/apps/web/src/modules/settings/SettingsPage.tsx
+@@ -1,6 +1,6 @@
+ // Opciones de apariencia y notificaciones. Nuevas preferencias se agregarán aquí.
+-import { Bell, Check, MonitorCog, Send, SlidersHorizontal } from 'lucide-react';
+-import { useSettings, type ThemeName, type ToastPosition } from '../../providers/SettingsProvider';
++import { Bell, Check, Layers3, MonitorCog, Send, SlidersHorizontal } from 'lucide-react';
++import { useSettings, type ModalBackdropStyle, type ThemeName, type ToastPosition } from '../../providers/SettingsProvider';
+ import { useToast } from '../../components/shared/Toast';
+ 
+ const themes: { id: ThemeName; label: string; hint: string; swatch: string }[] = [
+@@ -16,7 +16,7 @@
+ ];
+ 
+ export function SettingsPage() {
+-  const { theme, toastPosition, setTheme, setToastPosition } = useSettings();
++  const { theme, toastPosition, modalBackdrop, setTheme, setToastPosition, setModalBackdrop } = useSettings();
+   const { notify } = useToast();
+   return <div className="grid gap-5 xl:grid-cols-2">
+     <section className="app-panel rounded-2xl border border-slate-200 bg-white p-6 dark:border-[#23456A] dark:bg-[#0A1F3D]">
+@@ -44,8 +44,24 @@
+       </fieldset>
+       <button type="button" className="app-secondary-button mt-5 inline-flex items-center gap-2 rounded-xl border border-slate-200 px-4 py-2 text-sm font-medium dark:border-[#23456A]" onClick={() => notify('Así se verán tus notificaciones.', 'success')}><Send size={16}/> Probar notificación</button>
+     </section>
++    <section className="app-panel rounded-2xl border border-slate-200 bg-white p-6 dark:border-[#23456A] dark:bg-[#0A1F3D] xl:col-span-2">
++      <h3 className="flex items-center gap-2 text-lg font-semibold"><Layers3 size={21}/> Fondo de las ventanas emergentes</h3>
++      <p className="app-muted mb-5 mt-2 text-sm text-slate-500 dark:text-slate-300">Configura cómo se oscurece el contenido detrás de todos los modales.</p>
++      <fieldset className="grid gap-3 sm:grid-cols-2">
++        <legend className="sr-only">Efecto de fondo de modales</legend>
++        {([
++          { id: 'blur', label: 'Desenfoque suave', detail: 'Sombreado y fondo ligeramente difuminado.' },
++          { id: 'dim', label: 'Sombreado básico', detail: 'Oscurece el fondo, sin desenfocarlo.' },
++        ] satisfies { id: ModalBackdropStyle; label: string; detail: string }[]).map(option =>
++          <label key={option.id} className={`app-choice flex cursor-pointer items-center gap-3 rounded-xl border p-3 transition-colors ${modalBackdrop === option.id ? 'app-choice-selected' : 'border-slate-200 dark:border-[#23456A]'}`}>
++            <input type="radio" name="modal-backdrop" value={option.id} checked={modalBackdrop === option.id}
++              onChange={() => setModalBackdrop(option.id)} className="app-preference-radio accent-sky-500"/>
++            <span className="min-w-0 flex-1"><span className="block text-sm font-semibold">{option.label}</span><span className="app-muted mt-1 block text-xs">{option.detail}</span></span>
++          </label>)}
++      </fieldset>
++    </section>
+     <section className="app-panel rounded-2xl border border-dashed border-slate-200 bg-white p-5 dark:border-[#23456A] dark:bg-[#0A1F3D] xl:col-span-2">
+-      <p className="flex items-center gap-2 text-sm font-medium"><SlidersHorizontal size={17}/> Más preferencias próximamente</p>
++      <p className="flex items-center gap-2 text-sm font-medium"><SlidersHorizontal size={17}/> Preferencias locales</p>
+       <p className="app-muted mt-2 text-sm text-slate-500 dark:text-slate-300">Por ahora, las preferencias se guardan por usuario en este navegador. Más adelante podrán sincronizarse con el perfil de Supabase.</p>
+     </section>
+   </div>;
+--- a/apps/web/src/modules/organizations/OrganizationForm.tsx
++++ b/apps/web/src/modules/organizations/OrganizationForm.tsx
+@@ -4,6 +4,7 @@
+ import { MapContainer, Marker, TileLayer, useMap, useMapEvents } from 'react-leaflet';
+ import { divIcon } from 'leaflet';
+ import { Building2, MapPin } from 'lucide-react';
++import { OptionSelect } from '../../components/shared/OptionSelect';
+ import type { Organization, OrganizationInput } from './types';
+ import { COUNTRIES } from './types';
+ 
+@@ -67,6 +68,8 @@
+     latitude: initial.latitude?.toString() ?? '', longitude: initial.longitude?.toString() ?? '',
+   } : EMPTY);
+   const [formError, setFormError] = useState('');
++  // Si la sede está fuera del catálogo frecuente, permitimos un código ISO manual.
++  const [customCountry, setCustomCountry] = useState(() => Boolean(initial?.country_code && !COUNTRIES.some(country => country.code === initial.country_code)));
+   const change = (field: keyof FormDraft, value: string | null) =>
+     setValues(current => ({ ...current, [field]: value }));
+ 
+@@ -113,12 +116,21 @@
+         <input required minLength={3} maxLength={180} value={values.name} onChange={event => change('name', event.target.value)}
+           placeholder="Institución de ejemplo" className={inputCls}/>
+       </label>
+-      <label className="space-y-1 text-xs font-medium">País (ISO 3166-1 alfa-2)
+-        <input required list="institutions-country-list" maxLength={2} minLength={2} value={values.country_code}
+-          onChange={event => changeCountry(event.target.value)} placeholder="PE" className={inputCls}/>
+-        <datalist id="institutions-country-list">{COUNTRIES.map(country =>
+-          <option key={country.code} value={country.code}>{country.name}</option>)}</datalist>
+-      </label>
++      <div className="space-y-1 text-xs font-medium">
++        <span className="block">País (ISO 3166-1 alfa-2)</span>
++        <OptionSelect ariaLabel="País de la institución" value={customCountry ? '__other__' : values.country_code}
++          options={[...COUNTRIES.map(country => ({ value: country.code, label: country.name })),
++            { value: '__other__', label: 'Otro país (código ISO)' }]}
++          onChange={code => {
++            const other = code === '__other__';
++            setCustomCountry(other);
++            changeCountry(other ? '' : code);
++          }}/>
++        {customCountry && <input required maxLength={2} minLength={2} pattern="[A-Za-z]{2}"
++          aria-label="Código ISO de otro país" value={values.country_code}
++          onChange={event => changeCountry(event.target.value.replace(/[^a-z]/gi, '').toUpperCase())}
++          placeholder="Código ISO, por ejemplo JP" className={`${inputCls} mt-2`}/>}
++      </div>
+       <label className="space-y-1 text-xs font-medium">Ciudad
+         <input required minLength={2} maxLength={120} value={values.city}
+           onChange={event => change('city', event.target.value)} placeholder="Lima" className={inputCls}/>
+--- a/apps/web/src/modules/organizations/OrganizationsPage.tsx
++++ b/apps/web/src/modules/organizations/OrganizationsPage.tsx
+@@ -3,6 +3,7 @@
+ import { useMemo, useState } from 'react';
+ import { Building2, Edit3, Globe2, MapPin, Plus, RefreshCcw, Search, SlidersHorizontal } from 'lucide-react';
+ import { Modal } from '../../components/shared/Modal';
++import { OptionSelect } from '../../components/shared/OptionSelect';
+ import { Spinner } from '../../components/shared/Spinner';
+ import { InstitutionMap } from './InstitutionMap';
+ import { OrganizationForm } from './OrganizationForm';
+@@ -78,17 +79,15 @@
+     {error && <p role="alert" className="app-warning rounded-xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900">{error}</p>}
+     <div className="grid min-h-[620px] gap-4 lg:grid-cols-[minmax(280px,350px)_minmax(0,1fr)] 2xl:grid-cols-[minmax(300px,380px)_minmax(0,1fr)]">
+       <div className="app-panel flex min-h-0 flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white dark:border-[#23456A] dark:bg-[#0A1F3D]">
+-        <div className="space-y-3 border-b border-slate-200 p-4 dark:border-[#345578]">
++        <div className="institution-filter-header space-y-3 border-b border-slate-200 p-4 dark:border-[#345578]">
+           <label className="search-control flex items-center gap-2 rounded-xl border border-slate-200 px-3 py-2.5 text-sm dark:border-[#345578]">
+             <Search size={16} className="app-muted"/>
+             <input type="search" value={search} onChange={event => setSearch(event.target.value)} className="min-w-0 w-full bg-transparent outline-none"
+               placeholder="Buscar institución o ciudad" aria-label="Buscar instituciones"/>
+           </label>
+-          <select aria-label="Filtrar instituciones por país" value={country} onChange={event => setCountry(event.target.value)}
+-            className="app-input w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm dark:border-[#345578] dark:bg-[#112A48]">
+-            <option value="all">Todos los países</option>
+-            {countries.map(code => <option key={code} value={code}>{countryName(code)}</option>)}
+-          </select>
++          <OptionSelect ariaLabel="Filtrar instituciones por país" value={country} onChange={setCountry}
++            options={[{ value: 'all', label: 'Todos los países' },
++              ...countries.map(code => ({ value: code, label: countryName(code) }))]}/>
+           <p className="text-xs app-muted">{filtered.length} instituciones · {located} ubicadas en el mapa</p>
+         </div>
+         {loading && <div className="p-4"><Spinner label="Cargando instituciones..."/></div>}
+@@ -110,7 +109,7 @@
+             {org.latitude === null && <p className="mt-1 text-xs text-amber-600">Ubicación pendiente</p>}
+           </button>)}
+         </div>
+-        {selected && <div className="border-t border-slate-200 p-4 dark:border-[#345578]">
++        {selected && <div className="institution-selection-details border-t border-slate-200 p-4 dark:border-[#345578]">
+           <p className="text-sm font-bold">{selected.name}</p>
+           <p className="mt-1 text-xs app-muted">{selected.address || selected.city || 'Ubicación sin dirección'} · {countryName(selected.country_code)}</p>
+           <p className="mt-1 text-xs app-muted">Zona horaria: {selected.timezone}</p>
+--- a/apps/web/src/components/shared/Modal.tsx
++++ b/apps/web/src/components/shared/Modal.tsx
+@@ -3,6 +3,7 @@
+ import { useEffect, useId, useRef, type ReactNode } from 'react';
+ import { createPortal } from 'react-dom';
+ import { X } from 'lucide-react';
++import { ModalBackdrop } from './ModalBackdrop';
+ 
+ interface ModalProps {
+   open: boolean;
+@@ -75,23 +76,19 @@
+   if (!open) return null;
+ 
+   return createPortal(
+-    <div className="app-modal-overlay fixed inset-0 z-[10000] overflow-y-auto overscroll-contain bg-slate-950/70 px-4 py-4 backdrop-blur-[2px] sm:py-6">
+-      <div className="flex min-h-full items-center justify-center" onMouseDown={event => {
+-        if (event.target === event.currentTarget) onCloseRef.current();
+-      }}>
+-        <section ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby={titleId}
+-          className="app-modal flex max-h-[calc(100dvh-2rem)] w-full max-w-xl flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl dark:border-slate-700 dark:bg-[#0D2B52] sm:max-h-[calc(100dvh-3rem)]">
+-          <div className="flex shrink-0 items-start justify-between gap-4 border-b border-slate-200 px-5 py-4 dark:border-[#345578] sm:px-6">
+-            <h2 id={titleId} className="text-lg font-semibold text-slate-900 dark:text-white">{title}</h2>
+-            <button ref={closeRef} type="button" onClick={onClose} aria-label="Cerrar diálogo"
+-              className="app-modal-close shrink-0 rounded-lg p-1 text-slate-500 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-700"><X size={20}/></button>
+-          </div>
+-          <div className="app-modal-content min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 py-5 sm:px-6">
+-            {children}
+-          </div>
+-        </section>
+-      </div>
+-    </div>,
++    <ModalBackdrop onClose={() => onCloseRef.current()}>
++      <section ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby={titleId}
++        className="app-modal flex max-h-[calc(100dvh-2rem)] w-full max-w-xl flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl dark:border-slate-700 dark:bg-[#0D2B52] sm:max-h-[calc(100dvh-3rem)]">
++        <div className="flex shrink-0 items-start justify-between gap-4 border-b border-slate-200 px-5 py-4 dark:border-[#345578] sm:px-6">
++          <h2 id={titleId} className="text-lg font-semibold text-slate-900 dark:text-white">{title}</h2>
++          <button ref={closeRef} type="button" onClick={onClose} aria-label="Cerrar diálogo"
++            className="app-modal-close shrink-0 rounded-lg p-1 text-slate-500 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-700"><X size={20}/></button>
++        </div>
++        <div className="app-modal-content min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 py-5 sm:px-6">
++          {children}
++        </div>
++      </section>
++    </ModalBackdrop>,
+     document.body,
+   );
+ }
+--- /dev/null
++++ b/apps/web/src/components/shared/ModalBackdrop.tsx
+@@ -0,0 +1,21 @@
++// Capa visual reutilizable para TODOS los modales de EduMaster.ai.
++// La preferencia local controla si el sombreado incluye desenfoque de fondo.
++import type { ReactNode } from 'react';
++import { useSettings } from '../../providers/SettingsProvider';
++
++interface ModalBackdropProps {
++  children: ReactNode;
++  onClose: () => void;
++}
++
++export function ModalBackdrop({ children, onClose }: ModalBackdropProps) {
++  const { modalBackdrop } = useSettings();
++  return <div className={`app-modal-overlay fixed inset-0 z-[10000] overflow-y-auto overscroll-contain bg-slate-950/70 px-4 py-4 sm:py-6 ${modalBackdrop === 'blur' ? 'backdrop-blur-[3px]' : ''}`}>
++    <div className="flex min-h-full items-center justify-center" onMouseDown={event => {
++      // El clic en el exterior cierra; los controles internos siguen operativos.
++      if (event.target === event.currentTarget) onClose();
++    }}>
++      {children}
++    </div>
++  </div>;
++}
+--- /dev/null
++++ b/apps/web/src/components/shared/OptionSelect.tsx
+@@ -0,0 +1,136 @@
++// Selector compartido con opciones accesibles por teclado y lista flotante limitada
++// a tres filas visibles. El portal evita que los modales recorten el desplegable.
++import { useEffect, useId, useLayoutEffect, useRef, useState, type KeyboardEvent } from 'react';
++import { createPortal } from 'react-dom';
++import { Check, ChevronDown } from 'lucide-react';
++
++export interface SelectOption { value: string; label: string }
++
++interface OptionSelectProps {
++  value: string;
++  options: SelectOption[];
++  onChange: (value: string) => void;
++  ariaLabel: string;
++  placeholder?: string;
++  disabled?: boolean;
++  className?: string;
++}
++
++interface Placement { top: number; left: number; width: number; maxHeight: number }
++
++export function OptionSelect({ value, options, onChange, ariaLabel, placeholder = 'Seleccionar...', disabled = false, className = '' }: OptionSelectProps) {
++  const listId = useId();
++  const triggerRef = useRef<HTMLButtonElement>(null);
++  const popupRef = useRef<HTMLDivElement>(null);
++  const [open, setOpen] = useState(false);
++  const [activeIndex, setActiveIndex] = useState(0);
++  const [placement, setPlacement] = useState<Placement | null>(null);
++  const selectedIndex = options.findIndex(option => option.value === value);
++  const selected = selectedIndex >= 0 ? options[selectedIndex] : undefined;
++
++  // Calculamos las coordenadas de la lista cuando se abre y cada vez que cambia
++  // el tamaño/scroll del documento o del contenido desplazable del modal.
++  useLayoutEffect(() => {
++    if (!open) return;
++    const position = () => {
++      const rect = triggerRef.current?.getBoundingClientRect();
++      if (!rect) return;
++      const visibleRows = Math.min(options.length, 3);
++      const estimatedHeight = Math.max(48, visibleRows * 44 + 8);
++      const spaceBelow = window.innerHeight - rect.bottom;
++      const showAbove = spaceBelow < estimatedHeight + 12 && rect.top > spaceBelow;
++      const available = showAbove ? rect.top - 14 : spaceBelow - 14;
++      const maxHeight = Math.max(44, Math.min(140, available));
++      const top = showAbove ? Math.max(8, rect.top - maxHeight - 6) : rect.bottom + 6;
++      const width = Math.min(rect.width, window.innerWidth - 16);
++      const left = Math.max(8, Math.min(rect.left, window.innerWidth - width - 8));
++      setPlacement({ top, left, width, maxHeight });
++    };
++    position();
++    window.addEventListener('resize', position);
++    window.addEventListener('scroll', position, true);
++    return () => {
++      window.removeEventListener('resize', position);
++      window.removeEventListener('scroll', position, true);
++    };
++  }, [open, options.length]);
++
++  useEffect(() => {
++    if (!open) return;
++    // Click fuera del desplegable: cerramos sin modificar el valor seleccionado.
++    const closeOutside = (event: PointerEvent) => {
++      if (triggerRef.current?.contains(event.target as Node) || popupRef.current?.contains(event.target as Node)) return;
++      setOpen(false);
++    };
++    document.addEventListener('pointerdown', closeOutside);
++    return () => document.removeEventListener('pointerdown', closeOutside);
++  }, [open]);
++
++  useEffect(() => {
++    if (!open) return;
++    popupRef.current?.querySelector<HTMLElement>(`[data-option-index="${activeIndex}"]`)?.scrollIntoView({ block: 'nearest' });
++  }, [activeIndex, open]);
++
++  const choose = (index: number) => {
++    const item = options[index];
++    if (!item) return;
++    onChange(item.value);
++    setOpen(false);
++    triggerRef.current?.focus();
++  };
++
++  const handleKeyDown = (event: KeyboardEvent<HTMLButtonElement>) => {
++    if (disabled) return;
++    if (event.key === 'Escape' && open) {
++      event.preventDefault();
++      event.stopPropagation(); // Escape primero cierra el selector, no el modal.
++      setOpen(false);
++      return;
++    }
++    if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
++      event.preventDefault();
++      const direction = event.key === 'ArrowDown' ? 1 : -1;
++      if (!open) {
++        setActiveIndex(selectedIndex >= 0 ? selectedIndex : 0);
++        setOpen(true);
++      } else {
++        setActiveIndex(current => Math.max(0, Math.min(options.length - 1, current + direction)));
++      }
++      return;
++    }
++    if ((event.key === 'Enter' || event.key === ' ') && open) {
++      event.preventDefault();
++      choose(activeIndex);
++      return;
++    }
++    if (event.key === 'Home' && open) { event.preventDefault(); setActiveIndex(0); }
++    if (event.key === 'End' && open) { event.preventDefault(); setActiveIndex(Math.max(0, options.length - 1)); }
++  };
++
++  return <>
++    <button ref={triggerRef} type="button" role="combobox" aria-label={ariaLabel}
++      aria-controls={open ? listId : undefined} aria-expanded={open}
++      aria-haspopup="listbox" aria-activedescendant={open ? `${listId}-${activeIndex}` : undefined}
++      disabled={disabled} onKeyDown={handleKeyDown}
++      onClick={() => { setActiveIndex(selectedIndex >= 0 ? selectedIndex : 0); setOpen(current => !current); }}
++      className={`app-select-trigger flex min-h-11 w-full items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-left text-sm text-slate-900 transition-colors dark:border-[#345578] dark:bg-[#112A48] dark:text-white ${className}`}>
++      <span className={`min-w-0 flex-1 truncate ${selected ? '' : 'app-muted'}`}>{selected?.label ?? placeholder}</span>
++      <ChevronDown aria-hidden="true" size={17} className={`shrink-0 transition-transform ${open ? 'rotate-180' : ''}`}/>
++    </button>
++    {open && placement && createPortal(
++      <div ref={popupRef} id={listId} role="listbox" aria-label={ariaLabel}
++        className="app-select-popup fixed z-[10050] overflow-y-auto overscroll-contain rounded-xl border border-slate-200 bg-white p-1 shadow-xl dark:border-[#345578] dark:bg-[#112A48]"
++        style={{ top: placement.top, left: placement.left, width: placement.width, maxHeight: placement.maxHeight }}
++        onMouseDown={event => event.preventDefault()}>
++        {options.length === 0 && <p className="app-muted px-3 py-2 text-sm">Sin opciones disponibles</p>}
++        {options.map((option, index) => <button key={option.value} id={`${listId}-${index}`}
++          data-option-index={index} type="button" role="option" aria-selected={option.value === value}
++          tabIndex={-1} onMouseEnter={() => setActiveIndex(index)} onClick={() => choose(index)}
++          className={`app-select-option flex min-h-11 w-full items-center justify-between gap-2 rounded-lg px-3 py-2 text-left text-sm ${activeIndex === index ? 'app-select-option-active' : ''}`}>
++          <span className="min-w-0 truncate">{option.label}</span>
++          {option.value === value && <Check aria-hidden="true" size={16} className="shrink-0"/>}
++        </button>)}
++      </div>, document.body,
++    )}
++  </>;
++}
+--- /dev/null
++++ b/docs/CAMBIOS5_SELECTORES_MARGENES_MODAL.md
+@@ -0,0 +1,59 @@
++# EduMaster.ai — CAMBIOS 5
++
++## Contenido
++
++Solo se modifica el **frontend**: no ejecutar SQL ni sustituir `.env`.
++
++- Contenedor general: ancho máximo de **1600 px**, con márgenes laterales responsive de `clamp(28px, 3.5vw, 56px)`; en móviles, 16 px.
++- Tema Negro: divisor entre filtros y listado institucional en gris.
++- Nuevo `components/shared/OptionSelect.tsx`: desplegable uniforme con un **máximo de tres opciones visibles**. El resto se consulta desplazando el menú. Soporta flechas, Enter, Escape, Home/End. Se usa en el filtro y el formulario de países. Conserva «Otro país (código ISO)» para países no incluidos en el catálogo frecuente.
++- Retiradas las etiquetas visibles de Sprint de las cabeceras; las fases quedan documentadas pero no visibles para usuarios finales.
++- Nuevo `components/shared/ModalBackdrop.tsx`: oscurecimiento/desenfoque uniforme para todos los modales que utilicen `Modal.tsx`.
++- Configuración > Fondo de las ventanas emergentes: **Desenfoque suave** (por defecto) o **Sombreado básico**. La preferencia persiste por usuario y navegador en `localStorage`, sin cambio de esquema.
++
++## Cómo ajustar los márgenes tú mismo
++
++En `apps/web/src/styles.css` busca, al final del archivo:
++
++```css
++:root {
++  --module-max-width: 1600px;
++  --module-side-gap: clamp(28px, 3.5vw, 56px);
++}
++```
++
++- `--module-max-width`: es el ancho **exterior** máximo del contenedor; bájalo a `1540px` si quieres más aire en monitores anchos, o súbelo a `1640px` para más espacio de contenido.
++- `--module-side-gap`: es la separación **interior** respecto de los bordes del módulo (ya considera el sidebar). El primer número es el mínimo, `3.5vw` se adapta a la pantalla, y el último es el máximo.
++- Más separación: `clamp(32px, 4vw, 64px)`.
++- Menos separación: `clamp(20px, 2.5vw, 44px)`.
++- En móviles se aplica `--module-side-gap: 16px` en una regla `@media`; puedes conservar ese valor.
++
++Guarda (`Ctrl+S`): Vite actualiza los estilos automáticamente con `npm run dev`.
++
++## Instalación
++
++1. Respaldar `apps/web/src` actual.
++2. Extraer el ZIP del parche en la raíz del proyecto, preservando carpetas.
++3. Abrir una terminal Git Bash en `apps/web` y ejecutar:
++
++```bash
++npm run build
++npm run dev
++```
++
++No se agregaron dependencias. Tampoco se necesita actualizar la API ni la base de datos.
++
++## Casos de prueba manual
++
++- Probar módulos con sidebar expandido y plegado; confirmar márgenes visibles en ambos lados.
++- Abrir Instituciones en Negro: divisor de filtros y selección en gris.
++- Abrir Nueva institución > País: lista de a lo sumo tres filas con scroll y opción «Otro país».
++- Probar el selector con teclado y la selección de un país de la parte inferior de la lista.
++- Probar el filtro por país con el mismo estilo.
++- Verificar que ningún título de módulo muestre texto de Sprint.
++- Cambiar Configuración > fondo del modal a «Sombreado básico»; abrir Nueva institución o Seguridad > Ver controles. Confirmar que ambos usan el mismo sombreado, sin desenfoque.
++- Activar de nuevo «Desenfoque suave», recargar y confirmar que la opción elegida se conserva.
++
++## Alcance de las verificaciones
++
++Se ha analizado sintácticamente TypeScript/TSX y se ha verificado la estructura del ZIP. La compilación completa con Vite y las pruebas en navegador requieren dependencias npm instaladas; no fueron ejecutables en este entorno debido al acceso a npm.
