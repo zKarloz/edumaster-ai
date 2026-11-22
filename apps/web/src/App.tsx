@@ -2,7 +2,7 @@
 // Los ejemplos académicos están rotulados DEMO; nunca simulan datos reales.
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react';
 import { Activity, ArrowRight, BookOpen, Building2, CheckCircle2, ChevronDown, Database,
-  GraduationCap, LayoutDashboard, LockKeyhole, Menu, RefreshCw, Users,
+  GraduationCap, LayoutDashboard, LockKeyhole, Menu, RefreshCw, Users, ClipboardList,
   Server, ShieldCheck, XCircle, Settings, PanelLeftClose, PanelLeftOpen, UserRound, X } from 'lucide-react';
 import type { Session } from '@supabase/supabase-js';
 import { DataTable, type Column } from './components/shared/DataTable';
@@ -15,6 +15,7 @@ import { SettingsPage } from './modules/settings/SettingsPage';
 import { LoginScreen } from './LoginScreen';
 import { OrganizationsPage } from './modules/organizations/OrganizationsPage';
 import { AcademicPage } from './modules/academic/AcademicPage';
+import { AcademicActivityPage } from './modules/academic/AcademicActivityPage';
 import { UsersPage } from './modules/users/UsersPage';
 import { InstitutionalUsersPage } from './modules/users/InstitutionalUsersPage';
 import { AccountMenu } from './components/shared/AccountMenu';
@@ -25,7 +26,7 @@ import type { ProfileIdentity } from './modules/profile/types';
 import type { Organization, OrganizationInput } from './modules/organizations/types';
 import { countryName } from './modules/organizations/types';
 
-type Section = 'dashboard' | 'organizations' | 'users' | 'courses' | 'students' | 'enrollments' | 'security' | 'settings' | 'profile';
+type Section = 'dashboard' | 'organizations' | 'users' | 'courses' | 'students' | 'enrollments' | 'activity' | 'security' | 'settings' | 'profile';
 type Connection = 'checking' | 'online' | 'offline';
 const API = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 const columns: Column<Organization>[] = [
@@ -40,6 +41,7 @@ const nav = [
   { id: 'courses' as const, title: 'Cursos', icon: BookOpen },
   { id: 'students' as const, title: 'Estudiantes', icon: GraduationCap },
   { id: 'enrollments' as const, title: 'Matrículas', icon: CheckCircle2 },
+  { id: 'activity' as const, title: 'Actividad académica', icon: ClipboardList },
   { id: 'security' as const, title: 'Seguridad', icon: ShieldCheck },
   { id: 'settings' as const, title: 'Configuración', icon: Settings },
   { id: 'profile' as const, title: 'Perfil', icon: UserRound },
@@ -284,6 +286,7 @@ export default function App() {
     memberships.some(item => item.organization_id === org.id && item.roles.includes('institution_admin'))),
     [orgs, memberships]);
   const canManageUserAdministration = globalRoles.includes('superadmin') || institutionalAdminOrganizations.length > 0;
+  const canViewAcademicActivity = memberships.some(m => m.roles.some(role => ['institution_admin', 'coordinator', 'instructor'].includes(role)));
   const canManageAcademicOrganization = useCallback((orgId: string) => memberships.some(item => item.organization_id === orgId && item.roles.some(role => ['institution_admin', 'coordinator'].includes(role))), [memberships]);
   const title = nav.find(x => x.id === section)?.title ?? 'Resumen';
   const signedIn = Boolean(session);
@@ -341,7 +344,7 @@ export default function App() {
         </div>
         <span className={`mb-3 px-3 app-meta-text text-xs font-semibold uppercase tracking-widest text-slate-400 ${sidebarCollapsed ? 'md:sr-only' : ''}`}>Plataforma</span>
         <nav aria-label="Navegación principal" className="grid gap-1">
-          {nav.filter(link => link.id !== 'users' || canManageUserAdministration).map(link => {
+          {nav.filter(link => (link.id !== 'users' || canManageUserAdministration) && (link.id !== 'activity' || canViewAcademicActivity)).map(link => {
             const Icon = link.icon;
             const active = section === link.id;
             return <button key={link.id} onClick={() => navTo(link.id)} type="button" title={sidebarCollapsed ? link.title : undefined}
@@ -396,7 +399,7 @@ export default function App() {
               </div>
               <div className="app-panel rounded-2xl border border-slate-200 bg-white p-6 dark:border-[#23456A] dark:bg-[#0A1F3D]">
                 <h3 className="font-semibold">Próximos pasos</h3>
-                <p className="mt-3 text-sm leading-7 app-muted text-slate-500 dark:text-slate-300">Crea cursos en una institución, incorpora estudiantes con cuenta de Supabase Auth confirmada y registra matrículas. Después añadiremos actividad académica y un modelo neuronal experimental con revisión docente.</p>
+                <p className="mt-3 text-sm leading-7 app-muted text-slate-500 dark:text-slate-300">Crea cursos en una institución, incorpora estudiantes con cuenta de Supabase Auth confirmada y registra matrículas. Registra actividad académica real (notas, asistencia, participación y progreso) en las matrículas. El siguiente incremento será el modelo neuronal experimental con revisión docente.</p>
                 <button onClick={() => navTo('security')} className="app-accent mt-5 flex items-center gap-2 text-sm font-semibold text-[#087FE5] dark:text-[#20C8F5]">Revisar seguridad <ArrowRight size={15}/></button>
               </div>
             </div>
@@ -423,6 +426,9 @@ export default function App() {
             mode={section} organizations={orgs} organizationId={academicOrgId}
             onOrganizationChange={setAcademicOrgId} token={accessToken}
             canManageOrganization={canManageAcademicOrganization}/>}
+          {section === 'activity' && accessToken && <AcademicActivityPage
+            organizations={orgs} organizationId={academicOrgId}
+            onOrganizationChange={setAcademicOrgId} token={accessToken}/>}
           {section === 'security' && <div className="app-panel rounded-2xl border border-slate-200 bg-white p-6 dark:border-[#23456A] dark:bg-[#0A1F3D]">
             <LockKeyhole size={24} className="app-accent text-[#20C8F5]"/><h3 className="mt-3 text-lg font-semibold">Aislamiento por institución</h3>
             <p className="mt-2 text-sm leading-7 app-muted text-slate-500 dark:text-slate-300">Auth y RBAC se validarán en FastAPI. Las FKs compuestas impiden referencias entre instituciones; el esquema privado no se publica por Supabase Data API. Las políticas ABAC detalladas quedan pendientes de implementar y probar.</p>

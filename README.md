@@ -1,3 +1,5 @@
+> **Incremento v16:** Matrículas y actividad académica real (calificaciones, asistencia, participación, progreso). Aplicar primero la migración 005. Consulta [`LEEME_INCREMENTO_ACADEMICO_V16.md`](LEEME_INCREMENTO_ACADEMICO_V16.md).
+
 > **Actualización v13:** usuarios institucionales (roles locales, perfiles académicos, suspensión/reactivación). Consulta [`LEEME_INCREMENTO_USUARIOS_V13.md`](LEEME_INCREMENTO_USUARIOS_V13.md).
 
 > **Incremento v12:** Módulo Usuarios para asignar/revocar administradores institucionales. Consulta [LEEME_INCREMENTO_USUARIOS_V12.md](LEEME_INCREMENTO_USUARIOS_V12.md).
@@ -73,8 +75,8 @@ Comprobar **http://localhost:8000/health** y la documentación
 
 ```bash
 curl http://localhost:8000/health
-pytest -q
-ruff check app tests
+python -m pytest -q
+python -m ruff check app tests
 ```
 
 El frontend comprobará el backend automáticamente. Para acceder a los módulos es
@@ -115,7 +117,7 @@ No añadir `app` a la lista de esquemas expuestos por Supabase Data API.
 ```bash
 git init
 git add .
-git commit -m "chore: base multiinstitucion EduMaster Sprint 1"
+git commit -m "chore: iniciar la base multiinstitución de EduMaster"
 git branch -M main
 ```
 

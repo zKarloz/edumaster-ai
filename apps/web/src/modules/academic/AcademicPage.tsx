@@ -1,7 +1,7 @@
 // Incremento académico real: todas las operaciones via FastAPI con JWT.
 // Se reutilizan el modal, el selector con scroll y la tabla paginada del proyecto.
 import { useEffect, useState, type FormEvent, type ReactNode } from 'react';
-import { BookOpen, GraduationCap, Plus, RefreshCcw, UsersRound, School, Info } from 'lucide-react';
+import { BookOpen, GraduationCap, Plus, RefreshCcw, UsersRound, School, Info, MoreHorizontal } from 'lucide-react';
 import { DataTable, type Column } from '../../components/shared/DataTable';
 import { Modal } from '../../components/shared/Modal';
 import { OptionSelect } from '../../components/shared/OptionSelect';
@@ -49,16 +49,16 @@ const studentColumns: Column<Student>[] = [
   { header: 'Código académico', key: 'external_code' },
   { header: 'Matrículas', key: 'enrollment_count' },
 ];
-const enrollmentColumns: Column<Enrollment>[] = [
+const enrollmentColumnsBase: Column<Enrollment>[] = [
   { header: 'Estudiante', key: 'student_name' }, { header: 'Curso', key: 'course_title' },
   { header: 'Período', key: 'period' }, { header: 'Estado', key: 'status' },
 ];
 
-async function request<T>(path: string, token: string, signal?: AbortSignal, body?: unknown): Promise<T> {
+async function request<T>(path: string, token: string, signal?: AbortSignal, body?: unknown, method?: 'PATCH' | 'PUT'): Promise<T> {
   let response: Response;
   try {
     response = await fetch(`${API}${path}`, {
-      method: body === undefined ? 'GET' : 'POST', signal,
+      method: method || (body === undefined ? 'GET' : 'POST'), signal,
       headers: { Authorization: `Bearer ${token}`, ...(body === undefined ? {} : { 'Content-Type': 'application/json' }) },
       ...(body === undefined ? {} : { body: JSON.stringify(body) }),
     });
@@ -90,6 +90,9 @@ export function AcademicPage({ mode, organizations, organizationId, onOrganizati
   const [students, setStudents] = useState<Student[]>([]);
   const [enrollments, setEnrollments] = useState<Enrollment[]>([]);
   const [busy, setBusy] = useState(false);
+  // Estado y modal separados: las matrículas completadas son terminales.
+  const [statusEnrollment, setStatusEnrollment] = useState<Enrollment | null>(null);
+  const [newEnrollmentStatus, setNewEnrollmentStatus] = useState('');
   const [loading, setLoading] = useState(false);
   // Evita mostrar avisos de "sin datos" antes de terminar la primera consulta.
   const [loadedOrganizationId, setLoadedOrganizationId] = useState<string | null>(null);
@@ -178,6 +181,27 @@ export function AcademicPage({ mode, organizations, organizationId, onOrganizati
     } finally { setBusy(false); }
   }
 
+  async function changeEnrollmentStatus(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!statusEnrollment || !organizationId || !manager || !newEnrollmentStatus) return;
+    setBusy(true); setError('');
+    try {
+      await request(`/api/v1/academic/organizations/${organizationId}/enrollments/${statusEnrollment.id}/status`,
+        token, undefined, { status: newEnrollmentStatus }, 'PATCH');
+      notify('Estado de la matrícula actualizado.', 'success');
+      setStatusEnrollment(null);
+      setRefresh(value => value + 1);
+    } catch (cause: unknown) {
+      setError(cause instanceof Error ? cause.message : 'No se pudo actualizar la matrícula');
+    } finally { setBusy(false); }
+  }
+
+  const enrollmentColumns: Column<Enrollment>[] = [...enrollmentColumnsBase, {
+    header: 'Acciones', key: 'id', render: row => <button className={secondaryButton} type="button"
+      disabled={row.status === 'completed'} title="Cambiar estado de matrícula"
+      onClick={() => { setStatusEnrollment(row); setNewEnrollmentStatus(row.status); setError(''); }}
+      aria-label={`Cambiar estado de ${row.student_name}`}><MoreHorizontal size={18}/></button>,
+  }];
   const activeCourses = courses.filter(item => item.status === 'published' && item.offering_status === 'open' && item.offering_id);
   // Solo un estudiante activo puede matricularse: contar inactivos habilitaba por error el botón.
   const activeStudents = students.filter(item => item.status === 'active');
@@ -229,6 +253,21 @@ export function AcademicPage({ mode, organizations, organizationId, onOrganizati
         </p>}
     </>}
 
+    <Modal open={statusEnrollment !== null} title="Estado de la matrícula"
+      onClose={() => { if (!busy) { setStatusEnrollment(null); setError(''); } }}>
+      <form className="space-y-4" onSubmit={event => void changeEnrollmentStatus(event)}>
+        <p className="app-muted text-sm">{statusEnrollment?.student_name} · {statusEnrollment?.course_title} ({statusEnrollment?.period})</p>
+        <div className="space-y-1.5"><span className="text-sm font-medium">Nuevo estado</span>
+          <OptionSelect ariaLabel="Nuevo estado de la matrícula" value={newEnrollmentStatus} onChange={setNewEnrollmentStatus}
+            options={statusEnrollment?.status === 'active'
+              ? [{ value: 'active', label: 'Activa' }, { value: 'completed', label: 'Completada (definitiva)' }, { value: 'withdrawn', label: 'Retirada' }]
+              : [{ value: 'withdrawn', label: 'Retirada' }, { value: 'active', label: 'Reactivar (requiere oferta abierta)' }]}/></div>
+        <p className="app-muted text-xs">Finalizar una matrícula es una operación definitiva. Reactivar requiere que el estudiante siga activo y la oferta admita matrículas.</p>
+        {error && <p role="alert" className="app-warning rounded-xl border p-3 text-sm">{error}</p>}
+        <div className="flex justify-end gap-2"><button className={secondaryButton} type="button" disabled={busy} onClick={() => { setStatusEnrollment(null); setError(''); }}>Cancelar</button>
+          <button className={mainButton} type="submit" disabled={busy || newEnrollmentStatus === statusEnrollment?.status}>Guardar estado</button></div>
+      </form>
+    </Modal>
     <Modal open={dialog !== null} title={dialog === 'course' ? 'Registrar curso' : dialog === 'student' ? 'Incorporar estudiante' : 'Matricular estudiante'}
       onClose={() => { if (!busy) { setDialog(null); setError(''); } }}>
       <form className="space-y-4" onSubmit={event => void submit(event)}>

@@ -5,6 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.core.config import get_settings
 from app.routers.academic import router as academic_router
+from app.routers.academic_activity import router as academic_activity_router
 from app.routers.institutional_users import router as institutional_users_router
 from app.routers.organizations import router as organizations_router
 from app.routers.profile import router as profile_router
@@ -22,6 +23,7 @@ app.add_middleware(
 )
 app.include_router(organizations_router)
 app.include_router(academic_router)
+app.include_router(academic_activity_router)
 app.include_router(user_administration_router)
 app.include_router(institutional_users_router)
 app.include_router(profile_router)
