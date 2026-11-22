@@ -10,7 +10,7 @@ from decimal import Decimal
 from typing import Literal
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 from sqlalchemy import text
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
@@ -233,30 +233,51 @@ async def activity_overview(
 @router.get("/{organization_id}/activity/offerings/{offering_id}/records")
 async def activity_records(
     organization_id: UUID, offering_id: UUID,
+    enrollment_id: UUID = Query(..., description="Matrícula concreta cuyo historial se consulta"),
+    limit: int = Query(10, ge=1, le=50), offset: int = Query(0, ge=0),
+    kind: Literal["grade", "attendance", "participation"] | None = None,
     auth_id: UUID = Depends(authenticated_user_id),
     engine: AsyncEngine = Depends(require_engine),
 ) -> dict:
-    sql = text("""
-        SELECT a.id::text AS id, a.enrollment_id::text AS enrollment_id, a.kind,
-          a.title, a.activity_date, a.score, a.max_score, a.attendance_status,
-          a.participation_rating, a.notes, a.recorded_at,
-          u.full_name AS student_name
+    """Historial paginado POR MATRÍCULA. Nunca devuelve evidencias masivas.
+
+    Los filtros y la comprobación de oferta se aplican en SQL y también se
+    exige que el actor sea gestor o docente asignado a la oferta.
+    """
+    conditions = """
         FROM app.academic_activity_records a
         JOIN app.enrollments e ON e.id=a.enrollment_id AND e.organization_id=a.organization_id
-          AND e.offering_id=:offering_id
         JOIN app.students s ON s.id=e.student_id AND s.organization_id=e.organization_id
-        JOIN app.organization_memberships m ON m.id=s.membership_id
-          AND m.organization_id=s.organization_id
+        JOIN app.organization_memberships m ON m.id=s.membership_id AND m.organization_id=s.organization_id
         JOIN app.users u ON u.id=m.user_id
-        WHERE a.organization_id=:organization_id AND a.voided_at IS NULL
-        ORDER BY a.activity_date DESC, a.recorded_at DESC LIMIT 500
-    """)
+        WHERE a.organization_id=:organization_id AND e.offering_id=:offering_id
+          AND e.id=:enrollment_id AND a.voided_at IS NULL
+          AND (CAST(:kind AS text) IS NULL OR a.kind=CAST(:kind AS text))
+    """
+    parameters = {"organization_id": organization_id, "offering_id": offering_id,
+                  "enrollment_id": enrollment_id, "kind": kind}
     try:
         async with engine.connect() as conn:
             await _offering_permission(conn, auth_id, organization_id, offering_id)
-            rows = (await conn.execute(sql, {"organization_id": organization_id,
-                "offering_id": offering_id})).mappings().all()
-        return {"items": [dict(row) for row in rows]}
+            enrollment_exists = (await conn.execute(text("""
+                SELECT 1 FROM app.enrollments
+                WHERE id=:enrollment_id AND offering_id=:offering_id
+                  AND organization_id=:organization_id
+            """), parameters)).first()
+            if not enrollment_exists:
+                raise HTTPException(status_code=404, detail="Matrícula no disponible en esta oferta")
+            total = (await conn.execute(text("SELECT COUNT(*) " + conditions), parameters)).scalar_one()
+            rows = (await conn.execute(text("""
+                SELECT a.id::text AS id, a.enrollment_id::text AS enrollment_id, a.kind,
+                  a.title, a.activity_date, a.score, a.max_score, a.attendance_status,
+                  a.participation_rating, a.notes, a.recorded_at,
+                  u.full_name AS student_name
+            """ + conditions + """
+                ORDER BY a.activity_date DESC, a.recorded_at DESC, a.id DESC
+                LIMIT :limit OFFSET :offset
+            """), {**parameters, "limit": limit, "offset": offset})).mappings().all()
+        return {"items": [dict(row) for row in rows], "total": total,
+                "limit": limit, "offset": offset}
     except SQLAlchemyError as exc:
         raise _sql_failure(exc) from exc
 

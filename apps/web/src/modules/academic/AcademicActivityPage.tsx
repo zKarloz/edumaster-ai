@@ -1,7 +1,7 @@
 // EduMaster.ai v16: actividad académica real con permisos por oferta.
 // Este módulo registra evidencias; no calcula predicciones ni recomendaciones automáticas.
 import { useEffect, useState, type FormEvent } from 'react';
-import { Activity, BookOpen, ClipboardCheck, GraduationCap, Plus, RefreshCcw, Save, Trash2, UserRound } from 'lucide-react';
+import { Activity, ArrowLeft, BookOpen, ChevronLeft, ChevronRight, ClipboardCheck, GraduationCap, Plus, RefreshCcw, Save, Trash2, UserRound } from 'lucide-react';
 import { DataTable, type Column } from '../../components/shared/DataTable';
 import { Modal } from '../../components/shared/Modal';
 import { OptionSelect } from '../../components/shared/OptionSelect';
@@ -35,6 +35,10 @@ interface Props {
   organizationId: string;
   onOrganizationChange: (value: string) => void;
   token: string;
+  selectedOfferingId: string;
+  selectedEnrollmentId: string;
+  onSelectEnrollment: (offeringId: string, enrollmentId: string) => void;
+  onBackToOverview: () => void;
 }
 const API = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 const btn = 'app-primary-button inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-50';
@@ -70,7 +74,8 @@ async function api<T>(path: string, token: string, method = 'GET', body?: unknow
   return res.json() as Promise<T>;
 }
 
-export function AcademicActivityPage({ organizations, organizationId, onOrganizationChange, token }: Props) {
+export function AcademicActivityPage({ organizations, organizationId, onOrganizationChange, token,
+  selectedOfferingId, selectedEnrollmentId, onSelectEnrollment, onBackToOverview }: Props) {
   const { notify } = useToast();
   const [offerings, setOfferings] = useState<Offering[]>([]);
   const [offeringId, setOfferingId] = useState('');
@@ -78,7 +83,11 @@ export function AcademicActivityPage({ organizations, organizationId, onOrganiza
   const [instructors, setInstructors] = useState<Instructor[]>([]);
   const [assignment, setAssignment] = useState('');
   const [overview, setOverview] = useState<EnrollmentSummary[]>([]);
+  // El historial NO se descarga con el resumen: solo al abrir una matrícula.
   const [records, setRecords] = useState<AcademicRecord[]>([]);
+  const [recordTotal, setRecordTotal] = useState(0);
+  const [recordPage, setRecordPage] = useState(0);
+  const [recordKind, setRecordKind] = useState('all');
   const [loading, setLoading] = useState(false);
   const [loadingRecords, setLoadingRecords] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -98,6 +107,7 @@ export function AcademicActivityPage({ organizations, organizationId, onOrganiza
   const root = `/api/v1/academic/organizations/${organizationId}`;
   const selectedOffering = offerings.find(row => row.id === offeringId);
   const activeEnrollments = overview.filter(row => row.status === 'active');
+  const selectedSummary = overview.find(row => row.enrollment_id === selectedEnrollmentId);
 
   // La institución es compartida con Cursos, Estudiantes y Matrículas.
   useEffect(() => {
@@ -131,18 +141,40 @@ export function AcademicActivityPage({ organizations, organizationId, onOrganiza
     setOverview([]); setRecords([]);
     if (!offeringId) return;
     const controller = new AbortController();
-    setLoadingRecords(true); setError('');
+    setError('');
     const base = `${root}/activity/offerings/${offeringId}`;
-    void Promise.all([
-      api<{ items: EnrollmentSummary[] }>(`${base}/overview`, token, 'GET', undefined, controller.signal),
-      api<{ items: AcademicRecord[] }>(`${base}/records`, token, 'GET', undefined, controller.signal),
-    ]).then(([summary, evidence]) => {
-      if (!controller.signal.aborted) { setOverview(summary.items); setRecords(evidence.items); }
-    }).catch((cause: unknown) => {
-      if (!controller.signal.aborted) setError(cause instanceof Error ? cause.message : 'No se pudo consultar la actividad');
-    }).finally(() => { if (!controller.signal.aborted) setLoadingRecords(false); });
+    void api<{ items: EnrollmentSummary[] }>(`${base}/overview`, token, 'GET', undefined, controller.signal)
+      .then(summary => { if (!controller.signal.aborted) setOverview(summary.items); })
+      .catch((cause: unknown) => {
+        if (!controller.signal.aborted) setError(cause instanceof Error ? cause.message : 'No se pudo consultar la actividad');
+      });
     return () => controller.abort();
   }, [offeringId, root, token, refresh]);
+
+  // Un enlace directo incluye la oferta, para no mezclar alumnos de otros cursos.
+  useEffect(() => {
+    if (selectedOfferingId && offerings.some(row => row.id === selectedOfferingId) && offeringId !== selectedOfferingId)
+      setOfferingId(selectedOfferingId);
+  }, [selectedOfferingId, offerings, offeringId]);
+
+  useEffect(() => { setRecordPage(0); setRecordKind('all'); }, [selectedEnrollmentId, offeringId]);
+
+  useEffect(() => {
+    setRecords([]); setRecordTotal(0);
+    // No se solicita el historial cuando aún está visible la lista de estudiantes.
+    if (!selectedEnrollmentId || !offeringId || (selectedOfferingId && offeringId !== selectedOfferingId)) return;
+    const controller = new AbortController();
+    const query = new URLSearchParams({ enrollment_id: selectedEnrollmentId,
+      limit: '10', offset: String(recordPage * 10) });
+    if (recordKind !== 'all') query.set('kind',recordKind);
+    setLoadingRecords(true);
+    void api<{items:AcademicRecord[];total:number}>(
+      `${root}/activity/offerings/${offeringId}/records?${query}`, token, 'GET', undefined, controller.signal)
+      .then(data => { if (!controller.signal.aborted) { setRecords(data.items); setRecordTotal(data.total); } })
+      .catch((cause:unknown) => { if (!controller.signal.aborted) setError(cause instanceof Error ? cause.message : 'No se pudo consultar el historial'); })
+      .finally(() => { if (!controller.signal.aborted) setLoadingRecords(false); });
+    return () => controller.abort();
+  }, [organizationId, offeringId, selectedOfferingId, selectedEnrollmentId, recordPage, recordKind, root, token, refresh]);
 
   useEffect(() => { setAssignment(selectedOffering?.instructor_id || ''); }, [selectedOffering?.instructor_id]);
 
@@ -200,7 +232,10 @@ export function AcademicActivityPage({ organizations, organizationId, onOrganiza
   const active = overview.filter(row => row.status === 'active').length;
   const withGrades = overview.filter(row => row.grade_count > 0).length;
   const columns: Column<EnrollmentSummary>[] = [
-    { header: 'Estudiante', key: 'student_name' },
+    { header: 'Estudiante', key: 'student_name', render: row =>
+      <button type="button" className="app-accent text-left font-semibold hover:underline"
+        onClick={() => onSelectEnrollment(offeringId,row.enrollment_id)}
+        aria-label={`Ver historial de ${row.student_name}`}>{row.student_name}</button> },
     { header: 'Estado', key: 'status', render: row => states[row.status] || row.status },
     { header: 'Prom. notas', key: 'grade_average_percent', render: row => formatNumber(row.grade_average_percent, '%') },
     { header: 'Asistencia', key: 'attendance_percent', render: row => formatNumber(row.attendance_percent, '%') },
@@ -211,7 +246,6 @@ export function AcademicActivityPage({ organizations, organizationId, onOrganiza
   ];
   const recordColumns: Column<AcademicRecord>[] = [
     { header: 'Fecha', key: 'activity_date' },
-    { header: 'Estudiante', key: 'student_name' },
     { header: 'Actividad', key: 'kind', render: row => `${labels[row.kind]} · ${row.title}` },
     { header: 'Valor', key: 'score', render: row => row.kind === 'grade' ? `${formatNumber(row.score)} / ${formatNumber(row.max_score)}`
       : row.kind === 'attendance' ? states[row.attendance_status || ''] || row.attendance_status
@@ -239,7 +273,7 @@ export function AcademicActivityPage({ organizations, organizationId, onOrganiza
     {!loading && offerings.length === 0 && !error && <p className="app-info rounded-xl border p-4 text-sm">No hay ofertas asignadas. El administrador institucional puede asignar docentes y matricular estudiantes desde Matrículas.</p>}
     {offerings.length > 0 && <div className="app-panel space-y-4 rounded-2xl border p-5">
       <div className="space-y-2"><label className="flex items-center gap-2 text-sm font-semibold"><BookOpen size={17}/> Curso y período</label>
-        <OptionSelect ariaLabel="Oferta académica" value={offeringId} onChange={setOfferingId} options={offerings.map(row => ({
+        <OptionSelect ariaLabel="Oferta académica" value={offeringId} onChange={value => { if (selectedEnrollmentId) onBackToOverview(); setOfferingId(value); }} options={offerings.map(row => ({
           value: row.id, label: row.course_title, suffix: `${row.period} · ${row.active_enrollments} activos`,
         }))}/></div>
       {selectedOffering && <div className="app-muted text-sm">{selectedOffering.course_code} · {selectedOffering.period} · Docente: {selectedOffering.instructor_name || 'Sin asignar'}</div>}
@@ -252,12 +286,11 @@ export function AcademicActivityPage({ organizations, organizationId, onOrganiza
       </div>}
     </div>}
     {error && <p role="alert" className="app-warning rounded-xl border p-3 text-sm">{error}</p>}
-    {offeringId && <>
-      {loadingRecords && <Spinner label="Consultando las evidencias académicas..."/>}
+    {offeringId && !selectedEnrollmentId && <>
       <div className="grid gap-3 sm:grid-cols-3">
         <div className="app-panel rounded-2xl border p-4"><p className="app-muted text-xs">Matrículas activas</p><p className="mt-1 text-2xl font-semibold">{active}</p></div>
         <div className="app-panel rounded-2xl border p-4"><p className="app-muted text-xs">Estudiantes con notas</p><p className="mt-1 text-2xl font-semibold">{withGrades}</p></div>
-        <div className="app-panel rounded-2xl border p-4"><p className="app-muted text-xs">Evidencias registradas</p><p className="mt-1 text-2xl font-semibold">{records.length}</p></div>
+        <div className="app-panel rounded-2xl border p-4"><p className="app-muted text-xs">Registros de calificaciones</p><p className="mt-1 text-2xl font-semibold">{overview.reduce((sum,row)=>sum+row.grade_count,0)}</p></div>
       </div>
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h3 className="flex items-center gap-2 font-semibold"><ClipboardCheck size={19}/> Seguimiento por matrícula</h3>
@@ -266,10 +299,47 @@ export function AcademicActivityPage({ organizations, organizationId, onOrganiza
             type="button" disabled={activeEnrollments.length === 0} onClick={() => open(kind)}><Plus size={14}/>{labels[kind]}</button>)}
         </div>
       </div>
+      <p className="app-muted text-sm">Selecciona el nombre del estudiante para ver su historial. No se cargan evidencias de todos los alumnos.</p>
       <DataTable<EnrollmentSummary> rows={overview} columns={columns} label="Estudiantes de la oferta" pageSize={8}/>
-      <DataTable<AcademicRecord> rows={records} columns={recordColumns} label="Historial de evidencias (últimos 500 registros)" pageSize={8}/>
-      {records.length > 0 && <p className="app-muted text-xs">Las notas se presentan como porcentaje del puntaje máximo. La asistencia cuenta presentes y tardanzas sobre sesiones no justificadas. La participación se expresa de 1 a 5; no son predicciones de IA.</p>}
     </>}
+    {offeringId && selectedEnrollmentId && <div className="space-y-4">
+      <button type="button" className={secondary} onClick={onBackToOverview}><ArrowLeft size={17}/> Volver a estudiantes</button>
+      {!selectedSummary && !loading && <p className="app-warning rounded-xl border p-4 text-sm" role="alert">No se encontró la matrícula en esta oferta. Comprueba el enlace o tus permisos.</p>}
+      {selectedSummary && <>
+        <div className="app-panel rounded-2xl border p-5">
+          <p className="app-muted text-xs">Historial individual · {selectedOffering?.course_title} · {selectedOffering?.period}</p>
+          <h3 className="mt-2 flex items-center gap-2 text-xl font-bold"><UserRound size={22}/> {selectedSummary.student_name}</h3>
+          <p className="app-muted mt-1 text-sm">Matrícula: {states[selectedSummary.status] || selectedSummary.status}</p>
+          <div className="mt-5 grid gap-3 sm:grid-cols-4">
+            <div><p className="app-muted text-xs">Notas</p><strong>{formatNumber(selectedSummary.grade_average_percent,'%')}</strong></div>
+            <div><p className="app-muted text-xs">Asistencia</p><strong>{formatNumber(selectedSummary.attendance_percent,'%')}</strong></div>
+            <div><p className="app-muted text-xs">Participación</p><strong>{formatNumber(selectedSummary.participation_average,'/5')}</strong></div>
+            <div><p className="app-muted text-xs">Progreso</p><strong>{formatNumber(selectedSummary.completion_percent,'%')}</strong></div>
+          </div>
+        </div>
+        <div className="app-panel space-y-3 rounded-2xl border p-4">
+          <div className="flex flex-wrap items-end justify-between gap-3">
+            <h4 className="font-semibold">Evidencias de esta matrícula</h4>
+            <div className="w-full max-w-xs space-y-1"><label className="app-muted text-xs">Tipo de evidencia</label>
+              <OptionSelect ariaLabel="Filtrar evidencias" value={recordKind} onChange={value=>{setRecordKind(value);setRecordPage(0);}}
+                options={[{value:'all',label:'Todas las evidencias'}, {value:'grade',label:'Calificaciones'},
+                  {value:'attendance',label:'Asistencia'}, {value:'participation',label:'Participación'}]}/></div>
+          </div>
+          {loadingRecords && <Spinner label="Cargando historial individual..."/>}
+          {!loadingRecords && records.length===0 && <p className="app-muted rounded-lg p-4 text-sm">Aún no hay evidencias para estos filtros.</p>}
+          {!loadingRecords && records.length>0 && <DataTable<AcademicRecord> key={`${selectedEnrollmentId}-${recordKind}-${recordPage}`}
+            rows={records} columns={recordColumns} label="Historial individual" pageSize={10} manualMode/>}
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <p className="app-muted text-xs">{recordTotal} evidencias · página {recordPage+1} de {Math.max(1,Math.ceil(recordTotal/10))}</p>
+            <div className="flex gap-2"><button type="button" className={secondary} disabled={recordPage===0 || loadingRecords}
+              onClick={()=>setRecordPage(p=>Math.max(0,p-1))}><ChevronLeft size={15}/> Anterior</button>
+              <button type="button" className={secondary} disabled={loadingRecords || (recordPage+1)*10>=recordTotal}
+                onClick={()=>setRecordPage(p=>p+1)}>Siguiente <ChevronRight size={15}/></button></div>
+          </div>
+        </div>
+        <p className="app-muted text-xs">Las notas son porcentajes del puntaje máximo. La asistencia cuenta presentes y tardanzas sobre sesiones no justificadas; no son predicciones de IA.</p>
+      </>}
+    </div>}
     <Modal open={modal !== null} title={`Registrar ${modal ? labels[modal].toLowerCase() : 'actividad'}`} onClose={() => { if (!busy) { setModal(null); setError(''); } }}>
       <form className="space-y-4" onSubmit={event => void save(event)}>
         <div className="space-y-1.5"><label className="text-sm font-medium">Estudiante matriculado</label>

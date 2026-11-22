@@ -5,6 +5,7 @@ import { KeyRound } from 'lucide-react';
 import { Modal } from '../../components/shared/Modal';
 import { useToast } from '../../components/shared/Toast';
 import { supabase } from '../../lib/supabase';
+import { PasswordInput } from '../../components/shared/PasswordInput';
 
 
 /**
@@ -125,11 +126,11 @@ export function PasswordDialog({ open, onClose }: { open: boolean; onClose: () =
     <form onSubmit={event => void submit(event)} className="space-y-4">
       <p className="app-muted text-sm">El cambio de contraseña se valida con Supabase Auth y no altera tus roles institucionales.</p>
       <label className="flex flex-col gap-1.5 text-sm font-medium">Contraseña actual
-        <input className={field} type="password" required autoComplete="current-password" value={currentPassword} onChange={e => setCurrentPassword(e.target.value)}/></label>
+        <PasswordInput value={currentPassword} onChange={setCurrentPassword} autoComplete="current-password" disabled={saving || requesting}/></label>
       <label className="flex flex-col gap-1.5 text-sm font-medium">Nueva contraseña
-        <input className={field} type="password" required minLength={8} autoComplete="new-password" value={password} onChange={e => setPassword(e.target.value)}/></label>
+        <PasswordInput value={password} onChange={setPassword} autoComplete="new-password" minLength={8} disabled={saving || requesting}/></label>
       <label className="flex flex-col gap-1.5 text-sm font-medium">Confirmar nueva contraseña
-        <input className={field} type="password" required minLength={8} autoComplete="new-password" value={repeat} onChange={e => setRepeat(e.target.value)}/></label>
+        <PasswordInput value={repeat} onChange={setRepeat} autoComplete="new-password" minLength={8} disabled={saving || requesting}/></label>
       <button type="button" className={`${secondary} text-xs`} disabled={saving || requesting} onClick={() => void sendCode()}>
         {requesting ? 'Solicitando...' : 'Solicitar código de verificación (si se requiere)'}</button>
       {showNonce && <label className="flex flex-col gap-1.5 text-sm font-medium">Código recibido

@@ -5,6 +5,8 @@ import { Activity, ArrowRight, BookOpen, Building2, CheckCircle2, ChevronDown, D
   GraduationCap, LayoutDashboard, LockKeyhole, Menu, RefreshCw, Users, ClipboardList,
   Server, ShieldCheck, XCircle, Settings, PanelLeftClose, PanelLeftOpen, UserRound, X } from 'lucide-react';
 import type { Session } from '@supabase/supabase-js';
+import { useLocation, useNavigate } from 'react-router';
+import { activityDetail, enrollmentHistoryPath, sectionForPath, sectionPaths, type Section } from './routes';
 import { DataTable, type Column } from './components/shared/DataTable';
 import { Modal } from './components/shared/Modal';
 import { Spinner } from './components/shared/Spinner';
@@ -26,7 +28,6 @@ import type { ProfileIdentity } from './modules/profile/types';
 import type { Organization, OrganizationInput } from './modules/organizations/types';
 import { countryName } from './modules/organizations/types';
 
-type Section = 'dashboard' | 'organizations' | 'users' | 'courses' | 'students' | 'enrollments' | 'activity' | 'security' | 'settings' | 'profile';
 type Connection = 'checking' | 'online' | 'offline';
 const API = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 const columns: Column<Organization>[] = [
@@ -53,7 +54,10 @@ export default function App() {
     try { return window.localStorage.getItem('edumaster_sidebar_collapsed') === 'true'; }
     catch { return false; }
   });
-  const [section, setSection] = useState<Section>('dashboard');
+  const location = useLocation();
+  const navigate = useNavigate();
+  const section = sectionForPath(location.pathname) ?? 'dashboard';
+  const detailRoute = activityDetail(location.pathname);
   const [apiStatus, setApiStatus] = useState<Connection>('checking');
   const [session, setSession] = useState<Session | null>(null);
   const [orgs, setOrgs] = useState<Organization[]>([]);
@@ -278,7 +282,7 @@ export default function App() {
     if (!client) return;
     const { error } = await client.auth.signOut();
     if (error) { notify(`No se pudo cerrar sesión: ${error.message}`); return; }
-    setSession(null); setIdentity(null); setSection('dashboard'); setPassword(''); setAuthorizedUserId(null); setGlobalRoles([]); setMemberships([]); setAccountStatus('checking');
+    setSession(null); setIdentity(null); navigate('/iniciar-sesion', { replace: true }); setPassword(''); setAuthorizedUserId(null); setGlobalRoles([]); setMemberships([]); setAccountStatus('checking');
     notify('Sesión cerrada correctamente.', 'success');
   }
 
@@ -292,7 +296,27 @@ export default function App() {
   const signedIn = Boolean(session);
   const isDemo = false;
   const rows = orgs;
-  const navTo = (next: Section) => { setSection(next); setMobileMenu(false); };
+  const navTo = (next: Section) => { navigate(sectionPaths[next]); setMobileMenu(false); };
+  const academicRole = (orgId: string): 'manager'|'instructor'|'student' => {
+    const roles = memberships.find(item => item.organization_id === orgId)?.roles ?? [];
+    return roles.some(role => role === 'institution_admin' || role === 'coordinator') ? 'manager'
+      : roles.includes('instructor') ? 'instructor' : 'student';
+  };
+  // La URL no concede privilegios: la UI oculta módulos restringidos y FastAPI
+  // vuelve a comprobar el JWT, el rol y la institución en cada petición.
+  useEffect(() => {
+    if (!accessGranted) return;
+    if (!sectionForPath(location.pathname)
+      || (section === 'users' && !canManageUserAdministration)
+      || (section === 'activity' && !canViewAcademicActivity)) {
+      navigate(sectionPaths.dashboard, { replace: true });
+    }
+  }, [location.pathname, section, accessGranted, navigate, canManageUserAdministration, canViewAcademicActivity]);
+  useEffect(() => {
+    if (!detailRoute || !accessGranted) return;
+    if (orgs.some(org => org.id === detailRoute.organizationId) && academicOrgId !== detailRoute.organizationId)
+      setAcademicOrgId(detailRoute.organizationId);
+  }, [detailRoute?.organizationId, accessGranted, orgs, academicOrgId]);
   const cycleTheme = () => setTheme(theme === 'light' ? 'dark' : theme === 'dark' ? 'black' : 'light');
 
   if (!supabase) return <div className="app-shell flex min-h-screen items-center justify-center p-5 dark:bg-[#06152B]">
@@ -425,10 +449,15 @@ export default function App() {
           {(section === 'courses' || section === 'students' || section === 'enrollments') && accessToken && <AcademicPage
             mode={section} organizations={orgs} organizationId={academicOrgId}
             onOrganizationChange={setAcademicOrgId} token={accessToken}
+            courseRole={academicRole(academicOrgId)}
             canManageOrganization={canManageAcademicOrganization}/>}
           {section === 'activity' && accessToken && <AcademicActivityPage
             organizations={orgs} organizationId={academicOrgId}
-            onOrganizationChange={setAcademicOrgId} token={accessToken}/>}
+            onOrganizationChange={setAcademicOrgId} token={accessToken}
+            selectedEnrollmentId={detailRoute?.enrollmentId ?? ''}
+            selectedOfferingId={detailRoute?.offeringId ?? ''}
+            onSelectEnrollment={(offeringId, enrollmentId) => navigate(enrollmentHistoryPath(academicOrgId, offeringId, enrollmentId))}
+            onBackToOverview={() => navTo('activity')}/>}
           {section === 'security' && <div className="app-panel rounded-2xl border border-slate-200 bg-white p-6 dark:border-[#23456A] dark:bg-[#0A1F3D]">
             <LockKeyhole size={24} className="app-accent text-[#20C8F5]"/><h3 className="mt-3 text-lg font-semibold">Aislamiento por institución</h3>
             <p className="mt-2 text-sm leading-7 app-muted text-slate-500 dark:text-slate-300">Auth y RBAC se validarán en FastAPI. Las FKs compuestas impiden referencias entre instituciones; el esquema privado no se publica por Supabase Data API. Las políticas ABAC detalladas quedan pendientes de implementar y probar.</p>

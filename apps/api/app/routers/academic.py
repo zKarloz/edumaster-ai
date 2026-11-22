@@ -141,6 +141,154 @@ async def list_courses(
         raise _db_error(exc, "No se pudieron consultar los cursos") from exc
 
 
+
+# CAMBIOS 9: una oferta pertenece a un período, mientras que la finalización
+# personal corresponde a una matrícula. No mezclamos sus estados en SQL.
+@router.get("/{organization_id}/course-offerings")
+async def institutional_offerings(
+    organization_id: UUID,
+    limit: int = Query(20, ge=1, le=100),
+    offset: int = Query(0, ge=0),
+    period: str | None = Query(None, max_length=80),
+    offering_status: str | None = Query(None, pattern=r"^(planned|open|closed|cancelled)$"),
+    search: str = Query("", max_length=100),
+    year: int | None = Query(None, ge=2000, le=2100),
+    current: bool = False,
+    auth_id: UUID = Depends(authenticated_user_id),
+    engine: AsyncEngine = Depends(require_engine),
+) -> dict:
+    """Catálogo de ofertas paginado para gestores autorizados, sin duplicar cursos."""
+    where = """
+        FROM app.course_offerings off
+        JOIN app.courses c ON c.id=off.course_id AND c.organization_id=off.organization_id
+        WHERE off.organization_id=:organization_id
+          AND (CAST(:period AS text) IS NULL OR off.period=CAST(:period AS text))
+          AND (CAST(:offering_status AS text) IS NULL OR off.status=CAST(:offering_status AS text))
+          AND (c.title ILIKE :search OR c.code ILIKE :search)
+          AND (CAST(:year_pattern AS text) IS NULL OR off.period ILIKE CAST(:year_pattern AS text))
+          AND (NOT :current OR off.status='open')
+    """
+    parameters = {
+        "organization_id": organization_id, "period": period,
+        "offering_status": offering_status, "search": f"%{search.strip()}%",
+        "year_pattern": f"%{year}%" if year is not None else None, "current": current,
+    }
+    try:
+        async with engine.connect() as conn:
+            await _require_scope(conn, auth_id, organization_id, manage=True)
+            total = (await conn.execute(text("SELECT COUNT(*) " + where), parameters)).scalar_one()
+            rows = (await conn.execute(text("""
+                SELECT c.id::text AS id, c.code, c.title, c.description, c.level, c.status,
+                  off.id::text AS offering_id, off.period, off.status AS offering_status,
+                  (SELECT COUNT(*) FROM app.enrollments e
+                   WHERE e.organization_id=off.organization_id AND e.offering_id=off.id
+                     AND e.status='active') AS enrolled_count
+            """ + where + " ORDER BY off.created_at DESC, off.id DESC LIMIT :limit OFFSET :offset"),
+                {**parameters, "limit": limit, "offset": offset})).mappings().all()
+        return {"items": [dict(item) for item in rows], "total": total, "limit": limit, "offset": offset}
+    except SQLAlchemyError as exc:
+        raise _db_error(exc, "No se pudieron consultar las ofertas académicas") from exc
+
+
+@router.get("/{organization_id}/course-periods")
+async def course_periods(
+    organization_id: UUID,
+    auth_id: UUID = Depends(authenticated_user_id),
+    engine: AsyncEngine = Depends(require_engine),
+) -> dict:
+    """Solo períodos de ofertas visibles para el usuario en esta institución."""
+    sql = text("""
+        SELECT DISTINCT off.period FROM app.course_offerings off
+        WHERE off.organization_id=:organization_id AND (
+          :manager OR
+          EXISTS (
+            SELECT 1 FROM app.instructors i
+            JOIN app.organization_memberships im ON im.id=i.membership_id
+              AND im.organization_id=i.organization_id AND im.status='active'
+            JOIN app.membership_roles mr ON mr.membership_id=im.id
+            JOIN app.roles ir ON ir.id=mr.role_id AND ir.code='instructor' AND ir.scope='organization'
+            WHERE i.id=off.instructor_id AND i.organization_id=off.organization_id
+              AND i.status='active' AND im.user_id=:actor
+          ) OR
+          EXISTS (
+            SELECT 1 FROM app.enrollments e
+            JOIN app.students s ON s.id=e.student_id AND s.organization_id=e.organization_id
+            JOIN app.organization_memberships sm ON sm.id=s.membership_id
+              AND sm.organization_id=s.organization_id AND sm.status='active'
+            WHERE e.offering_id=off.id AND e.organization_id=off.organization_id
+              AND sm.user_id=:actor
+          )
+        ) ORDER BY off.period DESC LIMIT 200
+    """)
+    try:
+        async with engine.connect() as conn:
+            actor = await _require_scope(conn, auth_id, organization_id)
+            scope = (await conn.execute(SCOPE_SQL, {
+                "auth_id": auth_id, "organization_id": organization_id,
+            })).mappings().first()
+            periods = (await conn.execute(sql, {
+                "organization_id": organization_id,
+                "manager": bool(scope["is_manager"]), "actor": actor,
+            })).scalars().all()
+        return {"items": list(periods)}
+    except SQLAlchemyError as exc:
+        raise _db_error(exc, "No se pudieron consultar los períodos") from exc
+
+
+@router.get("/{organization_id}/my-courses")
+async def my_courses(
+    organization_id: UUID,
+    limit: int = Query(20, ge=1, le=100),
+    offset: int = Query(0, ge=0),
+    period: str | None = Query(None, max_length=80),
+    enrollment_status: str | None = Query(None, pattern=r"^(active|completed|withdrawn)$"),
+    search: str = Query("", max_length=100),
+    year: int | None = Query(None, ge=2000, le=2100),
+    current: bool = False,
+    auth_id: UUID = Depends(authenticated_user_id),
+    engine: AsyncEngine = Depends(require_engine),
+) -> dict:
+    """Solo las matrículas PROPIAS de la cuenta, independientemente del rol global.
+
+    El cliente no puede proporcionar student_id ni consultar otra identidad.
+    """
+    where = """
+        FROM app.enrollments e
+        JOIN app.course_offerings off ON off.id=e.offering_id
+          AND off.organization_id=e.organization_id
+        JOIN app.courses c ON c.id=off.course_id AND c.organization_id=e.organization_id
+        JOIN app.students s ON s.id=e.student_id AND s.organization_id=e.organization_id
+        JOIN app.organization_memberships m ON m.id=s.membership_id
+          AND m.organization_id=e.organization_id AND m.status='active'
+        JOIN app.users u ON u.id=m.user_id AND u.auth_user_id=:auth_id AND u.status='active'
+        WHERE e.organization_id=:organization_id
+          AND (CAST(:period AS text) IS NULL OR off.period=CAST(:period AS text))
+          AND (CAST(:enrollment_status AS text) IS NULL OR e.status=CAST(:enrollment_status AS text))
+          AND (CAST(:year_pattern AS text) IS NULL OR off.period ILIKE CAST(:year_pattern AS text))
+          AND (c.title ILIKE :search OR c.code ILIKE :search)
+          AND (NOT :current OR (e.status='active' AND off.status='open'))
+    """
+    params = {"organization_id": organization_id, "auth_id": auth_id,
+              "period": period, "enrollment_status": enrollment_status,
+              "search": f"%{search.strip()}%",
+              "year_pattern": f"%{year}%" if year is not None else None,
+              "current": current}
+    try:
+        async with engine.connect() as conn:
+            await _require_scope(conn, auth_id, organization_id)
+            total = (await conn.execute(text("SELECT COUNT(*) " + where), params)).scalar_one()
+            rows = (await conn.execute(text("""
+                SELECT c.id::text AS id, c.code, c.title, c.description, c.level, c.status,
+                  off.id::text AS offering_id, off.period, off.status AS offering_status,
+                  e.id::text AS enrollment_id, e.status AS enrollment_status,
+                  1 AS enrolled_count
+            """ + where + " ORDER BY e.enrolled_at DESC, e.id DESC LIMIT :limit OFFSET :offset"),
+                {**params, "limit": limit, "offset": offset})).mappings().all()
+        return {"items": [dict(item) for item in rows], "total": total, "limit": limit, "offset": offset}
+    except SQLAlchemyError as exc:
+        raise _db_error(exc, "No se pudieron consultar tus matrículas") from exc
+
+
 @router.post("/{organization_id}/courses", status_code=status.HTTP_201_CREATED)
 async def create_course(
     organization_id: UUID, payload: CourseCreate,

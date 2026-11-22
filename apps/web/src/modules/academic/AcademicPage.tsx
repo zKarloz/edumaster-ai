@@ -8,6 +8,7 @@ import { OptionSelect } from '../../components/shared/OptionSelect';
 import { Spinner } from '../../components/shared/Spinner';
 import { useToast } from '../../components/shared/Toast';
 import type { Organization } from '../organizations/types';
+import { CourseCatalog, type CourseRole } from './CourseCatalog';
 
 export type AcademicSection = 'courses' | 'students' | 'enrollments';
 interface Course {
@@ -27,6 +28,7 @@ interface Enrollment {
 }
 interface Props {
   mode: AcademicSection;
+  courseRole: CourseRole;
   organizations: Organization[];
   organizationId: string;
   onOrganizationChange: (value: string) => void;
@@ -38,12 +40,6 @@ const inputClass = 'app-input min-h-11 w-full rounded-xl border border-slate-200
 const mainButton = 'app-primary-button inline-flex items-center justify-center gap-2 rounded-xl bg-[#087FE5] px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-60';
 const secondaryButton = 'app-secondary-button inline-flex items-center gap-2 rounded-xl border border-slate-200 px-4 py-2.5 text-sm dark:border-[#345578]';
 const titleFor = { courses: 'Cursos', students: 'Estudiantes', enrollments: 'Matrículas' };
-const courseColumns: Column<Course>[] = [
-  { header: 'Código', key: 'code' }, { header: 'Curso', key: 'title' },
-  { header: 'Período', key: 'period' },
-  { header: 'Estado', key: 'status', render: row => row.status === 'published' ? 'Publicado' : 'Borrador' },
-  { header: 'Matrículas', key: 'enrolled_count' },
-];
 const studentColumns: Column<Student>[] = [
   { header: 'Estudiante', key: 'full_name' }, { header: 'Correo', key: 'email' },
   { header: 'Código académico', key: 'external_code' },
@@ -84,7 +80,7 @@ function Field({ label, children }: { label: string; children: ReactNode }) {
   </label>;
 }
 
-export function AcademicPage({ mode, organizations, organizationId, onOrganizationChange, canManageOrganization, token }: Props) {
+export function AcademicPage({ mode, courseRole, organizations, organizationId, onOrganizationChange, canManageOrganization, token }: Props) {
   const { notify } = useToast();
   const [courses, setCourses] = useState<Course[]>([]);
   const [students, setStudents] = useState<Student[]>([]);
@@ -235,7 +231,7 @@ export function AcademicPage({ mode, organizations, organizationId, onOrganizati
       </div>
       {loading && <Spinner label="Cargando datos académicos..."/>}
       {error && !dialog && <p role="alert" className="app-warning rounded-xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900">{error}</p>}
-      {mode === 'courses' && <DataTable<Course> key={organizationId} rows={courses} columns={courseColumns} label="Catálogo de cursos" pageSize={8}/>}
+      {mode === 'courses' && <CourseCatalog organizationId={organizationId} token={token} role={courseRole} refreshKey={refresh}/>}
       {mode === 'students' && manager && <DataTable<Student> key={organizationId} rows={students} columns={studentColumns} label="Estudiantes vinculados" pageSize={8}/>}
       {mode === 'enrollments' && manager && <DataTable<Enrollment> key={organizationId} rows={enrollments} columns={enrollmentColumns} label="Matrículas registradas" pageSize={8}/>}
       {mode !== 'courses' && !manager && <p role="status" className="app-panel rounded-xl border p-5 text-sm">El directorio de estudiantes y las matrículas requieren permisos de administración institucional.</p>}

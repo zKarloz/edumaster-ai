@@ -3,6 +3,7 @@
 import type { FormEvent } from 'react';
 import { ArrowRight, BookOpen, BrainCircuit, Building2, GraduationCap, LockKeyhole, Moon, ShieldCheck, Sun, Contrast } from 'lucide-react';
 import type { ThemeName } from './providers/SettingsProvider';
+import { PasswordInput } from './components/shared/PasswordInput';
 
 type Props = {
   email: string;
@@ -57,8 +58,7 @@ export function LoginScreen({ email, password, busy, error, theme,
               className="app-secondary-button w-full rounded-xl border border-slate-300 bg-white px-4 py-3 font-normal text-slate-900 outline-offset-2 focus:border-sky-500 dark:border-[#315578] dark:bg-[#071C37] dark:text-slate-100"/>
           </label>
           <label className="block space-y-2 text-sm font-medium">Contraseña
-            <input autoComplete="current-password" type="password" required value={password} onChange={e=>onPasswordChange(e.target.value)} placeholder="Tu contraseña"
-              className="app-secondary-button w-full rounded-xl border border-slate-300 bg-white px-4 py-3 font-normal text-slate-900 outline-offset-2 focus:border-sky-500 dark:border-[#315578] dark:bg-[#071C37] dark:text-slate-100"/>
+            <PasswordInput value={password} onChange={onPasswordChange} autoComplete="current-password" placeholder="Tu contraseña" disabled={busy}/>
           </label>
           {error && <p role="alert" className="rounded-lg border border-red-400/40 bg-red-500/10 px-3 py-2 text-sm text-red-700 dark:text-red-300">{error}</p>}
           <button type="submit" disabled={busy} className="app-primary-button flex w-full items-center justify-center gap-2 rounded-xl bg-[#087FE5] px-4 py-3 font-semibold text-white hover:bg-[#0669BD] disabled:opacity-60">
