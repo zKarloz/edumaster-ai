@@ -5,6 +5,7 @@ import App from './App';
 import { BrowserRouter } from 'react-router';
 import { ToastProvider } from './components/shared/Toast';
 import { SettingsProvider } from './providers/SettingsProvider';
+import './i18n';
 import './styles.css';
 
 ReactDOM.createRoot(document.getElementById('root')!).render(

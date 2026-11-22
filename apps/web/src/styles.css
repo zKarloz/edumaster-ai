@@ -367,3 +367,42 @@ html.black-theme .app-account-theme[aria-pressed='true'] { background: #414141; 
 .app-avatar-image { animation: app-avatar-reveal 230ms ease-out both; }
 :root[data-motion='off'] .app-avatar-image { animation: none !important; }
 @media (prefers-reduced-motion: reduce) { .app-avatar-image { animation: none !important; } }
+
+/* v18: tarjetas indicadoras discretamente elevadas sin sugerir un control clicable. */
+.app-indicator-card {
+  transition: transform 190ms ease, box-shadow 190ms ease;
+  will-change: auto;
+}
+@media (hover: hover) and (pointer: fine) {
+  html[data-motion='on'] .app-indicator-card:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 12px 24px rgb(15 23 42 / 11%);
+  }
+  html.black-theme[data-motion='on'] .app-indicator-card:hover {
+    box-shadow: 0 12px 25px rgb(0 0 0 / 48%);
+  }
+}
+/* Evita mezclar colores entre campo de correo y la acción de mostrar contraseña. */
+.app-password-toggle {
+  background: transparent;
+  border: 0;
+  color: var(--app-muted-text);
+}
+.app-password-toggle:hover:not(:disabled) { background: var(--app-control-hover); color: var(--app-text); }
+.app-input:focus-within { border-color: var(--app-primary-bg); }
+/* El menú dinámico se superpone; su rail conserva 76px dentro del flujo normal. */
+@media (min-width: 768px) {
+  .app-sidebar { transition: width 190ms ease; }
+  .app-sidebar-inner { transition: width 190ms ease, box-shadow 190ms ease; }
+  .app-sidebar-dynamic { overflow: visible; }
+  .app-sidebar-dynamic .app-sidebar-inner { z-index: 31; background: var(--app-panel-bg); }
+  .app-sidebar-dynamic:hover .app-sidebar-inner,
+  .app-sidebar-dynamic:focus-within .app-sidebar-inner { box-shadow: 10px 0 24px rgb(0 0 0 / 12%); }
+}
+.app-sidebar-options { max-width: min(15rem, calc(100vw - 2rem)); }
+html[data-motion='off'] .app-indicator-card:hover,
+html[data-motion='off'] .app-sidebar, html[data-motion='off'] .app-sidebar-inner { transform: none !important; transition: none !important; }
+@media (prefers-reduced-motion: reduce) {
+  .app-indicator-card:hover { transform: none !important; box-shadow: none !important; }
+  .app-sidebar, .app-sidebar-inner { transition: none !important; }
+}

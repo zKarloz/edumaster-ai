@@ -130,6 +130,48 @@ async def update_own_details(payload: PersonalDetails,
         raise HTTPException(status_code=503, detail='No se pudieron guardar tus datos; verifica migración 004') from exc
 
 
+class PreferredLanguage(BaseModel):
+    """Cambio parcial: nunca sobrescribe país, nacimiento, sexo ni consentimiento."""
+    model_config = ConfigDict(extra='forbid')
+    language_code: Literal['es', 'en', 'pt']
+
+
+@router.patch('/me/language')
+async def update_preferred_language(payload: PreferredLanguage,
+                                    auth_id: UUID = Depends(authenticated_user_id),
+                                    engine: AsyncEngine = Depends(require_engine)) -> dict:
+    """Actualiza exclusivamente el idioma propio, con control de identidad y auditoría."""
+    try:
+        async with engine.begin() as conn:
+            row = (await conn.execute(text('''
+                SELECT u.id FROM app.users u
+                WHERE u.auth_user_id=:auth_id AND u.status='active' AND (
+                    EXISTS (SELECT 1 FROM app.global_role_assignments g
+                      WHERE g.user_id=u.id)
+                    OR EXISTS (SELECT 1 FROM app.organization_memberships m
+                      JOIN app.organizations o ON o.id=m.organization_id
+                      WHERE m.user_id=u.id AND m.status='active' AND o.status='active')
+                )
+            '''), {'auth_id': auth_id})).first()
+            if not row:
+                raise HTTPException(status_code=403, detail='Cuenta sin acceso activo')
+            await conn.execute(text('''
+                INSERT INTO app.user_profile_details (user_id, language_code)
+                VALUES (:user_id, :language_code)
+                ON CONFLICT (user_id) DO UPDATE
+                SET language_code=EXCLUDED.language_code, updated_at=now()
+            '''), {'user_id': row[0], 'language_code': payload.language_code})
+            await conn.execute(text('''
+                INSERT INTO app.audit_logs (actor_id, action, resource, resource_id, metadata)
+                VALUES (:user_id, 'update_preferred_language', 'users', :user_id,
+                        '{"fields":"language_code"}'::jsonb)
+            '''), {'user_id': row[0]})
+        return {'language_code': payload.language_code}
+    except SQLAlchemyError as exc:
+        logger.exception('Error actualizando idioma preferido')
+        raise HTTPException(status_code=503, detail='No se pudo guardar el idioma') from exc
+
+
 @router.get('/directory/users/{user_id}')
 async def directory_user_details(user_id: UUID, organization_id: UUID,
                                  auth_id: UUID = Depends(authenticated_user_id),

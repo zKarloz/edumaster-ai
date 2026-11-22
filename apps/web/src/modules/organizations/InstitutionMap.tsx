@@ -1,6 +1,7 @@
 // Visualización geográfica con React Leaflet + OpenStreetMap.
 // Sin geolocalización del visitante; solo sedes registradas y autorizadas.
 import { useEffect, useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
 import { divIcon, latLngBounds } from 'leaflet';
 import { MapContainer, Marker, Popup, TileLayer, ZoomControl, useMap } from 'react-leaflet';
 import type { Organization } from './types';
@@ -45,6 +46,7 @@ function MapNavigation({ organizations, selectedId }: Pick<Props, 'organizations
 }
 
 export function InstitutionMap({ organizations, selectedId, onSelect }: Props) {
+  const { t } = useTranslation();
   const located = organizations.filter(org => org.latitude !== null && org.longitude !== null);
   return (
     <div className="institution-map relative h-full min-h-[360px] w-full overflow-hidden rounded-2xl border border-slate-200 dark:border-[#23456A]">
@@ -59,16 +61,16 @@ export function InstitutionMap({ organizations, selectedId, onSelect }: Props) {
             <div className="space-y-1 text-slate-800">
               <strong>{org.name}</strong>
               <div>{org.city}, {countryName(org.country_code)}</div>
-              <div className="text-xs">Código: {org.code}</div>
+              <div className="text-xs">{t('legacy.k943f7c6233')} {org.code}</div>
               <button className="text-sm font-semibold text-blue-700 underline" type="button" onClick={() => onSelect(org.id)}>
-                Ver institución
+                {t('legacy.k140bbf9e62')}
               </button>
             </div>
           </Popup>
         </Marker>)}
       </MapContainer>
       {located.length === 0 && <div className="pointer-events-none absolute left-4 right-4 top-4 z-[400] rounded-lg border border-slate-200 bg-white/95 px-4 py-3 text-sm font-medium text-slate-700 shadow-md sm:left-auto sm:max-w-sm">
-        No hay instituciones con coordenadas en este filtro. Registra una sede para colocar el primer marcador.
+        {t('legacy.k22a4df9911')}
       </div>}
     </div>
   );

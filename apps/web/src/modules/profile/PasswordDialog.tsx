@@ -1,5 +1,6 @@
 // Cambio de contraseña en Modal compartido. La política real se aplica en Supabase Auth.
 import { useState, type FormEvent } from 'react';
+import { useTranslation } from 'react-i18next';
 import { createClient } from '@supabase/supabase-js';
 import { KeyRound } from 'lucide-react';
 import { Modal } from '../../components/shared/Modal';
@@ -58,6 +59,7 @@ const primary = 'app-primary-button inline-flex items-center justify-center gap-
 const secondary = 'app-secondary-button inline-flex items-center justify-center gap-2 rounded-xl border px-4 py-2.5 text-sm font-semibold disabled:opacity-50';
 
 export function PasswordDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
+  const { t } = useTranslation();
   const { notify } = useToast();
   const [currentPassword, setCurrentPassword] = useState('');
   const [password, setPassword] = useState('');
@@ -122,23 +124,23 @@ export function PasswordDialog({ open, onClose }: { open: boolean; onClose: () =
     } catch { setError('No se pudo conectar con Supabase Auth.'); }
     finally { setSaving(false); }
   }
-  return <Modal open={open} onClose={close} title="Cambiar contraseña">
+  return <Modal open={open} onClose={close} title={t('labels.k0d53f4632f')}>
     <form onSubmit={event => void submit(event)} className="space-y-4">
-      <p className="app-muted text-sm">El cambio de contraseña se valida con Supabase Auth y no altera tus roles institucionales.</p>
-      <label className="flex flex-col gap-1.5 text-sm font-medium">Contraseña actual
+      <p className="app-muted text-sm">{t('legacy.k7eafad1200')}</p>
+      <label className="flex flex-col gap-1.5 text-sm font-medium">{t('legacy.k6848bf99f0')}
         <PasswordInput value={currentPassword} onChange={setCurrentPassword} autoComplete="current-password" disabled={saving || requesting}/></label>
-      <label className="flex flex-col gap-1.5 text-sm font-medium">Nueva contraseña
+      <label className="flex flex-col gap-1.5 text-sm font-medium">{t('legacy.k5c4fd97e2a')}
         <PasswordInput value={password} onChange={setPassword} autoComplete="new-password" minLength={8} disabled={saving || requesting}/></label>
-      <label className="flex flex-col gap-1.5 text-sm font-medium">Confirmar nueva contraseña
+      <label className="flex flex-col gap-1.5 text-sm font-medium">{t('legacy.k576af123ab')}
         <PasswordInput value={repeat} onChange={setRepeat} autoComplete="new-password" minLength={8} disabled={saving || requesting}/></label>
       <button type="button" className={`${secondary} text-xs`} disabled={saving || requesting} onClick={() => void sendCode()}>
         {requesting ? 'Solicitando...' : 'Solicitar código de verificación (si se requiere)'}</button>
-      {showNonce && <label className="flex flex-col gap-1.5 text-sm font-medium">Código recibido
+      {showNonce && <label className="flex flex-col gap-1.5 text-sm font-medium">{t('legacy.kbd9434bb80')}
         <input className={field} autoComplete="one-time-code" value={nonce} onChange={e => setNonce(e.target.value)}/></label>}
-      <p className="app-muted text-xs">No reutilices contraseñas antiguas. Supabase rechaza repetir la contraseña vigente; no existe una política de historial de contraseñas antiguas habilitada.</p>
+      <p className="app-muted text-xs">{t('legacy.kc9817e7851')}</p>
       {error && <div role="alert" className="app-warning rounded-xl border p-3 text-sm">{error}</div>}
       <div className="app-divider flex flex-wrap justify-end gap-2 border-t pt-4">
-        <button type="button" className={secondary} disabled={saving || requesting} onClick={close}>Cancelar</button>
+        <button type="button" className={secondary} disabled={saving || requesting} onClick={close}>{t('legacy.kc111e0ab9d')}</button>
         <button type="submit" className={primary} disabled={saving || requesting || !currentPassword || password.length < 8 || password !== repeat}>
           <KeyRound size={16}/>{saving ? 'Actualizando...' : 'Cambiar contraseña'}</button>
       </div>

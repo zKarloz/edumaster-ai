@@ -1,6 +1,7 @@
 // Gestión institucional de usuarios. No crea contraseñas ni concede roles globales.
 // Usa los componentes compartidos y los permisos se revalidan en FastAPI.
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
+import { useTranslation } from 'react-i18next';
 import { AlertTriangle, CheckCircle2, Ellipsis, Info, Plus, Shield, UserRoundMinus, UserRoundPlus } from 'lucide-react';
 import { DataTable, type Column } from '../../components/shared/DataTable';
 import { Modal } from '../../components/shared/Modal';
@@ -51,6 +52,7 @@ function readableError(data: unknown, status: number) {
 }
 
 export function InstitutionalUsersPage({ token, organizations }: Props) {
+  const { t } = useTranslation();
   const { notify } = useToast();
   const [organizationId, setOrganizationId] = useState('');
   const [members, setMembers] = useState<Member[]>([]);
@@ -145,7 +147,7 @@ export function InstitutionalUsersPage({ token, organizations }: Props) {
     { header: 'Usuario', key: 'full_name', render: item => <div className="min-w-40"><p className="font-semibold">{item.full_name}</p><p className="app-muted text-xs break-all">{item.email}</p></div> },
     { header: 'Roles', key: 'roles', render: item => <div className="flex max-w-72 flex-wrap gap-1.5">{item.roles.length
       ? item.roles.map(value => <span key={value} className="app-secondary-button rounded-lg border px-2 py-1 text-xs">{ROLE_LABELS[value] ?? value}</span>)
-      : <span className="app-muted text-xs">Sin rol</span>}</div> },
+      : <span className="app-muted text-xs">{t('legacy.kb51dc6112e')}</span>}</div> },
     { header: 'Estado', key: 'status', render: item => <span className={item.status === 'active'
       ? 'rounded-lg bg-emerald-500/10 px-2 py-1 text-xs text-emerald-700 dark:text-emerald-300'
       : 'app-warning rounded-lg border px-2 py-1 text-xs'}>{item.status === 'active' ? 'Activo' : item.status === 'suspended' ? 'Suspendido' : item.status}</span> },
@@ -154,8 +156,8 @@ export function InstitutionalUsersPage({ token, organizations }: Props) {
       {protectedMember(item)
       ? <span className="app-muted inline-flex items-center gap-1 text-xs"><Shield size={14}/> {item.is_self ? 'Tu cuenta' : 'Cuenta protegida'}</span>
       : <div className="flex flex-wrap gap-2">
-          <button type="button" className={buttonSecondary} disabled={item.status !== 'active'} onClick={() => openDialog('grant', item)} title="Asignar rol"><Plus size={15}/> Rol</button>
-          <button type="button" className={buttonSecondary} disabled={item.status !== 'active' || item.roles.length < 2 || !removableRolesFor(item)} onClick={() => openDialog('remove', item)} title="Retirar rol (se exige mantener al menos uno)"><UserRoundMinus size={15}/> Retirar</button>
+          <button type="button" className={buttonSecondary} disabled={item.status !== 'active'} onClick={() => openDialog('grant', item)} title={t('legacy.k23df5a5aa2')}><Plus size={15}/> {t('legacy.ka73f1345df')}</button>
+          <button type="button" className={buttonSecondary} disabled={item.status !== 'active' || item.roles.length < 2 || !removableRolesFor(item)} onClick={() => openDialog('remove', item)} title="Retirar rol (se exige mantener al menos uno)"><UserRoundMinus size={15}/> {t('legacy.ka8e1962115')}</button>
           <button type="button" className={buttonSecondary} disabled={!['active', 'suspended'].includes(item.status)} onClick={() => openDialog('status', item)}>{item.status === 'active' ? 'Suspender' : 'Reactivar'}</button>
         </div>}</div> },
   ];
@@ -171,56 +173,56 @@ export function InstitutionalUsersPage({ token, organizations }: Props) {
     </section>
     <section className="app-panel space-y-4 rounded-2xl border p-5 sm:p-6">
       <div className="flex flex-wrap items-start justify-between gap-3">
-        <div><h3 className="text-lg font-semibold">Usuarios de mi institución</h3><p className="app-muted mt-1 text-sm">Administra miembros y roles locales sin acceder a otras instituciones.</p></div>
-        <button type="button" className={buttonPrimary} disabled={!organizationId} onClick={() => openDialog('add')}><UserRoundPlus size={17}/> Incorporar usuario</button>
+        <div><h3 className="text-lg font-semibold">{t('legacy.k43fafce483')}</h3><p className="app-muted mt-1 text-sm">{t('legacy.kb75e4247be')}</p></div>
+        <button type="button" className={buttonPrimary} disabled={!organizationId} onClick={() => openDialog('add')}><UserRoundPlus size={17}/> {t('legacy.k354a7ee56f')}</button>
       </div>
       <div className="grid gap-3 md:grid-cols-2">
-        <div className="space-y-1.5"><label className="text-sm font-medium">Institución a gestionar</label>
-          <OptionSelect ariaLabel="Institución" value={organizationId} onChange={setOrganizationId}
+        <div className="space-y-1.5"><label className="text-sm font-medium">{t('legacy.k11c7df0b0a')}</label>
+          <OptionSelect ariaLabel={t('legacy.kc342a804db')} value={organizationId} onChange={setOrganizationId}
             options={organizations.map(item => ({ value: item.id, label: item.name, suffix: item.code }))}/></div>
-        <div className="space-y-1.5"><label htmlFor="member-search" className="text-sm font-medium">Buscar usuario o rol</label>
-          <input id="member-search" className={inputStyle} placeholder="Nombre, correo o rol" value={query} onChange={event => setQuery(event.target.value)}/></div>
+        <div className="space-y-1.5"><label htmlFor="member-search" className="text-sm font-medium">{t('legacy.k950be1414e')}</label>
+          <input id="member-search" className={inputStyle} placeholder={t('labels.kdcb280502d')} value={query} onChange={event => setQuery(event.target.value)}/></div>
       </div>
       {loading && <Spinner label="Cargando usuarios institucionales..."/>}
       {error && <div role="alert" className="app-warning rounded-xl border p-4 text-sm">{error}</div>}
       {!loading && !error && <DataTable<Member> key={organizationId} rows={filtered} label="Usuarios institucionales" columns={columns} pageSize={8}/>}
-      {!loading && !error && members.length === 0 && <div className="app-info flex items-start gap-2 rounded-xl border p-4 text-sm"><Info size={18}/>Incorpora una cuenta confirmada de Supabase Auth para gestionar sus roles.</div>}
+      {!loading && !error && members.length === 0 && <div className="app-info flex items-start gap-2 rounded-xl border p-4 text-sm"><Info size={18}/>{t('legacy.kc73ae30860')}</div>}
     </section>
 
     <Modal open={dialog === 'add'} title="Incorporar usuario institucional" onClose={closeDialog}>
       <form onSubmit={submitAdd} className="space-y-4">
-        <div className="app-info flex items-start gap-2 rounded-xl border p-3 text-sm"><Info size={17} className="mt-0.5 shrink-0"/><p>La cuenta debe existir en Supabase Auth y tener correo confirmado. Esta pantalla no crea ni solicita contraseñas.</p></div>
-        <div className="space-y-1.5"><span className="text-sm font-medium">Institución</span><div className="app-panel rounded-xl border px-3 py-2 text-sm">{chosenOrg?.name ?? '—'}</div></div>
-        <div className="space-y-1.5"><label htmlFor="new-member-email" className="text-sm font-medium">Correo electrónico *</label><input id="new-member-email" required maxLength={254} type="email" className={inputStyle} value={email} placeholder="docente@institucion.edu" onChange={event => { setEmail(event.target.value); setReview(false); }}/></div>
-        <div className="space-y-1.5"><label htmlFor="new-member-name" className="text-sm font-medium">Nombre completo *</label><input id="new-member-name" required maxLength={180} minLength={3} className={inputStyle} value={fullName} placeholder="Nombre de la cuenta" onChange={event => { setFullName(event.target.value); setReview(false); }}/></div>
-        <div className="space-y-1.5"><label className="text-sm font-medium">Primer rol *</label><OptionSelect ariaLabel="Rol de usuario" value={role} onChange={value => { setRole(value as MemberRole); setReview(false); }} options={ROLES}/></div>
-        {role === 'ml_engineer' && <div className="app-info rounded-xl border p-3 text-xs">Este rol no habilita automáticamente el acceso a datasets sensibles ni a entrenamiento de modelos.</div>}
-        <label className="flex cursor-pointer items-start gap-2 text-sm"><input className="mt-1 size-4 accent-sky-600" type="checkbox" checked={confirmed} onChange={event => { setConfirmed(event.target.checked); setReview(false); }}/><span>Confirmo que puedo gestionar esta cuenta dentro de la institución seleccionada.</span></label>
-        {review && <div className="app-panel space-y-1 rounded-xl border p-4 text-sm"><p className="flex items-center gap-2 font-semibold"><CheckCircle2 size={16}/> Confirmar incorporación</p><p><b>Cuenta:</b> {email.trim().toLowerCase()}</p><p><b>Institución:</b> {chosenOrg?.name}</p><p><b>Rol:</b> {ROLE_LABELS[role]}</p></div>}
+        <div className="app-info flex items-start gap-2 rounded-xl border p-3 text-sm"><Info size={17} className="mt-0.5 shrink-0"/><p>{t('legacy.kdfa1848e08')}</p></div>
+        <div className="space-y-1.5"><span className="text-sm font-medium">{t('legacy.kc342a804db')}</span><div className="app-panel rounded-xl border px-3 py-2 text-sm">{chosenOrg?.name ?? '—'}</div></div>
+        <div className="space-y-1.5"><label htmlFor="new-member-email" className="text-sm font-medium">{t('legacy.k61c683173b')}</label><input id="new-member-email" required maxLength={254} type="email" className={inputStyle} value={email} placeholder="docente@institucion.edu" onChange={event => { setEmail(event.target.value); setReview(false); }}/></div>
+        <div className="space-y-1.5"><label htmlFor="new-member-name" className="text-sm font-medium">{t('legacy.k171ef991ee')}</label><input id="new-member-name" required maxLength={180} minLength={3} className={inputStyle} value={fullName} placeholder={t('labels.kd9914a2026')} onChange={event => { setFullName(event.target.value); setReview(false); }}/></div>
+        <div className="space-y-1.5"><label className="text-sm font-medium">{t('legacy.ke68b58f113')}</label><OptionSelect ariaLabel="Rol de usuario" value={role} onChange={value => { setRole(value as MemberRole); setReview(false); }} options={ROLES}/></div>
+        {role === 'ml_engineer' && <div className="app-info rounded-xl border p-3 text-xs">{t('legacy.k3ae618bbf8')}</div>}
+        <label className="flex cursor-pointer items-start gap-2 text-sm"><input className="mt-1 size-4 accent-sky-600" type="checkbox" checked={confirmed} onChange={event => { setConfirmed(event.target.checked); setReview(false); }}/><span>{t('legacy.k3a5463aeea')}</span></label>
+        {review && <div className="app-panel space-y-1 rounded-xl border p-4 text-sm"><p className="flex items-center gap-2 font-semibold"><CheckCircle2 size={16}/> {t('legacy.kcf945213c2')}</p><p><b>{t('legacy.kee1f457534')}</b> {email.trim().toLowerCase()}</p><p><b>{t('legacy.k8427b2fe18')}</b> {chosenOrg?.name}</p><p><b>{t('legacy.k92bb0dc23f')}</b> {ROLE_LABELS[role]}</p></div>}
         {dialogError && <div role="alert" className="app-warning rounded-xl border p-3 text-sm">{dialogError}</div>}
-        <div className="flex justify-end gap-2 app-divider border-t pt-4"><button type="button" className={buttonSecondary} disabled={busy} onClick={closeDialog}>Cancelar</button><button type="submit" className={buttonPrimary} disabled={busy || !confirmed || !validEmail || fullName.trim().length < 3}>{busy ? 'Guardando...' : review ? 'Confirmar incorporación' : 'Revisar asignación'}</button></div>
+        <div className="flex justify-end gap-2 app-divider border-t pt-4"><button type="button" className={buttonSecondary} disabled={busy} onClick={closeDialog}>{t('legacy.kc111e0ab9d')}</button><button type="submit" className={buttonPrimary} disabled={busy || !confirmed || !validEmail || fullName.trim().length < 3}>{busy ? 'Guardando...' : review ? 'Confirmar incorporación' : 'Revisar asignación'}</button></div>
       </form>
     </Modal>
-    <Modal open={dialog === 'grant'} title="Asignar rol adicional" onClose={closeDialog}>
-      <div className="space-y-4 text-sm"><p>Cuenta: <b>{target?.full_name}</b></p>
-        {selectableRoles.length === 0 ? <div className="app-info rounded-xl border p-3">Este usuario ya tiene todos los roles locales delegables.</div> :
-          <div className="space-y-1.5"><label className="font-medium">Rol adicional</label><OptionSelect ariaLabel="Rol adicional" value={role} options={selectableRoles} onChange={value => setRole(value as MemberRole)}/></div>}
+    <Modal open={dialog === 'grant'} title={t('labels.kacfb0564c1')} onClose={closeDialog}>
+      <div className="space-y-4 text-sm"><p>{t('legacy.kee1f457534')} <b>{target?.full_name}</b></p>
+        {selectableRoles.length === 0 ? <div className="app-info rounded-xl border p-3">{t('legacy.kcb3370b50f')}</div> :
+          <div className="space-y-1.5"><label className="font-medium">{t('legacy.k94d14aaa82')}</label><OptionSelect ariaLabel="Rol adicional" value={role} options={selectableRoles} onChange={value => setRole(value as MemberRole)}/></div>}
         {dialogError && <div role="alert" className="app-warning rounded-xl border p-3">{dialogError}</div>}
-        <div className="flex justify-end gap-2 app-divider border-t pt-4"><button type="button" className={buttonSecondary} disabled={busy} onClick={closeDialog}>Cancelar</button><button className={buttonPrimary} type="button" disabled={busy || !target || !selectableRoles.length} onClick={() => target && void mutate('POST', `${base}/${target.membership_id}/roles`, { role }, 'Rol asignado.')}>Asignar rol</button></div>
+        <div className="flex justify-end gap-2 app-divider border-t pt-4"><button type="button" className={buttonSecondary} disabled={busy} onClick={closeDialog}>{t('legacy.kc111e0ab9d')}</button><button className={buttonPrimary} type="button" disabled={busy || !target || !selectableRoles.length} onClick={() => target && void mutate('POST', `${base}/${target.membership_id}/roles`, { role }, 'Rol asignado.')}>{t('legacy.k23df5a5aa2')}</button></div>
       </div>
     </Modal>
     <Modal open={dialog === 'remove'} title="Retirar rol" onClose={closeDialog}>
-      <div className="space-y-4 text-sm"><div className="app-warning flex gap-2 rounded-xl border p-3"><AlertTriangle size={18} className="shrink-0"/><span>Retirar un rol de estudiante con matrículas activas, o un docente con ofertas asignadas, requiere resolver primero esos vínculos.</span></div>
-        <p>Usuario: <b>{target?.full_name}</b></p><OptionSelect ariaLabel="Rol que se retirará" value={role} onChange={value => setRole(value as MemberRole)} options={removableRoles}/>
+      <div className="space-y-4 text-sm"><div className="app-warning flex gap-2 rounded-xl border p-3"><AlertTriangle size={18} className="shrink-0"/><span>{t('legacy.kb7cd6723ab')}</span></div>
+        <p>{t('legacy.k5a75b050f4')} <b>{target?.full_name}</b></p><OptionSelect ariaLabel={t('labels.ke82631313e')} value={role} onChange={value => setRole(value as MemberRole)} options={removableRoles}/>
         {dialogError && <div role="alert" className="app-warning rounded-xl border p-3">{dialogError}</div>}
-        <div className="flex justify-end gap-2 app-divider border-t pt-4"><button type="button" className={buttonSecondary} disabled={busy} onClick={closeDialog}>Cancelar</button><button type="button" className={buttonPrimary} disabled={busy || !target || removableRoles.length === 0} onClick={() => target && void mutate('DELETE', `${base}/${target.membership_id}/roles/${encodeURIComponent(role)}`, undefined, 'Rol retirado.')}>Confirmar retirada</button></div>
+        <div className="flex justify-end gap-2 app-divider border-t pt-4"><button type="button" className={buttonSecondary} disabled={busy} onClick={closeDialog}>{t('legacy.kc111e0ab9d')}</button><button type="button" className={buttonPrimary} disabled={busy || !target || removableRoles.length === 0} onClick={() => target && void mutate('DELETE', `${base}/${target.membership_id}/roles/${encodeURIComponent(role)}`, undefined, 'Rol retirado.')}>{t('legacy.kb66c1adc2e')}</button></div>
       </div>
     </Modal>
     <Modal open={dialog === 'status'} title={target?.status === 'active' ? 'Suspender membresía' : 'Reactivar membresía'} onClose={closeDialog}>
-      <div className="space-y-4 text-sm"><div className="app-warning flex items-start gap-2 rounded-xl border p-3"><AlertTriangle size={18} className="mt-0.5 shrink-0"/><p>Esta acción afecta solo a la institución seleccionada. No elimina la cuenta de Supabase Auth ni sus datos históricos.</p></div>
-        <p>¿Confirmas {target?.status === 'active' ? 'suspender' : 'reactivar'} la membresía de <b>{target?.full_name}</b>?</p>
+      <div className="space-y-4 text-sm"><div className="app-warning flex items-start gap-2 rounded-xl border p-3"><AlertTriangle size={18} className="mt-0.5 shrink-0"/><p>{t('legacy.kf38d8997c6')}</p></div>
+        <p>{t('legacy.kfe219a52df')} {target?.status === 'active' ? 'suspender' : 'reactivar'} {t('legacy.keb54822be7')} <b>{target?.full_name}</b>?</p>
         {dialogError && <div role="alert" className="app-warning rounded-xl border p-3">{dialogError}</div>}
-        <div className="flex justify-end gap-2 app-divider border-t pt-4"><button type="button" className={buttonSecondary} disabled={busy} onClick={closeDialog}>Cancelar</button><button type="button" className={buttonPrimary} disabled={busy || !target} onClick={() => target && void mutate('PATCH', `${base}/${target.membership_id}/status`, { status: target.status === 'active' ? 'suspended' : 'active' }, 'Estado de membresía actualizado.')}>Confirmar</button></div>
+        <div className="flex justify-end gap-2 app-divider border-t pt-4"><button type="button" className={buttonSecondary} disabled={busy} onClick={closeDialog}>{t('legacy.kc111e0ab9d')}</button><button type="button" className={buttonPrimary} disabled={busy || !target} onClick={() => target && void mutate('PATCH', `${base}/${target.membership_id}/status`, { status: target.status === 'active' ? 'suspended' : 'active' }, 'Estado de membresía actualizado.')}>{t('legacy.k81b4b67ff8')}</button></div>
       </div>
     </Modal>
   </>;

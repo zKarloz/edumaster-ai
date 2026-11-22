@@ -1,6 +1,7 @@
 // Página de gestión institucional: opción A (listado lateral + mapa grande).
 // El frontend filtra únicamente instituciones que la API ya autorizó.
 import { useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Building2, Edit3, Globe2, MapPin, Plus, RefreshCcw, Search, SlidersHorizontal } from 'lucide-react';
 import { Modal } from '../../components/shared/Modal';
 import { OptionSelect } from '../../components/shared/OptionSelect';
@@ -20,6 +21,7 @@ interface Props {
 }
 
 export function OrganizationsPage({ organizations, loading, error, canManage, onRefresh, onSave }: Props) {
+  const { t } = useTranslation();
   const [search, setSearch] = useState('');
   const [country, setCountry] = useState('all');
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -64,15 +66,15 @@ export function OrganizationsPage({ organizations, loading, error, canManage, on
     </section>
     <div className="flex flex-wrap items-center justify-between gap-3">
       <div>
-        <h3 className="text-lg font-bold">Instituciones registradas</h3>
-        <p className="mt-1 text-sm app-muted">Directorio institucional internacional · datos provenientes de PostgreSQL.</p>
+        <h3 className="text-lg font-bold">{t('legacy.kb5b9036927')}</h3>
+        <p className="mt-1 text-sm app-muted">{t('legacy.k305eed0f7c')}</p>
       </div>
       <div className="flex gap-2">
         <button type="button" onClick={onRefresh} className="app-secondary-button inline-flex items-center gap-2 rounded-xl border border-slate-200 px-3 py-2.5 text-sm dark:border-[#345578]" aria-label="Actualizar instituciones">
-          <RefreshCcw size={16}/> <span className="hidden sm:inline">Actualizar</span>
+          <RefreshCcw size={16}/> <span className="hidden sm:inline">{t('legacy.kc725f8bffa')}</span>
         </button>
         {canManage && <button type="button" onClick={() => { setEditing(null); setSaveError(''); }} className="app-primary-button inline-flex items-center gap-2 rounded-xl bg-[#087FE5] px-4 py-2.5 text-sm font-semibold text-white">
-          <Plus size={17}/> Nueva institución
+          <Plus size={17}/> {t('legacy.kb5d3b3f9e1')}
         </button>}
       </div>
     </div>
@@ -83,12 +85,12 @@ export function OrganizationsPage({ organizations, loading, error, canManage, on
           <label className="search-control flex items-center gap-2 rounded-xl border border-slate-200 px-3 py-2.5 text-sm dark:border-[#345578]">
             <Search size={16} className="app-muted"/>
             <input type="search" value={search} onChange={event => setSearch(event.target.value)} className="min-w-0 w-full bg-transparent outline-none"
-              placeholder="Buscar institución o ciudad" aria-label="Buscar instituciones"/>
+              placeholder={t('labels.k029c05e94c')} aria-label={t('labels.kdb1dd7b74d')}/>
           </label>
-          <OptionSelect ariaLabel="Filtrar instituciones por país" value={country} onChange={setCountry}
+          <OptionSelect ariaLabel={t('labels.k3571ee33d7')} value={country} onChange={setCountry}
             options={[{ value: 'all', label: 'Todos los países' },
               ...countries.map(code => ({ value: code, label: countryName(code), suffix: code }))]}/>
-          <p className="text-xs app-muted">{filtered.length} instituciones · {located} ubicadas en el mapa</p>
+          <p className="text-xs app-muted">{filtered.length} {t('legacy.k8ee0e8d08a')} {located} {t('legacy.k76e3860e12')}</p>
         </div>
         {loading && <div className="p-4"><Spinner label="Cargando instituciones..."/></div>}
         <div className="min-h-0 flex-1 space-y-2 overflow-y-auto p-3 lg:max-h-[540px]">
@@ -102,20 +104,20 @@ export function OrganizationsPage({ organizations, loading, error, canManage, on
               : 'border-slate-200 bg-white hover:bg-slate-50 dark:border-[#345578] dark:bg-[#0D2542] dark:hover:bg-[#173658]'}`}>
             <div className="flex items-start justify-between gap-2">
               <span className="font-semibold">{org.name}</span>
-              <span className="mt-0.5 shrink-0 rounded-full bg-emerald-500/10 px-2 py-0.5 text-[10px] font-semibold text-emerald-600 dark:text-emerald-400">Activa</span>
+              <span className="mt-0.5 shrink-0 rounded-full bg-emerald-500/10 px-2 py-0.5 text-[10px] font-semibold text-emerald-600 dark:text-emerald-400">{t('legacy.kec42b1bb4e')}</span>
             </div>
             <div className="mt-2 flex items-center gap-1 text-xs app-muted"><MapPin size={13}/>{org.city || 'Sin ciudad'}, {countryName(org.country_code)}</div>
             <div className="mt-1 text-xs app-meta-text">{org.code}</div>
-            {org.latitude === null && <p className="mt-1 text-xs text-amber-600">Ubicación pendiente</p>}
+            {org.latitude === null && <p className="mt-1 text-xs text-amber-600">{t('legacy.k2cd2493827')}</p>}
           </button>)}
         </div>
         {selected && <div className="institution-selection-details border-t border-slate-200 p-4 dark:border-[#345578]">
           <p className="text-sm font-bold">{selected.name}</p>
           <p className="mt-1 text-xs app-muted">{selected.address || selected.city || 'Ubicación sin dirección'} · {countryName(selected.country_code)}</p>
-          <p className="mt-1 text-xs app-muted">Zona horaria: {selected.timezone}</p>
+          <p className="mt-1 text-xs app-muted">{t('legacy.k86495ddbe2')} {selected.timezone}</p>
           {canManage && <button type="button" onClick={() => { setEditing(selected); setSaveError(''); }}
             className="app-secondary-button mt-3 inline-flex items-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-xs font-semibold dark:border-[#345578]">
-            <Edit3 size={14}/> Editar sede
+            <Edit3 size={14}/> {t('legacy.kaf2eecff8b')}
           </button>}
         </div>}
       </div>
@@ -123,7 +125,7 @@ export function OrganizationsPage({ organizations, loading, error, canManage, on
         <InstitutionMap organizations={filtered} selectedId={selected?.id ?? null} onSelect={setSelectedId}/>
       </div>
     </div>
-    <p className="text-xs app-muted">Mapa interactivo: OpenStreetMap · marcadores de instituciones autorizadas. La ubicación es la sede principal declarada, no geolocalización de estudiantes.</p>
+    <p className="text-xs app-muted">{t('legacy.k3661414ba7')}</p>
     <Modal open={editing !== undefined} title={editing ? 'Editar institución' : 'Registrar institución'} onClose={() => { if (!busy) setEditing(undefined); }}>
       <OrganizationForm key={editing?.id ?? 'new'} initial={editing} busy={busy} error={saveError} onSave={submit} onCancel={() => setEditing(undefined)}/>
     </Modal>

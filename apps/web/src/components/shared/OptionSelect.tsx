@@ -1,6 +1,7 @@
 // Selector compartido con opciones accesibles por teclado y lista flotante limitada
 // a tres filas visibles. El portal evita que los modales recorten el desplegable.
 import { useEffect, useId, useLayoutEffect, useRef, useState, type KeyboardEvent } from 'react';
+import { useTranslation } from 'react-i18next';
 import { createPortal } from 'react-dom';
 import { Check, ChevronDown } from 'lucide-react';
 
@@ -19,7 +20,8 @@ interface OptionSelectProps {
 
 interface Placement { top: number; left: number; width: number; maxHeight: number }
 
-export function OptionSelect({ value, options, onChange, ariaLabel, placeholder = 'Seleccionar...', disabled = false, className = '' }: OptionSelectProps) {
+export function OptionSelect({ value, options, onChange, ariaLabel, placeholder, disabled = false, className = '' }: OptionSelectProps) {
+  const { t } = useTranslation();
   const listId = useId();
   const triggerRef = useRef<HTMLButtonElement>(null);
   const popupRef = useRef<HTMLDivElement>(null);
@@ -115,7 +117,7 @@ export function OptionSelect({ value, options, onChange, ariaLabel, placeholder 
       disabled={disabled} onKeyDown={handleKeyDown}
       onClick={() => { setActiveIndex(selectedIndex >= 0 ? selectedIndex : 0); setOpen(current => !current); }}
       className={`app-select-trigger flex min-h-11 w-full items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-left text-sm text-slate-900 transition-colors dark:border-[#345578] dark:bg-[#112A48] dark:text-white ${className}`}>
-      <span className={`min-w-0 flex-1 truncate ${selected ? '' : 'app-muted'}`}>{selected?.label ?? placeholder}</span>
+      <span className={`min-w-0 flex-1 truncate ${selected ? '' : 'app-muted'}`}>{selected?.label ?? placeholder ?? t('common.select')}</span>
       {selected?.suffix && <span className="app-select-suffix shrink-0 text-xs app-muted" aria-hidden="true">{selected.suffix}</span>}
       <ChevronDown aria-hidden="true" size={17} className={`shrink-0 transition-transform ${open ? 'rotate-180' : ''}`}/>
     </button>
@@ -124,7 +126,7 @@ export function OptionSelect({ value, options, onChange, ariaLabel, placeholder 
         className="app-select-popup fixed z-[10050] overflow-y-auto overscroll-contain rounded-xl border border-slate-200 bg-white p-1 shadow-xl dark:border-[#345578] dark:bg-[#112A48]"
         style={{ top: placement.top, left: placement.left, width: placement.width, maxHeight: placement.maxHeight }}
         onMouseDown={event => event.preventDefault()}>
-        {options.length === 0 && <p className="app-muted px-3 py-2 text-sm">Sin opciones disponibles</p>}
+        {options.length === 0 && <p className="app-muted px-3 py-2 text-sm">{t('legacy.k19861bab53')}</p>}
         {options.map((option, index) => <button key={option.value} id={`${listId}-${index}`}
           data-option-index={index} type="button" role="option" aria-selected={option.value === value}
           tabIndex={-1} onMouseEnter={() => setActiveIndex(index)} onClick={() => choose(index)}

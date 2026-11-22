@@ -1,6 +1,7 @@
 // Vista compartida de fichas de usuarios. El backend decide el alcance visible.
 // No se presentan datos íntimos al administrador sin un fundamento de acceso.
 import { useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Building2, Globe2, Languages, Mail, ShieldCheck } from 'lucide-react';
 import { Modal } from '../../components/shared/Modal';
 import { Spinner } from '../../components/shared/Spinner';
@@ -21,6 +22,7 @@ const NAMES: Record<string, string> = {
 export function UserDetailModal({ open, userId, organizationId, token, onClose }: {
   open: boolean; userId: string | null; organizationId: string | null; token: string; onClose: () => void;
 }) {
+  const { t } = useTranslation();
   const [data, setData] = useState<Detail | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -41,7 +43,7 @@ export function UserDetailModal({ open, userId, organizationId, token, onClose }
   }, [open, userId, organizationId, token]);
   // Los avatares son privados: solo se cargan tras la autorización de FastAPI.
   const avatar = useAvatar(open && data ? data.auth_user_id : null);
-  return <Modal open={open} onClose={onClose} title="Detalles del usuario">
+  return <Modal open={open} onClose={onClose} title={t('labels.k90b46990b3')}>
     {loading && <div className="flex justify-center py-8"><Spinner label="Cargando ficha del usuario..."/></div>}
     {error && <div role="alert" className="app-warning rounded-xl border p-4 text-sm">{error}</div>}
     {data && !loading && <div className="space-y-5">
@@ -51,13 +53,13 @@ export function UserDetailModal({ open, userId, organizationId, token, onClose }
         <span className="app-muted text-xs">{data.membership_status === 'active' ? 'Membresía activa' : `Estado: ${data.membership_status}`}</span>
       </div>
       <dl className="app-divider space-y-4 border-t pt-4 text-sm">
-        <div className="flex items-start gap-3"><Mail size={17} className="app-muted mt-0.5"/><div><dt className="app-muted text-xs">Correo electrónico</dt><dd className="break-all font-medium">{data.email}</dd></div></div>
-        <div className="flex items-start gap-3"><Building2 size={17} className="app-muted mt-0.5"/><div><dt className="app-muted text-xs">Institución</dt><dd className="font-medium">{data.organization_name}</dd></div></div>
-        <div className="flex items-start gap-3"><ShieldCheck size={17} className="app-muted mt-0.5"/><div><dt className="app-muted text-xs">Roles</dt><dd className="mt-1 flex flex-wrap gap-2">{data.roles.length ? data.roles.map(role => <span key={role} className="app-secondary-button rounded-lg border px-2 py-1 text-xs">{NAMES[role] ?? role}</span>) : 'Sin rol asignado'}</dd></div></div>
-        <div className="flex items-start gap-3"><Globe2 size={17} className="app-muted mt-0.5"/><div><dt className="app-muted text-xs">País</dt><dd>{data.country_code ? countryName(data.country_code) : 'No compartido'}</dd></div></div>
-        <div className="flex items-start gap-3"><Languages size={17} className="app-muted mt-0.5"/><div><dt className="app-muted text-xs">Idioma preferido</dt><dd>{data.language_code ?? 'No compartido'}</dd></div></div>
+        <div className="flex items-start gap-3"><Mail size={17} className="app-muted mt-0.5"/><div><dt className="app-muted text-xs">{t('legacy.k59a16700ff')}</dt><dd className="break-all font-medium">{data.email}</dd></div></div>
+        <div className="flex items-start gap-3"><Building2 size={17} className="app-muted mt-0.5"/><div><dt className="app-muted text-xs">{t('legacy.kc342a804db')}</dt><dd className="font-medium">{data.organization_name}</dd></div></div>
+        <div className="flex items-start gap-3"><ShieldCheck size={17} className="app-muted mt-0.5"/><div><dt className="app-muted text-xs">{t('legacy.k47dcc27d6e')}</dt><dd className="mt-1 flex flex-wrap gap-2">{data.roles.length ? data.roles.map(role => <span key={role} className="app-secondary-button rounded-lg border px-2 py-1 text-xs">{NAMES[role] ?? role}</span>) : 'Sin rol asignado'}</dd></div></div>
+        <div className="flex items-start gap-3"><Globe2 size={17} className="app-muted mt-0.5"/><div><dt className="app-muted text-xs">{t('legacy.k0c664fca6d')}</dt><dd>{data.country_code ? countryName(data.country_code) : 'No compartido'}</dd></div></div>
+        <div className="flex items-start gap-3"><Languages size={17} className="app-muted mt-0.5"/><div><dt className="app-muted text-xs">{t('legacy.k9064d03618')}</dt><dd>{data.language_code ?? 'No compartido'}</dd></div></div>
       </dl>
-      <p className="app-info rounded-lg border p-3 text-xs">La fecha de nacimiento y el sexo son datos privados. El usuario puede editarlos desde su Perfil, pero no aparecen en el directorio administrativo.</p>
+      <p className="app-info rounded-lg border p-3 text-xs">{t('legacy.k210ce54f78')}</p>
     </div>}
   </Modal>;
 }

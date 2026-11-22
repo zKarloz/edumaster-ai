@@ -2,11 +2,12 @@
 // Los ejemplos académicos están rotulados DEMO; nunca simulan datos reales.
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react';
 import { Activity, ArrowRight, BookOpen, Building2, CheckCircle2, ChevronDown, Database,
-  GraduationCap, LayoutDashboard, LockKeyhole, Menu, RefreshCw, Users, ClipboardList,
-  Server, ShieldCheck, XCircle, Settings, PanelLeftClose, PanelLeftOpen, UserRound, X } from 'lucide-react';
+  GraduationCap, LayoutDashboard, LockKeyhole, Menu, Users, ClipboardList,
+  Server, ShieldCheck, XCircle, Settings, PanelLeftClose, PanelLeftOpen, X } from 'lucide-react';
 import type { Session } from '@supabase/supabase-js';
 import { useLocation, useNavigate } from 'react-router';
-import { activityDetail, enrollmentHistoryPath, sectionForPath, sectionPaths, type Section } from './routes';
+import { useTranslation } from 'react-i18next';
+import { activityDetail, enrollmentHistoryPath, legacyRedirect, sectionForPath, sectionPaths, type Section } from './routes';
 import { DataTable, type Column } from './components/shared/DataTable';
 import { Modal } from './components/shared/Modal';
 import { Spinner } from './components/shared/Spinner';
@@ -45,15 +46,22 @@ const nav = [
   { id: 'activity' as const, title: 'Actividad académica', icon: ClipboardList },
   { id: 'security' as const, title: 'Seguridad', icon: ShieldCheck },
   { id: 'settings' as const, title: 'Configuración', icon: Settings },
-  { id: 'profile' as const, title: 'Perfil', icon: UserRound },
-];
+ ];
+/** Las categorías vacías no aparecen cuando el rol no tiene acceso a sus módulos. */
+const navGroups = [
+  { label: 'nav.platform', sections: ['dashboard'] },
+  { label: 'nav.management', sections: ['organizations', 'users'] },
+  { label: 'nav.academic', sections: ['courses', 'students', 'enrollments', 'activity'] },
+  { label: 'nav.system', sections: ['security', 'settings'] },
+] as const;
 
 export default function App() {
-  const { theme, setTheme, selectPreferenceScope } = useSettings();
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
-    try { return window.localStorage.getItem('edumaster_sidebar_collapsed') === 'true'; }
-    catch { return false; }
-  });
+  const { t } = useTranslation();
+  const { theme, setTheme, sidebarMode, setSidebarMode, selectPreferenceScope, syncProfileLocale } = useSettings();
+  const [sidebarHover, setSidebarHover] = useState(false);
+  const [sidebarFocus, setSidebarFocus] = useState(false);
+  const [sidebarOptionsOpen, setSidebarOptionsOpen] = useState(false);
+
   const location = useLocation();
   const navigate = useNavigate();
   const section = sectionForPath(location.pathname) ?? 'dashboard';
@@ -70,6 +78,8 @@ export default function App() {
   const [loadingOrgs, setLoadingOrgs] = useState(false);
   const [showPermissions, setShowPermissions] = useState(false);
   const [mobileMenu, setMobileMenu] = useState(false);
+  const sidebarWide = sidebarMode === 'expanded' || (sidebarMode === 'dynamic' && (sidebarHover || sidebarFocus)) || mobileMenu;
+  const sidebarRail = sidebarMode !== 'expanded';
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [authBusy, setAuthBusy] = useState(false);
@@ -83,10 +93,12 @@ export default function App() {
 
   // Las opciones de interfaz se guardan para el usuario conectado en este navegador.
   useEffect(() => selectPreferenceScope(session?.user.id ?? null), [session?.user.id, selectPreferenceScope]);
+  // Migración de rutas v17. Se conservan rutas profundas de historiales.
   useEffect(() => {
-    try { window.localStorage.setItem('edumaster_sidebar_collapsed', String(sidebarCollapsed)); }
-    catch { /* Almacenamiento no disponible. */ }
-  }, [sidebarCollapsed]);
+    const destination = legacyRedirect(location.pathname);
+    if (destination) navigate(`${destination}${location.search}${location.hash}`, { replace: true });
+  }, [location.pathname, location.search, location.hash, navigate]);
+  useEffect(() => { setSidebarOptionsOpen(false); setSidebarHover(false); }, [sidebarMode]);
   useEffect(() => {
     if (!mobileMenu) return;
     const handleEscape = (event: KeyboardEvent) => { if (event.key === 'Escape') setMobileMenu(false); };
@@ -142,6 +154,17 @@ export default function App() {
   // El backend sigue verificando el JWT y los permisos en cada petición protegida.
   const sessionUserId = session?.user.id ?? null;
   const accessToken = session?.access_token ?? null;
+  useEffect(() => {
+    if (!accessToken || !sessionUserId || accountStatus !== 'ready') return;
+    const controller = new AbortController();
+    void fetch(`${API}/api/v1/me/details`, {
+      headers: { Authorization: `Bearer ${accessToken}` }, signal: controller.signal,
+    }).then(response => response.ok ? response.json() as Promise<{language_code: string | null}> : null)
+      .then(details => { if (details && !controller.signal.aborted) syncProfileLocale(details.language_code); })
+      .catch(() => { /* La preferencia local continúa disponible sin red. */ });
+    return () => controller.abort();
+    // El ID y el estado cambian al autenticar; las renovaciones de JWT no deben reiniciar la UI.
+  }, [sessionUserId, accountStatus, accessToken, syncProfileLocale]);
   useEffect(() => {
     if (!sessionUserId || !accessToken) {
       setAuthorizedUserId(null);
@@ -292,7 +315,7 @@ export default function App() {
   const canManageUserAdministration = globalRoles.includes('superadmin') || institutionalAdminOrganizations.length > 0;
   const canViewAcademicActivity = memberships.some(m => m.roles.some(role => ['institution_admin', 'coordinator', 'instructor'].includes(role)));
   const canManageAcademicOrganization = useCallback((orgId: string) => memberships.some(item => item.organization_id === orgId && item.roles.some(role => ['institution_admin', 'coordinator'].includes(role))), [memberships]);
-  const title = nav.find(x => x.id === section)?.title ?? 'Resumen';
+  const title = t(`nav.${section === 'dashboard' ? 'dashboard' : section}`);
   const signedIn = Boolean(session);
   const isDemo = false;
   const rows = orgs;
@@ -309,7 +332,7 @@ export default function App() {
     if (!sectionForPath(location.pathname)
       || (section === 'users' && !canManageUserAdministration)
       || (section === 'activity' && !canViewAcademicActivity)) {
-      navigate(sectionPaths.dashboard, { replace: true });
+      if (!legacyRedirect(location.pathname)) navigate(sectionPaths.dashboard, { replace: true });
     }
   }, [location.pathname, section, accessGranted, navigate, canManageUserAdministration, canViewAcademicActivity]);
   useEffect(() => {
@@ -321,11 +344,11 @@ export default function App() {
 
   if (!supabase) return <div className="app-shell flex min-h-screen items-center justify-center p-5 dark:bg-[#06152B]">
     <div className="app-panel max-w-md rounded-xl border border-amber-400/40 bg-white p-6 text-slate-800 dark:bg-[#0A1F3D] dark:text-slate-100">
-      <h1 className="text-xl font-bold">Supabase no está configurado</h1>
-      <p className="mt-2 text-sm">Revisa VITE_SUPABASE_URL y VITE_SUPABASE_PUBLISHABLE_KEY en apps/web/.env y reinicia Vite.</p>
+      <h1 className="text-xl font-bold">{t('legacy.k0a5b6d202d')}</h1>
+      <p className="mt-2 text-sm">{t('legacy.ka7e4783f59')}</p>
     </div>
   </div>;
-  if (!authInitialized) return <div className="app-shell flex min-h-screen items-center justify-center dark:bg-[#06152B] dark:text-white"><Spinner label="Recuperando sesión..."/></div>;
+  if (!authInitialized) return <div className="app-shell flex min-h-screen items-center justify-center dark:bg-[#06152B] dark:text-white"><Spinner label={t('login.restoring')}/></div>;
   if (!session) return <LoginScreen email={email} password={password} busy={authBusy} error={authError} theme={theme}
     onEmailChange={setEmail} onPasswordChange={setPassword} onThemeChange={cycleTheme} onSubmit={signIn}/>;
   if (!accessGranted) return <div className="app-shell flex min-h-screen items-center justify-center bg-[#F5F7FB] p-5 text-slate-900 dark:bg-[#06152B] dark:text-slate-100">
@@ -334,16 +357,16 @@ export default function App() {
         name={identity?.id === session.user.id ? identity.value.name : String(session.user.user_metadata?.full_name || session.user.email?.split('@')[0] || 'Usuario')}
         photo={avatar.photo} loading={avatar.loading} large/></div>
       <LockKeyhole size={23} className="app-accent mx-auto text-[#087FE5]"/>
-      <h1 className="mt-4 text-2xl font-bold">{accountStatus === 'checking' ? 'Validando acceso' : accountStatus === 'forbidden' ? 'Cuenta pendiente de habilitación' : accountStatus === 'unauthorized' ? 'El backend no aceptó tu sesión' : 'No se pudo verificar el acceso'}</h1>
+      <h1 className="mt-4 text-2xl font-bold">{accountStatus === 'checking' ? t('login.validating') : accountStatus === 'forbidden' ? t('login.denied') : accountStatus === 'unauthorized' ? t('login.unauthorized') : 'No se pudo verificar el acceso'}</h1>
       <p className="app-muted mt-3 text-sm leading-6 text-slate-600 dark:text-slate-300">
-        {accountStatus === 'checking' ? 'Comprobando que tu cuenta tenga roles autorizados en EduMaster.ai...'
-          : accountStatus === 'forbidden' ? 'La identidad de Supabase Auth funciona, pero falta registrar o activar tus roles y membresías en el esquema app.'
+        {accountStatus === 'checking' ? t('login.validatingMessage')
+          : accountStatus === 'forbidden' ? t('login.deniedMessage')
           : accountStatus === 'unauthorized' ? 'FastAPI rechazó el JWT (401). Verifica la clave de firma activa ES256/RS256 en Supabase. Asignar roles SQL no soluciona este error.'
           : `${accountMessage}. Comprueba el backend y DATABASE_URL.`}
       </p>
       <div className="mt-6 flex flex-wrap gap-3">
-        <button type="button" onClick={() => window.location.reload()} className="app-primary-button rounded-lg bg-[#087FE5] px-4 py-2.5 text-sm font-semibold text-white">Reintentar</button>
-        <button type="button" onClick={() => void signOut()} className="app-secondary-button rounded-lg border border-slate-300 px-4 py-2.5 text-sm">Cerrar sesión</button>
+        <button type="button" onClick={() => window.location.reload()} className="app-primary-button rounded-lg bg-[#087FE5] px-4 py-2.5 text-sm font-semibold text-white">{t('login.retry')}</button>
+        <button type="button" onClick={() => void signOut()} className="app-secondary-button rounded-lg border border-slate-300 px-4 py-2.5 text-sm">{t('login.signout')}</button>
       </div>
     </div>
   </div>;
@@ -353,85 +376,118 @@ export default function App() {
   return <div className="app-shell min-h-screen bg-[#F5F7FB] text-slate-900 transition-colors dark:bg-[#06152B] dark:text-slate-100">
     <div className="flex min-h-screen">
       {/* En móvil, el fondo clicable cierra el menú sin tocar sus contenidos. */}
-      <button type="button" tabIndex={mobileMenu ? 0 : -1} aria-label="Cerrar navegación" aria-hidden={!mobileMenu}
+      <button type="button" tabIndex={mobileMenu ? 0 : -1} aria-label={t('labels.kdb3f8c9269')} aria-hidden={!mobileMenu}
         onClick={() => setMobileMenu(false)}
         className={`fixed inset-0 z-30 bg-black/60 transition-opacity duration-300 md:hidden ${mobileMenu ? 'pointer-events-auto opacity-100' : 'pointer-events-none opacity-0'}`}/>
-      <aside id="edumaster-sidebar" aria-label="Menú principal" data-open={mobileMenu ? 'true' : 'false'}
-        className={`app-sidebar app-mobile-drawer fixed inset-y-0 left-0 z-40 flex h-dvh w-64 shrink-0 flex-col overflow-x-hidden overflow-y-auto border-r border-slate-200 bg-white p-4 shadow-xl md:sticky md:top-0 md:z-30 md:h-dvh md:shadow-none dark:border-[#163B63] dark:bg-[#071C37] ${sidebarCollapsed ? 'md:w-[76px]' : 'md:w-64'}`}>
-        <div className="mb-9 flex min-h-12 items-center gap-3">
-          <span className="app-brand-symbol shrink-0 rounded-xl bg-[#087FE5] p-2.5 text-white"><GraduationCap size={24}/></span>
-          <div className={`min-w-0 flex-1 overflow-hidden ${sidebarCollapsed ? 'md:hidden' : ''}`}>
-            <p className="whitespace-nowrap text-lg font-bold tracking-tight">EduMaster<span className="app-brand-accent text-[#20C8F5]">.ai</span></p>
-            <p className="whitespace-nowrap app-meta-text text-[10px] uppercase tracking-[.2em] text-slate-500 dark:text-slate-400">Enterprise Platform</p>
+      <aside id="edumaster-sidebar" aria-label={t('nav.platform')} data-open={mobileMenu ? 'true' : 'false'}
+        onMouseEnter={() => setSidebarHover(true)} onMouseLeave={() => { setSidebarHover(false); setSidebarOptionsOpen(false); }}
+        onFocusCapture={() => setSidebarFocus(true)}
+        onBlurCapture={event => { if (!event.currentTarget.contains(event.relatedTarget as Node)) setSidebarFocus(false); }}
+        className={`app-sidebar app-mobile-drawer fixed inset-y-0 left-0 z-40 h-dvh shrink-0 border-r border-slate-200 bg-white shadow-xl md:sticky md:top-0 md:z-30 md:shadow-none dark:border-[#163B63] dark:bg-[#071C37] ${sidebarRail ? 'md:w-[76px]' : 'md:w-64'} ${sidebarMode === 'dynamic' ? 'app-sidebar-dynamic' : ''}`}>
+        {/* En dinámico la capa interna se extiende sobre el contenido sin desplazarlo. */}
+        <div className={`app-sidebar-inner flex h-dvh w-64 flex-col border-r border-transparent bg-inherit p-3 md:h-dvh ${sidebarMode === 'dynamic' ? 'md:absolute md:left-0 md:top-0' : ''} ${!sidebarWide ? 'md:w-[76px]' : 'md:w-64'}`}>
+          <div className="mb-5 flex min-h-12 shrink-0 items-center gap-3 px-1">
+            <span className="app-brand-symbol shrink-0 rounded-xl bg-[#087FE5] p-2.5 text-white"><GraduationCap size={24}/></span>
+            <div className={`min-w-0 flex-1 overflow-hidden ${!sidebarWide ? 'md:hidden' : ''}`}>
+              <p className="whitespace-nowrap text-lg font-bold tracking-tight">EduMaster<span className="app-brand-accent text-[#20C8F5]">.ai</span></p>
+              <p className="whitespace-nowrap app-meta-text text-[10px] uppercase tracking-[.2em] text-slate-500 dark:text-slate-400">Enterprise Platform</p>
+            </div>
+            <button type="button" onClick={() => setMobileMenu(false)} aria-label={t('nav.closeMenu')}
+              className="app-mobile-close ml-auto rounded-lg p-2 hover:bg-slate-100 md:hidden dark:hover:bg-[#163B63]"><X size={20}/></button>
           </div>
-          <button type="button" onClick={() => setMobileMenu(false)} aria-label="Cerrar menú" className="app-mobile-close ml-auto rounded-lg p-2 hover:bg-slate-100 md:hidden dark:hover:bg-[#163B63]"><X size={20}/></button>
+          <nav aria-label={t('nav.platform')} className="app-sidebar-scroll min-h-0 flex-1 space-y-5 overflow-x-hidden overflow-y-auto pb-3">
+            {navGroups.map(group => {
+              const visible = group.sections.map(id => nav.find(link => link.id === id)).filter((link): link is typeof nav[number] =>
+                Boolean(link && (link.id !== 'users' || canManageUserAdministration) && (link.id !== 'activity' || canViewAcademicActivity)));
+              if (!visible.length) return null;
+              return <div key={group.label} className="space-y-1">
+                <p aria-label={t(group.label)} className={`px-3 pb-1 text-xs font-semibold uppercase tracking-widest app-meta-text text-slate-400 ${!sidebarWide ? 'md:text-center' : ''}`}>
+                  <span className={sidebarWide ? '' : 'md:hidden'}>{t(group.label)}</span>
+                  {!sidebarWide && <span aria-hidden="true" className="hidden md:inline">-</span>}
+                </p>
+                {visible.map(link => {
+                  const Icon = link.icon;
+                  const active = section === link.id;
+                  return <button key={link.id} onClick={() => navTo(link.id)} type="button"
+                    title={!sidebarWide ? t(`nav.${link.id}`) : undefined}
+                    aria-label={t(`nav.${link.id}`)} aria-current={active ? 'page' : undefined}
+                    className={`flex w-full min-h-11 items-center gap-3 rounded-xl px-3 py-3 text-left text-sm font-medium transition-colors ${active ? 'app-nav-active bg-[#087FE5]/10 text-[#087FE5] dark:bg-[#103963] dark:text-[#20C8F5]' : 'app-nav-inactive text-slate-500 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-[#163B63]'}`}>
+                    <Icon size={19} className="shrink-0"/>
+                    <span className={`whitespace-nowrap ${!sidebarWide ? 'md:hidden' : ''}`}>{t(`nav.${link.id}`)}</span>
+                  </button>;
+                })}
+              </div>;
+            })}
+          </nav>
+          {/* Menú de preferencias fijo al pie, con cierre por Escape y selección por teclado. */}
+          <div className="app-divider relative shrink-0 border-t pt-3">
+            {sidebarOptionsOpen && <div role="group" aria-label={t('nav.sidebarMode')}
+              className="app-panel app-sidebar-options absolute bottom-full left-0 z-50 mb-2 w-60 space-y-1 rounded-xl border p-2 shadow-xl">
+              {([['expanded', PanelLeftOpen], ['collapsed', PanelLeftClose], ['dynamic', Menu]] as const).map(([mode, Icon]) =>
+                <button type="button" key={mode} aria-pressed={sidebarMode === mode} onClick={() => { setSidebarMode(mode); setSidebarOptionsOpen(false); }}
+                  className={`app-account-action flex w-full items-center gap-2 rounded-lg p-2 text-left text-sm ${sidebarMode === mode ? 'app-nav-active' : ''}`}>
+                  <Icon size={18}/><span>{t(`nav.${mode === 'expanded' ? 'expand' : mode === 'collapsed' ? 'collapse' : 'dynamic'}`)}</span>
+                  {sidebarMode === mode && <CheckCircle2 size={15} className="ml-auto"/>}
+                </button>)}
+              </div>}
+            <button type="button" aria-expanded={sidebarOptionsOpen} aria-label={t('nav.sidebarMode')}
+              title={t('nav.sidebarMode')} onKeyDown={event => { if (event.key === 'Escape') setSidebarOptionsOpen(false); }}
+              onClick={() => setSidebarOptionsOpen(open => !open)}
+              className="app-secondary-button flex min-h-11 w-full items-center gap-3 rounded-xl px-3 py-2 text-left text-sm">
+              {sidebarMode === 'expanded' ? <PanelLeftClose size={19}/> : <PanelLeftOpen size={19}/>}<span className={sidebarWide ? '' : 'md:hidden'}>{t('nav.sidebarMode')}</span>
+              {sidebarWide && <ChevronDown size={16} className="ml-auto"/>}
+            </button>
+          </div>
         </div>
-        <span className={`mb-3 px-3 app-meta-text text-xs font-semibold uppercase tracking-widest text-slate-400 ${sidebarCollapsed ? 'md:sr-only' : ''}`}>Plataforma</span>
-        <nav aria-label="Navegación principal" className="grid gap-1">
-          {nav.filter(link => (link.id !== 'users' || canManageUserAdministration) && (link.id !== 'activity' || canViewAcademicActivity)).map(link => {
-            const Icon = link.icon;
-            const active = section === link.id;
-            return <button key={link.id} onClick={() => navTo(link.id)} type="button" title={sidebarCollapsed ? link.title : undefined}
-              aria-current={active ? 'page' : undefined}
-              className={`flex min-h-11 items-center gap-3 rounded-xl px-3 py-3 text-left text-sm font-medium transition-colors ${active ? 'app-nav-active bg-[#087FE5]/10 text-[#087FE5] dark:bg-[#103963] dark:text-[#20C8F5]' : 'app-nav-inactive text-slate-500 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-[#163B63]'}`}>
-              <Icon size={19} className="shrink-0"/>
-              <span className={`whitespace-nowrap ${sidebarCollapsed ? 'md:hidden' : ''}`}>{link.title}</span>
-            </button>;
-          })}
-        </nav>
       </aside>
       <div className="min-w-0 flex-1">
         <header className="app-header sticky top-0 z-20 flex min-h-20 flex-wrap items-center justify-between gap-3 border-b border-slate-200 bg-white/95 px-5 backdrop-blur md:px-8 dark:border-[#163B63] dark:bg-[#081B35]/95">
           <div className="flex items-center gap-3">
-            <button type="button" className="rounded-lg p-2 md:hidden" aria-expanded={mobileMenu} aria-controls="edumaster-sidebar" aria-label="Abrir navegación" onClick={() => setMobileMenu(true)}><Menu size={22}/></button>
-            <button type="button" className="app-secondary-button hidden rounded-lg p-2 md:inline-flex" aria-label={sidebarCollapsed ? 'Expandir barra lateral' : 'Contraer barra lateral'} title={sidebarCollapsed ? 'Expandir menú' : 'Contraer menú'} onClick={() => setSidebarCollapsed(current => !current)}>{sidebarCollapsed ? <PanelLeftOpen size={21}/> : <PanelLeftClose size={21}/>}</button>
-            <div><span className="app-meta-text text-xs text-slate-400">EduMaster.ai / Administración</span><h1 className="text-xl font-bold">{title}</h1></div>
+            <button type="button" className="rounded-lg p-2 md:hidden" aria-expanded={mobileMenu} aria-controls="edumaster-sidebar" aria-label={t('labels.k7af767cd6a')} onClick={() => setMobileMenu(true)}><Menu size={22}/></button>
+            <div><span className="app-meta-text text-xs text-slate-400">{`EduMaster.ai / ${t('nav.administration')}`}</span><h1 className="text-xl font-bold">{title}</h1></div>
           </div>
           <div className="flex items-center gap-2">
-            <span className={`hidden items-center gap-2 rounded-full px-3 py-2 text-xs sm:inline-flex ${apiStatus === 'online' ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400' : 'app-status-warning bg-amber-500/10 text-amber-700'}`}>
-              <span className={`size-2 rounded-full ${apiStatus === 'online' ? 'bg-emerald-500' : 'bg-amber-500'}`}/>{apiStatus === 'checking' ? 'Comprobando...' : apiStatus === 'online' ? 'API conectada' : 'API sin conexión'}
-            </span>
             <AccountMenu key={session.user.id} identity={accountIdentity} userId={session.user.id} photo={avatar.photo} photoLoading={avatar.loading}
               onProfile={() => navTo('profile')} onSignOut={signOut}/>
           </div>
         </header>
         <main key={section} className="module-enter mx-auto w-full app-content-container space-y-6 py-6">
           <section className="flex flex-wrap items-center justify-between gap-3">
-            <div><h2 className="text-2xl font-bold">{section === 'dashboard' ? 'Centro de administración' : `${title} · EduMaster.ai`}</h2>
-              <p className="mt-1 text-sm app-muted text-slate-500 dark:text-slate-300">{signedIn ? `Sesión: ${session?.user.email ?? 'usuario'} · Datos limitados a tus instituciones` : 'Vista DEMO: sin datos institucionales reales'}</p>
+            <div><h2 className="text-2xl font-bold">{section === 'dashboard' ? t('nav.overview') : `${title} · EduMaster.ai`}</h2>
+              <p className="mt-1 text-sm app-muted text-slate-500 dark:text-slate-300">{signedIn ? t('common.session', {email: session?.user.email ?? 'usuario'}) : t('dashboard.demo')}</p>
             </div>
-            <button onClick={() => void checkApi()} type="button" className="app-secondary-button flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold hover:bg-slate-50 dark:border-[#23456A] dark:bg-[#0A1F3D] dark:hover:bg-[#173658]"><RefreshCw size={16}/> Probar API</button>
+
           </section>
           {section === 'dashboard' && <>
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
               {[
-                { label: 'Arquitectura', value: 'Multi-tenant', icon: Building2, help: 'Arquitectura multiinstitución' },
-                { label: 'Base de datos', value: 'PostgreSQL', icon: Database, help: 'Supabase · esquema app' },
-                { label: 'Backend', value: 'FastAPI', icon: Server, help: 'Render / entorno local' },
-                { label: 'Modo de datos', value: isDemo ? 'DEMO' : 'Conectado', icon: Activity, help: isDemo ? 'No hay KPIs oficiales' : 'Sesión autenticada' },
-              ].map(card => <div key={card.label} className="app-panel rounded-2xl border border-slate-200 bg-white p-5 dark:border-[#23456A] dark:bg-[#0A1F3D]">
+                { label: t('dashboard.architecture'), value: 'Multi-tenant', icon: Building2, help: t('dashboard.multi') },
+                { label: t('dashboard.database'), value: 'PostgreSQL', icon: Database, help: t('dashboard.databaseHelp') },
+                { label: t('dashboard.backend'), value: 'FastAPI', icon: Server, help: t('dashboard.backendHelp') },
+                { label: t('dashboard.dataMode'), value: isDemo ? t('dashboard.demo') : t('dashboard.connected'), icon: Activity, help: t('dashboard.dataHelp') },
+              ].map(card => <div key={card.label} className="app-panel app-indicator-card rounded-2xl border border-slate-200 bg-white p-5 dark:border-[#23456A] dark:bg-[#0A1F3D]">
                 <div className="flex items-center justify-between text-sm app-muted text-slate-500 dark:text-slate-300"><span>{card.label}</span><card.icon size={20} className="app-accent text-[#087FE5] dark:text-[#20C8F5]"/></div>
                 <p className="mt-4 text-2xl font-bold">{card.value}</p><p className="mt-2 app-meta-text text-xs text-slate-400">{card.help}</p>
               </div>)}
             </div>
             <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
               <div className="app-panel rounded-2xl border border-slate-200 bg-white p-6 dark:border-[#23456A] dark:bg-[#0A1F3D]">
-                <h3 className="font-semibold">Fundaciones del sistema</h3>
+                <h3 className="font-semibold">{t('dashboard.foundation')}</h3>
                 <div className="mt-5 space-y-4">{[
                   ['React, TypeScript y Tailwind', true],['Tema claro/oscuro', true],['FastAPI · /health', true],['Supabase Auth y PostgreSQL', true],['RBAC/ABAC por institución', false]
                 ].map(([label, ready]) => <div key={String(label)} className="flex items-center gap-3 text-sm">{ready ? <CheckCircle2 size={18} className="text-emerald-500"/> : <XCircle size={18} className="text-slate-400"/>}<span>{label}</span></div>)}</div>
               </div>
               <div className="app-panel rounded-2xl border border-slate-200 bg-white p-6 dark:border-[#23456A] dark:bg-[#0A1F3D]">
-                <h3 className="font-semibold">Próximos pasos</h3>
-                <p className="mt-3 text-sm leading-7 app-muted text-slate-500 dark:text-slate-300">Crea cursos en una institución, incorpora estudiantes con cuenta de Supabase Auth confirmada y registra matrículas. Registra actividad académica real (notas, asistencia, participación y progreso) en las matrículas. El siguiente incremento será el modelo neuronal experimental con revisión docente.</p>
-                <button onClick={() => navTo('security')} className="app-accent mt-5 flex items-center gap-2 text-sm font-semibold text-[#087FE5] dark:text-[#20C8F5]">Revisar seguridad <ArrowRight size={15}/></button>
+                <h3 className="font-semibold">{t('dashboard.nextSteps')}</h3>
+                <p className="mt-3 text-sm leading-7 app-muted text-slate-500 dark:text-slate-300">{t('dashboard.nextDescription')}</p>
+                <button onClick={() => navTo('security')} className="app-accent mt-5 flex items-center gap-2 text-sm font-semibold text-[#087FE5] dark:text-[#20C8F5]">{t('dashboard.checkSecurity')} <ArrowRight size={15}/></button>
               </div>
             </div>
           </>}
           {section === 'dashboard' && <>
             {loadingOrgs && <Spinner label="Consultando instituciones autorizadas..."/>}
-            {orgError && <div role="alert" className="app-warning rounded-xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900">{orgError}. Comprueba la API y la migración de ubicaciones.</div>}
-            <DataTable<Organization> rows={rows} columns={columns} label={isDemo ? 'Instituciones (datos DEMO)' : 'Instituciones autorizadas'} />
+            {orgError && <div role="alert" className="app-warning rounded-xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900">{orgError}{t('legacy.k7644712905')}</div>}
+            <DataTable<Organization> rows={rows} columns={columns} label={t('dashboard.organizations')} />
           </>}
           {section === 'organizations' && <OrganizationsPage
             organizations={orgs} loading={loadingOrgs} error={orgError}
@@ -442,7 +498,7 @@ export default function App() {
           {section === 'users' && accessToken && (globalRoles.includes('superadmin')
             ? <UsersPage token={accessToken} organizations={orgs} canManage/>
             : <InstitutionalUsersPage token={accessToken} organizations={institutionalAdminOrganizations}/>)}
-          {section === 'settings' && <SettingsPage/>}
+          {section === 'settings' && <SettingsPage token={accessToken ?? ''} apiStatus={apiStatus} onCheckApi={checkApi}/>}
           {section === 'profile' && accessToken && <ProfilePage key={session.user.id} identity={accountIdentity} token={accessToken}
             userId={session.user.id} photo={avatar.photo} photoLoading={avatar.loading} onIdentity={value => setIdentity({ id: session.user.id, value })}
             onSavePhoto={avatar.save} onRemovePhoto={avatar.remove}/>}
@@ -459,20 +515,20 @@ export default function App() {
             onSelectEnrollment={(offeringId, enrollmentId) => navigate(enrollmentHistoryPath(academicOrgId, offeringId, enrollmentId))}
             onBackToOverview={() => navTo('activity')}/>}
           {section === 'security' && <div className="app-panel rounded-2xl border border-slate-200 bg-white p-6 dark:border-[#23456A] dark:bg-[#0A1F3D]">
-            <LockKeyhole size={24} className="app-accent text-[#20C8F5]"/><h3 className="mt-3 text-lg font-semibold">Aislamiento por institución</h3>
-            <p className="mt-2 text-sm leading-7 app-muted text-slate-500 dark:text-slate-300">Auth y RBAC se validarán en FastAPI. Las FKs compuestas impiden referencias entre instituciones; el esquema privado no se publica por Supabase Data API. Las políticas ABAC detalladas quedan pendientes de implementar y probar.</p>
-            <button type="button" onClick={() => setShowPermissions(true)} className="app-secondary-button mt-4 flex items-center gap-2 rounded-lg border border-slate-200 px-4 py-2 text-sm dark:border-slate-600">Ver controles planificados <ChevronDown size={16}/></button>
+            <LockKeyhole size={24} className="app-accent text-[#20C8F5]"/><h3 className="mt-3 text-lg font-semibold">{t('legacy.k58c0760579')}</h3>
+            <p className="mt-2 text-sm leading-7 app-muted text-slate-500 dark:text-slate-300">{t('legacy.k71ac295807')}</p>
+            <button type="button" onClick={() => setShowPermissions(true)} className="app-secondary-button mt-4 flex items-center gap-2 rounded-lg border border-slate-200 px-4 py-2 text-sm dark:border-slate-600">{t('legacy.k9027157396')} <ChevronDown size={16}/></button>
           </div>}
-          <footer className="app-page-footer flex flex-wrap justify-between gap-2 border-t border-slate-200 pt-5 text-xs text-slate-500 dark:border-[#23456A] dark:text-slate-400"><span>EduMaster.ai · Aprende · Practica · Destaca</span><span>Entorno de desarrollo · 2026</span></footer>
+          <footer className="app-page-footer flex flex-wrap justify-between gap-2 border-t border-slate-200 pt-5 text-xs text-slate-500 dark:border-[#23456A] dark:text-slate-400"><span>{t('legacy.kf8b93dcae3')}</span><span>{t('legacy.k5bf7b8d7ea')}</span></footer>
         </main>
       </div>
     </div>
     <Modal open={showPermissions} title="Controles por completar" onClose={() => setShowPermissions(false)}>
       <ul className="space-y-2 text-sm leading-relaxed text-slate-600 dark:text-slate-200">
-        <li>• Verificar los permisos del usuario antes de cada acción protegida.</li>
-        <li>• Autorizar recursos según institución, curso y propiedad del registro.</li>
-        <li>• Probar accesos denegados entre instituciones A y B.</li>
-        <li>• Auditar cambios críticos y operaciones sensibles.</li>
+        <li>{t('legacy.k96cbba7acb')}</li>
+        <li>{t('legacy.k20d5153595')}</li>
+        <li>{t('legacy.k4fdfe45630')}</li>
+        <li>{t('legacy.k7b143d1214')}</li>
       </ul>
     </Modal>
   </div>;

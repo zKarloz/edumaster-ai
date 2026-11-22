@@ -1,6 +1,7 @@
 // Incremento académico real: todas las operaciones via FastAPI con JWT.
 // Se reutilizan el modal, el selector con scroll y la tabla paginada del proyecto.
 import { useEffect, useState, type FormEvent, type ReactNode } from 'react';
+import { useTranslation } from 'react-i18next';
 import { BookOpen, GraduationCap, Plus, RefreshCcw, UsersRound, School, Info, MoreHorizontal } from 'lucide-react';
 import { DataTable, type Column } from '../../components/shared/DataTable';
 import { Modal } from '../../components/shared/Modal';
@@ -81,6 +82,7 @@ function Field({ label, children }: { label: string; children: ReactNode }) {
 }
 
 export function AcademicPage({ mode, courseRole, organizations, organizationId, onOrganizationChange, canManageOrganization, token }: Props) {
+  const { t } = useTranslation();
   const { notify } = useToast();
   const [courses, setCourses] = useState<Course[]>([]);
   const [students, setStudents] = useState<Student[]>([]);
@@ -194,7 +196,7 @@ export function AcademicPage({ mode, courseRole, organizations, organizationId, 
 
   const enrollmentColumns: Column<Enrollment>[] = [...enrollmentColumnsBase, {
     header: 'Acciones', key: 'id', render: row => <button className={secondaryButton} type="button"
-      disabled={row.status === 'completed'} title="Cambiar estado de matrícula"
+      disabled={row.status === 'completed'} title={t('labels.k93429b4a8d')}
       onClick={() => { setStatusEnrollment(row); setNewEnrollmentStatus(row.status); setError(''); }}
       aria-label={`Cambiar estado de ${row.student_name}`}><MoreHorizontal size={18}/></button>,
   }];
@@ -205,16 +207,16 @@ export function AcademicPage({ mode, courseRole, organizations, organizationId, 
   return <div className="space-y-5">
     <div className="app-panel flex flex-wrap items-end justify-between gap-4 rounded-2xl border border-slate-200 bg-white p-5 dark:border-[#23456A] dark:bg-[#0A1F3D]">
       <div className="min-w-[220px] flex-1 space-y-2 sm:max-w-md">
-        <p className="flex items-center gap-2 font-semibold"> <School size={18}/> Institución académica</p>
-        <OptionSelect ariaLabel="Seleccionar institución académica" value={organizationId}
+        <p className="flex items-center gap-2 font-semibold"> <School size={18}/> {t('legacy.k3b064c55e4')}</p>
+        <OptionSelect ariaLabel={t('labels.k98a6e3f58a')} value={organizationId}
           onChange={onOrganizationChange} options={organizations.map(org => ({ value: org.id, label: org.name, suffix: org.code }))}
-          placeholder="Selecciona una institución"/>
+          placeholder={t('labels.k771af51b29')}/>
       </div>
       <button type="button" onClick={() => setRefresh(count => count + 1)} className={secondaryButton} disabled={!organizationId}>
-        <RefreshCcw size={16}/> Actualizar
+        <RefreshCcw size={16}/> {t('legacy.kc725f8bffa')}
       </button>
     </div>
-    {organizations.length === 0 && <p className="app-warning rounded-xl border p-4 text-sm">Primero registra una institución en el módulo Instituciones.</p>}
+    {organizations.length === 0 && <p className="app-warning rounded-xl border p-4 text-sm">{t('legacy.k584af66e42')}</p>}
     {organizationId && <>
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
@@ -229,51 +231,51 @@ export function AcademicPage({ mode, courseRole, organizations, organizationId, 
           <Plus size={17}/>{mode === 'courses' ? 'Nuevo curso' : mode === 'students' ? 'Incorporar estudiante' : 'Nueva matrícula'}
         </button>}
       </div>
-      {loading && <Spinner label="Cargando datos académicos..."/>}
+      {loading && <Spinner label={t('labels.k5b1819571f')}/>}
       {error && !dialog && <p role="alert" className="app-warning rounded-xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900">{error}</p>}
       {mode === 'courses' && <CourseCatalog organizationId={organizationId} token={token} role={courseRole} refreshKey={refresh}/>}
-      {mode === 'students' && manager && <DataTable<Student> key={organizationId} rows={students} columns={studentColumns} label="Estudiantes vinculados" pageSize={8}/>}
-      {mode === 'enrollments' && manager && <DataTable<Enrollment> key={organizationId} rows={enrollments} columns={enrollmentColumns} label="Matrículas registradas" pageSize={8}/>}
-      {mode !== 'courses' && !manager && <p role="status" className="app-panel rounded-xl border p-5 text-sm">El directorio de estudiantes y las matrículas requieren permisos de administración institucional.</p>}
+      {mode === 'students' && manager && <DataTable<Student> key={organizationId} rows={students} columns={studentColumns} label={t('labels.kccfcb84afc')} pageSize={8}/>}
+      {mode === 'enrollments' && manager && <DataTable<Enrollment> key={organizationId} rows={enrollments} columns={enrollmentColumns} label={t('labels.k9a41bf917f')} pageSize={8}/>}
+      {mode !== 'courses' && !manager && <p role="status" className="app-panel rounded-xl border p-5 text-sm">{t('legacy.ka070051a68')}</p>}
       {/* Guía informativa (azul suave en Claro/Oscuro, gris en Negro):
           aparece mientras la institución no tenga estudiantes. No es una alerta de error. */}
       {mode === 'students' && manager && !loading && !error && loadedOrganizationId === organizationId && students.length === 0 &&
         <p role="status" className="app-info flex items-start gap-2 rounded-xl border p-4 text-sm">
           <Info size={18} aria-hidden="true" className="mt-0.5 shrink-0"/>
-          <span>Antes de incorporar un estudiante, crea su cuenta y confirma su correo en Supabase Authentication → Users. Este formulario no crea credenciales de acceso.</span>
+          <span>{t('legacy.k632b8acda3')}</span>
         </p>}
       {/* Aviso de requisito pendiente: desaparece al existir estudiantes activos y ofertas abiertas. */}
       {mode === 'enrollments' && manager && !loading && !error && loadedOrganizationId === organizationId && (!activeStudents.length || !activeCourses.length) &&
         <p role="status" className="app-warning rounded-xl border p-4 text-sm">
-          Para matricular necesitas al menos un estudiante activo y un curso publicado con oferta abierta.
+          {t('legacy.kfd017e12b4')}
         </p>}
     </>}
 
-    <Modal open={statusEnrollment !== null} title="Estado de la matrícula"
+    <Modal open={statusEnrollment !== null} title={t('labels.kca88b611d5')}
       onClose={() => { if (!busy) { setStatusEnrollment(null); setError(''); } }}>
       <form className="space-y-4" onSubmit={event => void changeEnrollmentStatus(event)}>
         <p className="app-muted text-sm">{statusEnrollment?.student_name} · {statusEnrollment?.course_title} ({statusEnrollment?.period})</p>
-        <div className="space-y-1.5"><span className="text-sm font-medium">Nuevo estado</span>
-          <OptionSelect ariaLabel="Nuevo estado de la matrícula" value={newEnrollmentStatus} onChange={setNewEnrollmentStatus}
+        <div className="space-y-1.5"><span className="text-sm font-medium">{t('legacy.ke06525f03e')}</span>
+          <OptionSelect ariaLabel={t('labels.kff3490d030')} value={newEnrollmentStatus} onChange={setNewEnrollmentStatus}
             options={statusEnrollment?.status === 'active'
               ? [{ value: 'active', label: 'Activa' }, { value: 'completed', label: 'Completada (definitiva)' }, { value: 'withdrawn', label: 'Retirada' }]
               : [{ value: 'withdrawn', label: 'Retirada' }, { value: 'active', label: 'Reactivar (requiere oferta abierta)' }]}/></div>
-        <p className="app-muted text-xs">Finalizar una matrícula es una operación definitiva. Reactivar requiere que el estudiante siga activo y la oferta admita matrículas.</p>
+        <p className="app-muted text-xs">{t('legacy.k85138b85f6')}</p>
         {error && <p role="alert" className="app-warning rounded-xl border p-3 text-sm">{error}</p>}
-        <div className="flex justify-end gap-2"><button className={secondaryButton} type="button" disabled={busy} onClick={() => { setStatusEnrollment(null); setError(''); }}>Cancelar</button>
-          <button className={mainButton} type="submit" disabled={busy || newEnrollmentStatus === statusEnrollment?.status}>Guardar estado</button></div>
+        <div className="flex justify-end gap-2"><button className={secondaryButton} type="button" disabled={busy} onClick={() => { setStatusEnrollment(null); setError(''); }}>{t('legacy.kc111e0ab9d')}</button>
+          <button className={mainButton} type="submit" disabled={busy || newEnrollmentStatus === statusEnrollment?.status}>{t('legacy.ke716a7cb05')}</button></div>
       </form>
     </Modal>
     <Modal open={dialog !== null} title={dialog === 'course' ? 'Registrar curso' : dialog === 'student' ? 'Incorporar estudiante' : 'Matricular estudiante'}
       onClose={() => { if (!busy) { setDialog(null); setError(''); } }}>
       <form className="space-y-4" onSubmit={event => void submit(event)}>
         {dialog === 'course' && <>
-          <Field label="Código del curso"><input required minLength={3} maxLength={40} value={code} onChange={event => setCode(event.target.value.toLowerCase())} placeholder="mat-101" className={inputClass}/></Field>
-          <Field label="Nombre del curso"><input required minLength={3} maxLength={180} value={courseName} onChange={event => setCourseName(event.target.value)} placeholder="Fundamentos de Matemáticas" className={inputClass}/></Field>
-          <Field label="Descripción (opcional)"><textarea maxLength={2000} rows={3} value={description} onChange={event => setDescription(event.target.value)} className={inputClass}/></Field>
-          <Field label="Nivel (opcional)"><input maxLength={80} value={level} onChange={event => setLevel(event.target.value)} placeholder="Básico" className={inputClass}/></Field>
-          <Field label="Período académico"><input required minLength={3} maxLength={80} value={period} onChange={event => setPeriod(event.target.value)} placeholder="2026-II" className={inputClass}/></Field>
-          <div className="space-y-1.5"><span className="text-sm font-medium">Estado inicial</span><OptionSelect value={courseStatus} onChange={setCourseStatus} ariaLabel="Estado inicial del curso" options={[
+          <Field label={t('labels.ka93d91fcef')}><input required minLength={3} maxLength={40} value={code} onChange={event => setCode(event.target.value.toLowerCase())} placeholder="mat-101" className={inputClass}/></Field>
+          <Field label={t('labels.k137ba8f9fe')}><input required minLength={3} maxLength={180} value={courseName} onChange={event => setCourseName(event.target.value)} placeholder={t('labels.ke665e8271c')} className={inputClass}/></Field>
+          <Field label={t('labels.k7908858ff7')}><textarea maxLength={2000} rows={3} value={description} onChange={event => setDescription(event.target.value)} className={inputClass}/></Field>
+          <Field label="Nivel (opcional)"><input maxLength={80} value={level} onChange={event => setLevel(event.target.value)} placeholder={t('labels.k303ce531ce')} className={inputClass}/></Field>
+          <Field label={t('labels.k9939a579d8')}><input required minLength={3} maxLength={80} value={period} onChange={event => setPeriod(event.target.value)} placeholder="2026-II" className={inputClass}/></Field>
+          <div className="space-y-1.5"><span className="text-sm font-medium">{t('legacy.kf451720f0b')}</span><OptionSelect value={courseStatus} onChange={setCourseStatus} ariaLabel="Estado inicial del curso" options={[
             { value: 'published', label: 'Publicado — matrícula abierta' }, { value: 'draft', label: 'Borrador — sin matrículas' },
           ]}/></div>
         </>}
@@ -281,24 +283,24 @@ export function AcademicPage({ mode, courseRole, organizations, organizationId, 
           {/* La guía permanece disponible dentro del formulario, incluso si ya hay alumnos. */}
           <p className="app-info flex items-start gap-2 rounded-xl border p-3 text-xs" role="note">
             <Info size={16} aria-hidden="true" className="shrink-0"/>
-            <span>La cuenta debe existir y tener el correo confirmado en Supabase Authentication → Users. Aquí no se crean contraseñas.</span>
+            <span>{t('legacy.k2221b1f5d5')}</span>
           </p>
-          <Field label="Correo de la cuenta Supabase Auth"><input required type="email" maxLength={254} value={email} onChange={event => setEmail(event.target.value)} placeholder="estudiante@ejemplo.com" className={inputClass}/></Field>
-          <Field label="Nombre completo"><input required minLength={3} maxLength={180} value={fullName} onChange={event => setFullName(event.target.value)} placeholder="Estudiante de prueba" className={inputClass}/></Field>
-          <Field label="Código académico (opcional)"><input maxLength={60} value={externalCode} onChange={event => setExternalCode(event.target.value)} placeholder="ALU-001" className={inputClass}/></Field>
-          <p className="app-muted text-xs">Una cuenta Auth confirmada puede pertenecer a varias instituciones; cada institución conserva su propio perfil académico.</p>
+          <Field label={t('labels.kd9ad8dccb2')}><input required type="email" maxLength={254} value={email} onChange={event => setEmail(event.target.value)} placeholder="estudiante@ejemplo.com" className={inputClass}/></Field>
+          <Field label={t('labels.kcccece8229')}><input required minLength={3} maxLength={180} value={fullName} onChange={event => setFullName(event.target.value)} placeholder={t('labels.k38c2fe17d6')} className={inputClass}/></Field>
+          <Field label={t('labels.k8171b2e848')}><input maxLength={60} value={externalCode} onChange={event => setExternalCode(event.target.value)} placeholder="ALU-001" className={inputClass}/></Field>
+          <p className="app-muted text-xs">{t('legacy.k8ba820e4b0')}</p>
         </>}
         {dialog === 'enrollment' && <>
-          <div className="space-y-1.5"><span className="text-sm font-medium">Curso y período</span><OptionSelect ariaLabel="Curso ofertado" value={offering} onChange={setOffering} placeholder="Seleccionar oferta abierta" options={activeCourses.map(item => ({
+          <div className="space-y-1.5"><span className="text-sm font-medium">{t('legacy.kc5748851e0')}</span><OptionSelect ariaLabel={t('labels.k2b4e66cbb5')} value={offering} onChange={setOffering} placeholder={t('labels.kabc2bb6cd4')} options={activeCourses.map(item => ({
             value: item.offering_id!, label: item.title, suffix: item.period ?? '',
           }))}/></div>
-          <div className="space-y-1.5"><span className="text-sm font-medium">Estudiante</span><OptionSelect ariaLabel="Estudiante a matricular" value={studentId} onChange={setStudentId} placeholder="Seleccionar estudiante" options={activeStudents.map(item => ({
+          <div className="space-y-1.5"><span className="text-sm font-medium">{t('legacy.k7a3b082a0f')}</span><OptionSelect ariaLabel={t('labels.ka6cffed7cb')} value={studentId} onChange={setStudentId} placeholder={t('labels.k9083386ed4')} options={activeStudents.map(item => ({
             value: item.id, label: item.full_name, suffix: item.external_code || '',
           }))}/></div>
         </>}
         {error && <p role="alert" className="app-warning rounded-xl border border-amber-300 bg-amber-50 p-3 text-sm">{error}</p>}
         <div className="flex justify-end gap-2 pt-3">
-          <button type="button" disabled={busy} onClick={() => { setDialog(null); setError(''); }} className={secondaryButton}>Cancelar</button>
+          <button type="button" disabled={busy} onClick={() => { setDialog(null); setError(''); }} className={secondaryButton}>{t('legacy.kc111e0ab9d')}</button>
           <button type="submit" disabled={busy || (dialog === 'enrollment' && (!offering || !studentId))} className={mainButton}>
             {busy ? 'Guardando...' : 'Guardar'}
           </button>

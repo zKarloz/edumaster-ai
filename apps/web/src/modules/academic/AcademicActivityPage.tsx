@@ -1,6 +1,8 @@
 // EduMaster.ai v16: actividad académica real con permisos por oferta.
 // Este módulo registra evidencias; no calcula predicciones ni recomendaciones automáticas.
 import { useEffect, useState, type FormEvent } from 'react';
+import { useTranslation } from 'react-i18next';
+import i18n, { localeTag, normalizeLocale } from '../../i18n';
 import { Activity, ArrowLeft, BookOpen, ChevronLeft, ChevronRight, ClipboardCheck, GraduationCap, Plus, RefreshCcw, Save, Trash2, UserRound } from 'lucide-react';
 import { DataTable, type Column } from '../../components/shared/DataTable';
 import { Modal } from '../../components/shared/Modal';
@@ -44,10 +46,10 @@ const API = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 const btn = 'app-primary-button inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-50';
 const secondary = 'app-secondary-button inline-flex items-center justify-center gap-2 rounded-xl border px-3 py-2.5 text-sm disabled:opacity-40';
 const input = 'app-input w-full rounded-xl border px-3 py-2.5 text-sm';
-const labels: Record<Kind, string> = { grade: 'Calificación', attendance: 'Asistencia', participation: 'Participación', progress: 'Progreso' };
-const states: Record<string, string> = { active: 'Activa', completed: 'Completada', withdrawn: 'Retirada', present: 'Presente', absent: 'Ausente', late: 'Tardanza', excused: 'Justificada' };
+const labels: Record<Kind, string> = { grade: 'activity.grade', attendance: 'activity.attendance', participation: 'activity.participation', progress: 'activity.progress' };
+const states: Record<string, string> = { active: 'activity.active', completed: 'activity.completed', withdrawn: 'activity.withdrawn', present: 'activity.present', absent: 'activity.absent', late: 'activity.late', excused: 'activity.excused' };
 const formatNumber = (value: number | string | null | undefined, suffix = ''): string =>
-  value === null || value === undefined ? '—' : `${Number(value).toLocaleString('es-PE', { maximumFractionDigits: 2 })}${suffix}`;
+  value === null || value === undefined ? '—' : `${Number(value).toLocaleString(localeTag[normalizeLocale(i18n.language)], { maximumFractionDigits: 2 })}${suffix}`;
 function localDate(): string {
   const day = new Date();
   return `${day.getFullYear()}-${String(day.getMonth() + 1).padStart(2, '0')}-${String(day.getDate()).padStart(2, '0')}`;
@@ -77,6 +79,13 @@ async function api<T>(path: string, token: string, method = 'GET', body?: unknow
 export function AcademicActivityPage({ organizations, organizationId, onOrganizationChange, token,
   selectedOfferingId, selectedEnrollmentId, onSelectEnrollment, onBackToOverview }: Props) {
   const { notify } = useToast();
+  const { t } = useTranslation();
+  /** Traduce los estados conocidos y conserva valores desconocidos sin pasar undefined a i18next. */
+  const statusLabel = (status: string | null | undefined): string => {
+    if (!status) return '—';
+    const translationKey = states[status];
+    return translationKey ? t(translationKey) : status;
+  };
   const [offerings, setOfferings] = useState<Offering[]>([]);
   const [offeringId, setOfferingId] = useState('');
   const [manager, setManager] = useState(false);
@@ -201,7 +210,7 @@ export function AcademicActivityPage({ organizations, organizationId, onOrganiza
     setBusy(true); setError('');
     try {
       await api(base + (modal === 'progress' ? '/progress' : '/records'), token, modal === 'progress' ? 'PUT' : 'POST', body);
-      notify(`${labels[modal]} registrada correctamente.`, 'success');
+      notify(`${t(labels[modal])} registrada correctamente.`, 'success');
       setModal(null); setRefresh(current => current + 1);
     } catch (cause: unknown) { setError(cause instanceof Error ? cause.message : 'No se pudo guardar'); }
     finally { setBusy(false); }
@@ -236,19 +245,19 @@ export function AcademicActivityPage({ organizations, organizationId, onOrganiza
       <button type="button" className="app-accent text-left font-semibold hover:underline"
         onClick={() => onSelectEnrollment(offeringId,row.enrollment_id)}
         aria-label={`Ver historial de ${row.student_name}`}>{row.student_name}</button> },
-    { header: 'Estado', key: 'status', render: row => states[row.status] || row.status },
+    { header: 'Estado', key: 'status', render: row => statusLabel(row.status) },
     { header: 'Prom. notas', key: 'grade_average_percent', render: row => formatNumber(row.grade_average_percent, '%') },
     { header: 'Asistencia', key: 'attendance_percent', render: row => formatNumber(row.attendance_percent, '%') },
     { header: 'Participación', key: 'participation_average', render: row => formatNumber(row.participation_average, '/5') },
     { header: 'Progreso', key: 'completion_percent', render: row => <div className="flex min-w-28 items-center gap-2"><div className="h-2 flex-1 overflow-hidden rounded-full bg-slate-200 dark:bg-slate-600"><div className="h-full rounded-full bg-sky-500" style={{ width: `${Math.max(0, Math.min(100, Number(row.completion_percent)))}%` }}/></div>{formatNumber(row.completion_percent, '%')}</div> },
     { header: 'Acción', key: 'enrollment_id', render: row => row.status === 'active'
-      ? <button type="button" className={secondary} onClick={() => open('grade', row.enrollment_id)} aria-label={`Registrar nota de ${row.student_name}`}><Plus size={14}/> Nota</button> : '—' },
+      ? <button type="button" className={secondary} onClick={() => open('grade', row.enrollment_id)} aria-label={`Registrar nota de ${row.student_name}`}><Plus size={14}/> {t('legacy.k1a6b7be7e5')}</button> : '—' },
   ];
   const recordColumns: Column<AcademicRecord>[] = [
     { header: 'Fecha', key: 'activity_date' },
     { header: 'Actividad', key: 'kind', render: row => `${labels[row.kind]} · ${row.title}` },
     { header: 'Valor', key: 'score', render: row => row.kind === 'grade' ? `${formatNumber(row.score)} / ${formatNumber(row.max_score)}`
-      : row.kind === 'attendance' ? states[row.attendance_status || ''] || row.attendance_status
+      : row.kind === 'attendance' ? statusLabel(row.attendance_status)
         : `${row.participation_rating}/5` },
     { header: 'Acciones', key: 'id', render: row => <button type="button" className={secondary}
       onClick={() => { setError(''); setDeleteRecord(row); }} title="Anular registro" aria-label={`Anular registro ${row.title}`}><Trash2 size={15}/></button> },
@@ -258,123 +267,123 @@ export function AcademicActivityPage({ organizations, organizationId, onOrganiza
     <div className="app-panel rounded-2xl border p-5">
       <div className="flex flex-wrap items-end gap-4">
         <div className="min-w-56 flex-1 space-y-2 sm:max-w-md">
-          <label className="flex items-center gap-2 text-sm font-semibold"><GraduationCap size={18}/> Institución académica</label>
-          <OptionSelect ariaLabel="Institución para actividad académica" value={organizationId} onChange={onOrganizationChange}
-            options={organizations.map(org => ({ value: org.id, label: org.name, suffix: org.code }))} placeholder="Selecciona una institución"/>
+          <label className="flex items-center gap-2 text-sm font-semibold"><GraduationCap size={18}/> {t('activity.academicInstitution')}</label>
+          <OptionSelect ariaLabel={t('labels.kb395478b08')} value={organizationId} onChange={onOrganizationChange}
+            options={organizations.map(org => ({ value: org.id, label: org.name, suffix: org.code }))} placeholder={t('activity.selectInstitution')}/>
         </div>
-        <button type="button" className={secondary} disabled={!organizationId || loading} onClick={() => setRefresh(x => x + 1)}><RefreshCcw size={16}/> Actualizar</button>
+        <button type="button" className={secondary} disabled={!organizationId || loading} onClick={() => setRefresh(x => x + 1)}><RefreshCcw size={16}/> {t('activity.refresh')}</button>
       </div>
     </div>
     <div className="flex flex-wrap items-start justify-between gap-3">
-      <div><h2 className="flex items-center gap-2 text-lg font-semibold"><Activity size={20}/> Actividad académica</h2>
-        <p className="app-muted mt-1 text-sm">Calificaciones, asistencia, participación y avance basados en registros reales.</p></div>
+      <div><h2 className="flex items-center gap-2 text-lg font-semibold"><Activity size={20}/> {t('activity.title')}</h2>
+        <p className="app-muted mt-1 text-sm">{t('activity.hint')}</p></div>
     </div>
-    {loading && <Spinner label="Buscando ofertas académicas autorizadas..."/>}
-    {!loading && offerings.length === 0 && !error && <p className="app-info rounded-xl border p-4 text-sm">No hay ofertas asignadas. El administrador institucional puede asignar docentes y matricular estudiantes desde Matrículas.</p>}
+    {loading && <Spinner label={t('activity.loadingOffers')}/>}
+    {!loading && offerings.length === 0 && !error && <p className="app-info rounded-xl border p-4 text-sm">{t('activity.noOffers')}</p>}
     {offerings.length > 0 && <div className="app-panel space-y-4 rounded-2xl border p-5">
-      <div className="space-y-2"><label className="flex items-center gap-2 text-sm font-semibold"><BookOpen size={17}/> Curso y período</label>
-        <OptionSelect ariaLabel="Oferta académica" value={offeringId} onChange={value => { if (selectedEnrollmentId) onBackToOverview(); setOfferingId(value); }} options={offerings.map(row => ({
+      <div className="space-y-2"><label className="flex items-center gap-2 text-sm font-semibold"><BookOpen size={17}/> {t('activity.coursePeriod')}</label>
+        <OptionSelect ariaLabel={t('labels.kebc4adc63e')} value={offeringId} onChange={value => { if (selectedEnrollmentId) onBackToOverview(); setOfferingId(value); }} options={offerings.map(row => ({
           value: row.id, label: row.course_title, suffix: `${row.period} · ${row.active_enrollments} activos`,
         }))}/></div>
-      {selectedOffering && <div className="app-muted text-sm">{selectedOffering.course_code} · {selectedOffering.period} · Docente: {selectedOffering.instructor_name || 'Sin asignar'}</div>}
+      {selectedOffering && <div className="app-muted text-sm">{selectedOffering.course_code} · {selectedOffering.period} {t('legacy.k21fdd8add9')} {selectedOffering.instructor_name || 'Sin asignar'}</div>}
       {manager && selectedOffering && <div className="app-divider flex flex-wrap items-end gap-3 border-t pt-4">
-        <div className="min-w-52 flex-1 space-y-2"><label className="flex items-center gap-2 text-sm font-medium"><UserRound size={16}/> Docente responsable</label>
-          <OptionSelect ariaLabel="Asignar docente" value={assignment} onChange={setAssignment} placeholder="Sin docente asignado"
+        <div className="min-w-52 flex-1 space-y-2"><label className="flex items-center gap-2 text-sm font-medium"><UserRound size={16}/> {t('activity.instructor')}</label>
+          <OptionSelect ariaLabel={t('labels.k9f7317135f')} value={assignment} onChange={setAssignment} placeholder={t('activity.noInstructor')}
             options={[{ value: '', label: 'Sin docente asignado' }, ...instructors.map(row => ({ value: row.id, label: row.name }))]}/></div>
-        <button className={secondary} type="button" onClick={() => void assignInstructor()} disabled={busy || assignment === (selectedOffering.instructor_id || '')}><Save size={16}/> Guardar asignación</button>
-        {instructors.length === 0 && <p className="app-muted basis-full text-xs">Para asignar docentes, dales el rol Docente desde el módulo Usuarios de esta institución.</p>}
+        <button className={secondary} type="button" onClick={() => void assignInstructor()} disabled={busy || assignment === (selectedOffering.instructor_id || '')}><Save size={16}/> {t('activity.assign')}</button>
+        {instructors.length === 0 && <p className="app-muted basis-full text-xs">{t('activity.assignHint')}</p>}
       </div>}
     </div>}
     {error && <p role="alert" className="app-warning rounded-xl border p-3 text-sm">{error}</p>}
     {offeringId && !selectedEnrollmentId && <>
       <div className="grid gap-3 sm:grid-cols-3">
-        <div className="app-panel rounded-2xl border p-4"><p className="app-muted text-xs">Matrículas activas</p><p className="mt-1 text-2xl font-semibold">{active}</p></div>
-        <div className="app-panel rounded-2xl border p-4"><p className="app-muted text-xs">Estudiantes con notas</p><p className="mt-1 text-2xl font-semibold">{withGrades}</p></div>
-        <div className="app-panel rounded-2xl border p-4"><p className="app-muted text-xs">Registros de calificaciones</p><p className="mt-1 text-2xl font-semibold">{overview.reduce((sum,row)=>sum+row.grade_count,0)}</p></div>
+        <div className="app-panel rounded-2xl border p-4"><p className="app-muted text-xs">{t('activity.activeEnrollments')}</p><p className="mt-1 text-2xl font-semibold">{active}</p></div>
+        <div className="app-panel rounded-2xl border p-4"><p className="app-muted text-xs">{t('activity.studentsWithGrades')}</p><p className="mt-1 text-2xl font-semibold">{withGrades}</p></div>
+        <div className="app-panel rounded-2xl border p-4"><p className="app-muted text-xs">{t('activity.gradeRecords')}</p><p className="mt-1 text-2xl font-semibold">{overview.reduce((sum,row)=>sum+row.grade_count,0)}</p></div>
       </div>
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <h3 className="flex items-center gap-2 font-semibold"><ClipboardCheck size={19}/> Seguimiento por matrícula</h3>
+        <h3 className="flex items-center gap-2 font-semibold"><ClipboardCheck size={19}/> {t('activity.enrollmentFollowup')}</h3>
         <div className="flex flex-wrap gap-2">
           {(['grade', 'attendance', 'participation', 'progress'] as const).map(kind => <button key={kind} className={secondary}
-            type="button" disabled={activeEnrollments.length === 0} onClick={() => open(kind)}><Plus size={14}/>{labels[kind]}</button>)}
+            type="button" disabled={activeEnrollments.length === 0} onClick={() => open(kind)}><Plus size={14}/>{t(labels[kind])}</button>)}
         </div>
       </div>
-      <p className="app-muted text-sm">Selecciona el nombre del estudiante para ver su historial. No se cargan evidencias de todos los alumnos.</p>
-      <DataTable<EnrollmentSummary> rows={overview} columns={columns} label="Estudiantes de la oferta" pageSize={8}/>
+      <p className="app-muted text-sm">{t('activity.studentHint')}</p>
+      <DataTable<EnrollmentSummary> rows={overview} columns={columns} label={t('activity.offeringStudents')} pageSize={8}/>
     </>}
     {offeringId && selectedEnrollmentId && <div className="space-y-4">
-      <button type="button" className={secondary} onClick={onBackToOverview}><ArrowLeft size={17}/> Volver a estudiantes</button>
-      {!selectedSummary && !loading && <p className="app-warning rounded-xl border p-4 text-sm" role="alert">No se encontró la matrícula en esta oferta. Comprueba el enlace o tus permisos.</p>}
+      <button type="button" className={secondary} onClick={onBackToOverview}><ArrowLeft size={17}/> {t('activity.backStudents')}</button>
+      {!selectedSummary && !loading && <p className="app-warning rounded-xl border p-4 text-sm" role="alert">{t('activity.missing')}</p>}
       {selectedSummary && <>
         <div className="app-panel rounded-2xl border p-5">
-          <p className="app-muted text-xs">Historial individual · {selectedOffering?.course_title} · {selectedOffering?.period}</p>
+          <p className="app-muted text-xs">{t('legacy.k3062e7d7b9')} {selectedOffering?.course_title} · {selectedOffering?.period}</p>
           <h3 className="mt-2 flex items-center gap-2 text-xl font-bold"><UserRound size={22}/> {selectedSummary.student_name}</h3>
-          <p className="app-muted mt-1 text-sm">Matrícula: {states[selectedSummary.status] || selectedSummary.status}</p>
+          <p className="app-muted mt-1 text-sm">{t('legacy.k2eb48527f8')} {statusLabel(selectedSummary.status)}</p>
           <div className="mt-5 grid gap-3 sm:grid-cols-4">
-            <div><p className="app-muted text-xs">Notas</p><strong>{formatNumber(selectedSummary.grade_average_percent,'%')}</strong></div>
-            <div><p className="app-muted text-xs">Asistencia</p><strong>{formatNumber(selectedSummary.attendance_percent,'%')}</strong></div>
-            <div><p className="app-muted text-xs">Participación</p><strong>{formatNumber(selectedSummary.participation_average,'/5')}</strong></div>
-            <div><p className="app-muted text-xs">Progreso</p><strong>{formatNumber(selectedSummary.completion_percent,'%')}</strong></div>
+            <div><p className="app-muted text-xs">{t('activity.grades')}</p><strong>{formatNumber(selectedSummary.grade_average_percent,'%')}</strong></div>
+            <div><p className="app-muted text-xs">{t('activity.attendance')}</p><strong>{formatNumber(selectedSummary.attendance_percent,'%')}</strong></div>
+            <div><p className="app-muted text-xs">{t('activity.participation')}</p><strong>{formatNumber(selectedSummary.participation_average,'/5')}</strong></div>
+            <div><p className="app-muted text-xs">{t('activity.progress')}</p><strong>{formatNumber(selectedSummary.completion_percent,'%')}</strong></div>
           </div>
         </div>
         <div className="app-panel space-y-3 rounded-2xl border p-4">
           <div className="flex flex-wrap items-end justify-between gap-3">
-            <h4 className="font-semibold">Evidencias de esta matrícula</h4>
-            <div className="w-full max-w-xs space-y-1"><label className="app-muted text-xs">Tipo de evidencia</label>
+            <h4 className="font-semibold">{t('activity.historyOfEnrollment')}</h4>
+            <div className="w-full max-w-xs space-y-1"><label className="app-muted text-xs">{t('activity.evidenceType')}</label>
               <OptionSelect ariaLabel="Filtrar evidencias" value={recordKind} onChange={value=>{setRecordKind(value);setRecordPage(0);}}
                 options={[{value:'all',label:'Todas las evidencias'}, {value:'grade',label:'Calificaciones'},
                   {value:'attendance',label:'Asistencia'}, {value:'participation',label:'Participación'}]}/></div>
           </div>
-          {loadingRecords && <Spinner label="Cargando historial individual..."/>}
-          {!loadingRecords && records.length===0 && <p className="app-muted rounded-lg p-4 text-sm">Aún no hay evidencias para estos filtros.</p>}
+          {loadingRecords && <Spinner label={t('activity.loadingHistory')}/>}
+          {!loadingRecords && records.length===0 && <p className="app-muted rounded-lg p-4 text-sm">{t('activity.emptyHistory')}</p>}
           {!loadingRecords && records.length>0 && <DataTable<AcademicRecord> key={`${selectedEnrollmentId}-${recordKind}-${recordPage}`}
-            rows={records} columns={recordColumns} label="Historial individual" pageSize={10} manualMode/>}
+            rows={records} columns={recordColumns} label={t('activity.individualHistory')} pageSize={10} manualMode/>}
           <div className="flex flex-wrap items-center justify-between gap-3">
-            <p className="app-muted text-xs">{recordTotal} evidencias · página {recordPage+1} de {Math.max(1,Math.ceil(recordTotal/10))}</p>
+            <p className="app-muted text-xs">{recordTotal} {t('legacy.kb94e05ce9d')} {recordPage+1} {t('legacy.k600ccd1b71')} {Math.max(1,Math.ceil(recordTotal/10))}</p>
             <div className="flex gap-2"><button type="button" className={secondary} disabled={recordPage===0 || loadingRecords}
-              onClick={()=>setRecordPage(p=>Math.max(0,p-1))}><ChevronLeft size={15}/> Anterior</button>
+              onClick={()=>setRecordPage(p=>Math.max(0,p-1))}><ChevronLeft size={15}/> {t('activity.previous')}</button>
               <button type="button" className={secondary} disabled={loadingRecords || (recordPage+1)*10>=recordTotal}
-                onClick={()=>setRecordPage(p=>p+1)}>Siguiente <ChevronRight size={15}/></button></div>
+                onClick={()=>setRecordPage(p=>p+1)}>{t('activity.next')} <ChevronRight size={15}/></button></div>
           </div>
         </div>
-        <p className="app-muted text-xs">Las notas son porcentajes del puntaje máximo. La asistencia cuenta presentes y tardanzas sobre sesiones no justificadas; no son predicciones de IA.</p>
+        <p className="app-muted text-xs">{t('activity.recordHint')}</p>
       </>}
     </div>}
     <Modal open={modal !== null} title={`Registrar ${modal ? labels[modal].toLowerCase() : 'actividad'}`} onClose={() => { if (!busy) { setModal(null); setError(''); } }}>
       <form className="space-y-4" onSubmit={event => void save(event)}>
-        <div className="space-y-1.5"><label className="text-sm font-medium">Estudiante matriculado</label>
-          <OptionSelect ariaLabel="Seleccionar matrícula" value={selectedStudent} onChange={id => { setSelectedStudent(id); const selected = activeEnrollments.find(row => row.enrollment_id === id); if (selected) setProgress(String(selected.completion_percent)); }}
+        <div className="space-y-1.5"><label className="text-sm font-medium">{t('activity.enrolledStudent')}</label>
+          <OptionSelect ariaLabel={t('labels.k63b53b0249')} value={selectedStudent} onChange={id => { setSelectedStudent(id); const selected = activeEnrollments.find(row => row.enrollment_id === id); if (selected) setProgress(String(selected.completion_percent)); }}
             options={activeEnrollments.map(row => ({ value: row.enrollment_id, label: row.student_name }))}/></div>
         {modal !== 'progress' && <>
-          <label className="flex flex-col gap-1.5 text-sm font-medium">Actividad<input className={input} required minLength={2} maxLength={120} value={title} onChange={event => setTitle(event.target.value)}/></label>
-          <label className="flex flex-col gap-1.5 text-sm font-medium">Fecha<input className={input} type="date" required value={activityDate} onChange={event => setActivityDate(event.target.value)}/></label>
+          <label className="flex flex-col gap-1.5 text-sm font-medium">{t('activity.activity')}<input className={input} required minLength={2} maxLength={120} value={title} onChange={event => setTitle(event.target.value)}/></label>
+          <label className="flex flex-col gap-1.5 text-sm font-medium">{t('activity.date')}<input className={input} type="date" required value={activityDate} onChange={event => setActivityDate(event.target.value)}/></label>
         </>}
         {modal === 'grade' && <div className="grid grid-cols-2 gap-3">
-          <label className="flex flex-col gap-1.5 text-sm font-medium">Nota obtenida<input className={input} type="number" required step="0.01" min="0" max={maxScore || undefined} value={score} onChange={e => setScore(e.target.value)}/></label>
-          <label className="flex flex-col gap-1.5 text-sm font-medium">Nota máxima<input className={input} type="number" required step="0.01" min="0.01" value={maxScore} onChange={e => setMaxScore(e.target.value)}/></label>
+          <label className="flex flex-col gap-1.5 text-sm font-medium">{t('activity.score')}<input className={input} type="number" required step="0.01" min="0" max={maxScore || undefined} value={score} onChange={e => setScore(e.target.value)}/></label>
+          <label className="flex flex-col gap-1.5 text-sm font-medium">{t('activity.maxScore')}<input className={input} type="number" required step="0.01" min="0.01" value={maxScore} onChange={e => setMaxScore(e.target.value)}/></label>
         </div>}
-        {modal === 'attendance' && <div className="space-y-1.5"><label className="text-sm font-medium">Asistencia</label>
+        {modal === 'attendance' && <div className="space-y-1.5"><label className="text-sm font-medium">{t('activity.attendance')}</label>
           <OptionSelect ariaLabel="Estado de asistencia" value={attendance} onChange={setAttendance} options={[
             { value: 'present', label: 'Presente' }, { value: 'late', label: 'Tardanza' },
             { value: 'absent', label: 'Ausente' }, { value: 'excused', label: 'Justificada' },
           ]}/></div>}
-        {modal === 'participation' && <div className="space-y-1.5"><label className="text-sm font-medium">Participación</label>
-          <OptionSelect ariaLabel="Valoración de participación" value={participation} onChange={setParticipation}
+        {modal === 'participation' && <div className="space-y-1.5"><label className="text-sm font-medium">{t('activity.participation')}</label>
+          <OptionSelect ariaLabel={t('labels.k59e66db044')} value={participation} onChange={setParticipation}
             options={[1, 2, 3, 4, 5].map(n => ({ value: String(n), label: `${n} / 5` }))}/></div>}
-        {modal === 'progress' && <label className="flex flex-col gap-1.5 text-sm font-medium">Avance del curso (0–100 %)
+        {modal === 'progress' && <label className="flex flex-col gap-1.5 text-sm font-medium">{t('legacy.k517537a3b5')}
           <input className={input} type="number" required min="0" max="100" step="0.01" value={progress} onChange={event => setProgress(event.target.value)}/></label>}
-        {modal !== 'progress' && <label className="flex flex-col gap-1.5 text-sm font-medium">Observaciones (opcional)
+        {modal !== 'progress' && <label className="flex flex-col gap-1.5 text-sm font-medium">{t('legacy.k381be18e76')}
           <textarea className={input} maxLength={500} rows={3} value={notes} onChange={event => setNotes(event.target.value)}/></label>}
         {error && <p role="alert" className="app-warning rounded-xl border p-3 text-sm">{error}</p>}
-        <div className="flex justify-end gap-2 pt-2"><button type="button" className={secondary} disabled={busy} onClick={() => { setModal(null); setError(''); }}>Cancelar</button>
+        <div className="flex justify-end gap-2 pt-2"><button type="button" className={secondary} disabled={busy} onClick={() => { setModal(null); setError(''); }}>{t('activity.cancel')}</button>
           <button type="submit" className={btn} disabled={busy || !selectedStudent}>{busy ? 'Guardando…' : 'Guardar evidencia'}</button></div>
       </form>
     </Modal>
-    <Modal open={deleteRecord !== null} title="Anular evidencia" onClose={() => { if (!busy) { setDeleteRecord(null); setError(''); } }}>
-      <div className="space-y-4"><p className="text-sm">¿Anular la evidencia «{deleteRecord?.title}»? No se borrará físicamente; la auditoría conservará esta operación.</p>
+    <Modal open={deleteRecord !== null} title={t('activity.void')} onClose={() => { if (!busy) { setDeleteRecord(null); setError(''); } }}>
+      <div className="space-y-4"><p className="text-sm">{t('legacy.k288ffdeb8b')}{deleteRecord?.title}{t('legacy.k9035945b93')}</p>
         {error && <p role="alert" className="app-warning rounded-xl border p-3 text-sm">{error}</p>}
-        <div className="flex justify-end gap-2"><button className={secondary} disabled={busy} onClick={() => { setDeleteRecord(null); setError(''); }}>Cancelar</button>
-          <button className={btn} disabled={busy} onClick={() => void voidRecord()}>Confirmar anulación</button></div></div>
+        <div className="flex justify-end gap-2"><button className={secondary} disabled={busy} onClick={() => { setDeleteRecord(null); setError(''); }}>{t('activity.cancel')}</button>
+          <button className={btn} disabled={busy} onClick={() => void voidRecord()}>{t('activity.confirmVoid')}</button></div></div>
     </Modal>
   </div>;
 }
