@@ -1,6 +1,6 @@
 // Shell de Sprint 1: navegación, estado API, tema, componentes y Auth opcional.
 // Los ejemplos académicos están rotulados DEMO; nunca simulan datos reales.
-import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent, type PointerEvent as ReactPointerEvent } from 'react';
 import { Activity, ArrowRight, BookOpen, Building2, CheckCircle2, ChevronDown, Database,
   GraduationCap, LayoutDashboard, LockKeyhole, Menu, Users, ClipboardList,
   Server, ShieldCheck, XCircle, Settings, PanelLeftClose, PanelLeftOpen, X } from 'lucide-react';
@@ -59,8 +59,10 @@ export default function App() {
   const { t } = useTranslation();
   const { theme, setTheme, sidebarMode, setSidebarMode, selectPreferenceScope, syncProfileLocale } = useSettings();
   const [sidebarHover, setSidebarHover] = useState(false);
-  const [sidebarFocus, setSidebarFocus] = useState(false);
+  const [sidebarKeyboardFocus, setSidebarKeyboardFocus] = useState(false);
   const [sidebarOptionsOpen, setSidebarOptionsOpen] = useState(false);
+  const sidebarModeRoot = useRef<HTMLDivElement>(null);
+  const sidebarModeTrigger = useRef<HTMLButtonElement>(null);
 
   const location = useLocation();
   const navigate = useNavigate();
@@ -78,7 +80,7 @@ export default function App() {
   const [loadingOrgs, setLoadingOrgs] = useState(false);
   const [showPermissions, setShowPermissions] = useState(false);
   const [mobileMenu, setMobileMenu] = useState(false);
-  const sidebarWide = sidebarMode === 'expanded' || (sidebarMode === 'dynamic' && (sidebarHover || sidebarFocus)) || mobileMenu;
+  const sidebarWide = sidebarMode === 'expanded' || (sidebarMode === 'dynamic' && (sidebarHover || sidebarKeyboardFocus || sidebarOptionsOpen)) || mobileMenu;
   const sidebarRail = sidebarMode !== 'expanded';
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -98,7 +100,29 @@ export default function App() {
     const destination = legacyRedirect(location.pathname);
     if (destination) navigate(`${destination}${location.search}${location.hash}`, { replace: true });
   }, [location.pathname, location.search, location.hash, navigate]);
-  useEffect(() => { setSidebarOptionsOpen(false); setSidebarHover(false); }, [sidebarMode]);
+  // La opción seleccionada cierra el selector; el rail dinámico no se debe quedar
+  // fijado por el foco de un botón pulsado con el ratón.
+  useEffect(() => { setSidebarOptionsOpen(false); setSidebarKeyboardFocus(false); }, [sidebarMode]);
+  useEffect(() => {
+    if (!sidebarOptionsOpen) return;
+    const outside = (event: PointerEvent | FocusEvent) => {
+      if (event.target instanceof Node && !sidebarModeRoot.current?.contains(event.target)) setSidebarOptionsOpen(false);
+    };
+    const escape = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return;
+      event.preventDefault();
+      setSidebarOptionsOpen(false);
+      sidebarModeTrigger.current?.focus();
+    };
+    document.addEventListener('pointerdown', outside);
+    document.addEventListener('focusin', outside);
+    document.addEventListener('keydown', escape);
+    return () => {
+      document.removeEventListener('pointerdown', outside);
+      document.removeEventListener('focusin', outside);
+      document.removeEventListener('keydown', escape);
+    };
+  }, [sidebarOptionsOpen]);
   useEffect(() => {
     if (!mobileMenu) return;
     const handleEscape = (event: KeyboardEvent) => { if (event.key === 'Escape') setMobileMenu(false); };
@@ -372,6 +396,22 @@ export default function App() {
   </div>;
 
   const accountIdentity = identity && identity.id === session.user.id ? identity.value : { name: session.user.email?.split('@')[0] || 'Usuario', email: session.user.email || '' };
+  // Una cuenta puede tener varios roles; se muestran los del contexto institucional
+  // seleccionado, o todos los de su primera institución cuando aún no se eligió.
+  const contextRoles = memberships.find(m => m.organization_id === academicOrgId)?.roles ?? memberships[0]?.roles ?? [];
+  const accountRoleKeys = globalRoles.includes('superadmin') ? ['superadmin'] : contextRoles;
+  const accountRoleLabel = accountRoleKeys.length
+    ? accountRoleKeys.map(role => {
+      const roleKey = `account.role_${role}`;
+      return t(roleKey, { defaultValue: role.replaceAll('_', ' ') });
+    }).join(' · ')
+    : t('account.role_user');
+
+  // Los clics de ratón no deben retener la expansión, incluso si el botón
+  // navegado permanece como document.activeElement. Tab conserva accesibilidad.
+  const onSidebarPointerDown = (_event: ReactPointerEvent<HTMLElement>) => {
+    setSidebarKeyboardFocus(false);
+  };
 
   return <div className="app-shell min-h-screen bg-[#F5F7FB] text-slate-900 transition-colors dark:bg-[#06152B] dark:text-slate-100">
     <div className="flex min-h-screen">
@@ -379,10 +419,15 @@ export default function App() {
       <button type="button" tabIndex={mobileMenu ? 0 : -1} aria-label={t('labels.kdb3f8c9269')} aria-hidden={!mobileMenu}
         onClick={() => setMobileMenu(false)}
         className={`fixed inset-0 z-30 bg-black/60 transition-opacity duration-300 md:hidden ${mobileMenu ? 'pointer-events-auto opacity-100' : 'pointer-events-none opacity-0'}`}/>
-      <aside id="edumaster-sidebar" aria-label={t('nav.platform')} data-open={mobileMenu ? 'true' : 'false'}
-        onMouseEnter={() => setSidebarHover(true)} onMouseLeave={() => { setSidebarHover(false); setSidebarOptionsOpen(false); }}
-        onFocusCapture={() => setSidebarFocus(true)}
-        onBlurCapture={event => { if (!event.currentTarget.contains(event.relatedTarget as Node)) setSidebarFocus(false); }}
+      <aside id="edumaster-sidebar" aria-label={t('nav.platform')} data-open={mobileMenu ? 'true' : 'false'} data-wide={sidebarWide ? 'true' : 'false'}
+        onMouseEnter={() => setSidebarHover(true)} onMouseLeave={() => setSidebarHover(false)}
+        onPointerDownCapture={onSidebarPointerDown}
+        onFocusCapture={event => {
+          // :focus-visible distingue la navegación Tab de los clics que dejaban
+          // el sidebar dinámico permanentemente expandido.
+          if (event.target instanceof HTMLElement && event.target.matches(':focus-visible')) setSidebarKeyboardFocus(true);
+        }}
+        onBlurCapture={event => { if (!event.currentTarget.contains(event.relatedTarget as Node)) setSidebarKeyboardFocus(false); }}
         className={`app-sidebar app-mobile-drawer fixed inset-y-0 left-0 z-40 h-dvh shrink-0 border-r border-slate-200 bg-white shadow-xl md:sticky md:top-0 md:z-30 md:shadow-none dark:border-[#163B63] dark:bg-[#071C37] ${sidebarRail ? 'md:w-[76px]' : 'md:w-64'} ${sidebarMode === 'dynamic' ? 'app-sidebar-dynamic' : ''}`}>
         {/* En dinámico la capa interna se extiende sobre el contenido sin desplazarlo. */}
         <div className={`app-sidebar-inner flex h-dvh w-64 flex-col border-r border-transparent bg-inherit p-3 md:h-dvh ${sidebarMode === 'dynamic' ? 'md:absolute md:left-0 md:top-0' : ''} ${!sidebarWide ? 'md:w-[76px]' : 'md:w-64'}`}>
@@ -401,14 +446,14 @@ export default function App() {
                 Boolean(link && (link.id !== 'users' || canManageUserAdministration) && (link.id !== 'activity' || canViewAcademicActivity)));
               if (!visible.length) return null;
               return <div key={group.label} className="space-y-1">
-                <p aria-label={t(group.label)} className={`px-3 pb-1 text-xs font-semibold uppercase tracking-widest app-meta-text text-slate-400 ${!sidebarWide ? 'md:text-center' : ''}`}>
+                <p aria-label={t(group.label)} className={`px-3 pb-1 text-xs font-semibold uppercase tracking-widest app-meta-text text-slate-400 ${!sidebarWide ? 'md:flex md:min-h-4 md:items-center md:justify-center' : ''}`}>
                   <span className={sidebarWide ? '' : 'md:hidden'}>{t(group.label)}</span>
-                  {!sidebarWide && <span aria-hidden="true" className="hidden md:inline">-</span>}
+                  {!sidebarWide && <span aria-hidden="true" className="app-sidebar-category-dash hidden md:block"/>}
                 </p>
                 {visible.map(link => {
                   const Icon = link.icon;
                   const active = section === link.id;
-                  return <button key={link.id} onClick={() => navTo(link.id)} type="button"
+                  return <button key={link.id} onClick={event => { if (event.detail > 0) event.currentTarget.blur(); navTo(link.id); }} type="button"
                     title={!sidebarWide ? t(`nav.${link.id}`) : undefined}
                     aria-label={t(`nav.${link.id}`)} aria-current={active ? 'page' : undefined}
                     className={`flex w-full min-h-11 items-center gap-3 rounded-xl px-3 py-3 text-left text-sm font-medium transition-colors ${active ? 'app-nav-active bg-[#087FE5]/10 text-[#087FE5] dark:bg-[#103963] dark:text-[#20C8F5]' : 'app-nav-inactive text-slate-500 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-[#163B63]'}`}>
@@ -419,23 +464,36 @@ export default function App() {
               </div>;
             })}
           </nav>
-          {/* Menú de preferencias fijo al pie, con cierre por Escape y selección por teclado. */}
-          <div className="app-divider relative shrink-0 border-t pt-3">
-            {sidebarOptionsOpen && <div role="group" aria-label={t('nav.sidebarMode')}
+          {/* El selector se mantiene montado para animar también el cierre.
+              No se cierra al salir con el ratón: solo al elegir, Escape o clic fuera. */}
+          <div className="app-divider relative shrink-0 border-t pt-3" ref={sidebarModeRoot}>
+            <div id="edumaster-sidebar-modes" role="group" aria-label={t('nav.sidebarMode')}
+              data-open={sidebarOptionsOpen} inert={!sidebarOptionsOpen} aria-hidden={!sidebarOptionsOpen}
               className="app-panel app-sidebar-options absolute bottom-full left-0 z-50 mb-2 w-60 space-y-1 rounded-xl border p-2 shadow-xl">
               {([['expanded', PanelLeftOpen], ['collapsed', PanelLeftClose], ['dynamic', Menu]] as const).map(([mode, Icon]) =>
-                <button type="button" key={mode} aria-pressed={sidebarMode === mode} onClick={() => { setSidebarMode(mode); setSidebarOptionsOpen(false); }}
+                <button type="button" key={mode} aria-pressed={sidebarMode === mode}
+                  onClick={event => {
+                    setSidebarMode(mode);
+                    setSidebarOptionsOpen(false);
+                    setSidebarKeyboardFocus(false);
+                    if (event.detail > 0) event.currentTarget.blur();
+                    else sidebarModeTrigger.current?.focus();
+                  }}
                   className={`app-account-action flex w-full items-center gap-2 rounded-lg p-2 text-left text-sm ${sidebarMode === mode ? 'app-nav-active' : ''}`}>
-                  <Icon size={18}/><span>{t(`nav.${mode === 'expanded' ? 'expand' : mode === 'collapsed' ? 'collapse' : 'dynamic'}`)}</span>
-                  {sidebarMode === mode && <CheckCircle2 size={15} className="ml-auto"/>}
+                  <Icon size={18} className="shrink-0"/><span className="whitespace-nowrap">{t(`nav.${mode === 'expanded' ? 'expand' : mode === 'collapsed' ? 'collapse' : 'dynamic'}`)}</span>
+                  {sidebarMode === mode && <CheckCircle2 size={15} className="ml-auto shrink-0"/>}
                 </button>)}
-              </div>}
-            <button type="button" aria-expanded={sidebarOptionsOpen} aria-label={t('nav.sidebarMode')}
-              title={t('nav.sidebarMode')} onKeyDown={event => { if (event.key === 'Escape') setSidebarOptionsOpen(false); }}
+            </div>
+            <button ref={sidebarModeTrigger} type="button" aria-expanded={sidebarOptionsOpen}
+              aria-controls="edumaster-sidebar-modes" aria-label={t('nav.sidebarMode')}
+              title={t('nav.sidebarMode')}
               onClick={() => setSidebarOptionsOpen(open => !open)}
-              className="app-secondary-button flex min-h-11 w-full items-center gap-3 rounded-xl px-3 py-2 text-left text-sm">
-              {sidebarMode === 'expanded' ? <PanelLeftClose size={19}/> : <PanelLeftOpen size={19}/>}<span className={sidebarWide ? '' : 'md:hidden'}>{t('nav.sidebarMode')}</span>
-              {sidebarWide && <ChevronDown size={16} className="ml-auto"/>}
+              className="app-sidebar-mode-button app-secondary-button flex min-h-11 w-full min-w-0 flex-nowrap items-center gap-3 overflow-hidden rounded-xl px-3 py-2 text-left text-sm">
+              <span className="flex size-[19px] shrink-0 items-center justify-center">
+                {sidebarMode === 'expanded' ? <PanelLeftClose size={19} className="shrink-0"/> : <PanelLeftOpen size={19} className="shrink-0"/>}
+              </span>
+              <span className={`${sidebarWide ? '' : 'md:hidden'} min-w-0 flex-1 overflow-hidden text-ellipsis whitespace-nowrap`}>{t('nav.sidebarMode')}</span>
+              <ChevronDown size={16} aria-hidden="true" className={`${sidebarWide ? '' : 'md:hidden'} shrink-0 transition-transform ${sidebarOptionsOpen ? 'rotate-180' : ''}`}/>
             </button>
           </div>
         </div>
@@ -447,7 +505,7 @@ export default function App() {
             <div><span className="app-meta-text text-xs text-slate-400">{`EduMaster.ai / ${t('nav.administration')}`}</span><h1 className="text-xl font-bold">{title}</h1></div>
           </div>
           <div className="flex items-center gap-2">
-            <AccountMenu key={session.user.id} identity={accountIdentity} userId={session.user.id} photo={avatar.photo} photoLoading={avatar.loading}
+            <AccountMenu key={session.user.id} identity={accountIdentity} roleLabel={accountRoleLabel} userId={session.user.id} photo={avatar.photo} photoLoading={avatar.loading}
               onProfile={() => navTo('profile')} onSignOut={signOut}/>
           </div>
         </header>

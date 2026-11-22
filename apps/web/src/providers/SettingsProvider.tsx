@@ -7,19 +7,20 @@ export type ThemeName = 'light' | 'dark' | 'black';
 export type ToastPosition = 'bottom-right' | 'top-right' | 'top-center' | 'bottom-center';
 export type ModalBackdropStyle = 'blur' | 'dim';
 export type SidebarMode = 'expanded' | 'collapsed' | 'dynamic';
-interface Preferences { theme: ThemeName; toastPosition: ToastPosition; modalBackdrop: ModalBackdropStyle; animationsEnabled: boolean; sidebarMode: SidebarMode; locale: Locale }
+interface Preferences { theme: ThemeName; toastPosition: ToastPosition; modalBackdrop: ModalBackdropStyle; animationsEnabled: boolean; blurEnabled: boolean; sidebarMode: SidebarMode; locale: Locale }
 interface SettingsContextValue extends Preferences {
   setTheme: (theme: ThemeName) => void;
   setToastPosition: (position: ToastPosition) => void;
   setModalBackdrop: (style: ModalBackdropStyle) => void;
   setAnimationsEnabled: (enabled: boolean) => void;
+  setBlurEnabled: (enabled: boolean) => void;
   setSidebarMode: (mode: SidebarMode) => void;
   setLocale: (locale: Locale) => void;
   syncProfileLocale: (code: string | null) => void;
   selectPreferenceScope: (userId: string | null) => void;
 }
 
-const DEFAULTS: Preferences = { theme: 'dark', toastPosition: 'bottom-right', modalBackdrop: 'blur', animationsEnabled: true, sidebarMode: 'expanded', locale: 'es' }; 
+const DEFAULTS: Preferences = { theme: 'dark', toastPosition: 'bottom-right', modalBackdrop: 'blur', animationsEnabled: true, blurEnabled: true, sidebarMode: 'expanded', locale: 'es' }; 
 const THEMES: ThemeName[] = ['light', 'dark', 'black'];
 const POSITIONS: ToastPosition[] = ['bottom-right', 'top-right', 'top-center', 'bottom-center'];
 const storageKey = (scope: string) => `edumaster_preferences_v1_${scope}`;
@@ -37,6 +38,8 @@ function readPreferences(scope: string): Preferences {
           modalBackdrop: candidate.modalBackdrop === 'dim' ? 'dim' : DEFAULTS.modalBackdrop,
           // Preferencias anteriores no incluyen esta propiedad: conservar animaciones por defecto.
           animationsEnabled: typeof candidate.animationsEnabled === 'boolean' ? candidate.animationsEnabled : DEFAULTS.animationsEnabled,
+          // Versiones anteriores conservan los efectos de cristal hasta que el usuario decida.
+          blurEnabled: typeof candidate.blurEnabled === 'boolean' ? candidate.blurEnabled : DEFAULTS.blurEnabled,
           sidebarMode: ['expanded', 'collapsed', 'dynamic'].includes(candidate.sidebarMode || '') ? candidate.sidebarMode! : (window.localStorage.getItem('edumaster_sidebar_collapsed') === 'true' ? 'collapsed' : 'expanded'),
           locale: normalizeLocale(candidate.locale),
         };
@@ -70,6 +73,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
   const setToastPosition = useCallback((toastPosition: ToastPosition) => update({ toastPosition }), [update]);
   const setModalBackdrop = useCallback((modalBackdrop: ModalBackdropStyle) => update({ modalBackdrop }), [update]);
   const setAnimationsEnabled = useCallback((animationsEnabled: boolean) => update({ animationsEnabled }), [update]);
+  const setBlurEnabled = useCallback((blurEnabled: boolean) => update({ blurEnabled }), [update]);
   const setSidebarMode = useCallback((sidebarMode: SidebarMode) => update({ sidebarMode }), [update]);
   const setLocale = useCallback((locale: Locale) => {
     // Solo la selección manual establece prioridad frente al valor remoto.
@@ -110,7 +114,12 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     document.documentElement.dataset.motion = preferences.animationsEnabled ? 'on' : 'off';
   }, [preferences.animationsEnabled]);
 
-  return <SettingsContext.Provider value={{ ...preferences, setTheme, setToastPosition, setModalBackdrop, setAnimationsEnabled, setSidebarMode, setLocale, syncProfileLocale, selectPreferenceScope }}>
+  // Desenfoque de superficies (topbar y ventanas); independiente de las animaciones.
+  useEffect(() => {
+    document.documentElement.dataset.blur = preferences.blurEnabled ? 'on' : 'off';
+  }, [preferences.blurEnabled]);
+
+  return <SettingsContext.Provider value={{ ...preferences, setTheme, setToastPosition, setModalBackdrop, setAnimationsEnabled, setBlurEnabled, setSidebarMode, setLocale, syncProfileLocale, selectPreferenceScope }}>
     {children}
   </SettingsContext.Provider>;
 }

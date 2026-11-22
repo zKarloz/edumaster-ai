@@ -396,8 +396,9 @@ html.black-theme .app-account-theme[aria-pressed='true'] { background: #414141; 
   .app-sidebar-inner { transition: width 190ms ease, box-shadow 190ms ease; }
   .app-sidebar-dynamic { overflow: visible; }
   .app-sidebar-dynamic .app-sidebar-inner { z-index: 31; background: var(--app-panel-bg); }
-  .app-sidebar-dynamic:hover .app-sidebar-inner,
-  .app-sidebar-dynamic:focus-within .app-sidebar-inner { box-shadow: 10px 0 24px rgb(0 0 0 / 12%); }
+  /* No mantenemos la sombra por :focus-within: un clic del ratón puede
+     conservar el foco aunque el menú ya esté colapsado. */
+  .app-sidebar-dynamic[data-wide='true'] .app-sidebar-inner { box-shadow: 10px 0 24px rgb(0 0 0 / 12%); }
 }
 .app-sidebar-options { max-width: min(15rem, calc(100vw - 2rem)); }
 html[data-motion='off'] .app-indicator-card:hover,
@@ -406,3 +407,63 @@ html[data-motion='off'] .app-sidebar, html[data-motion='off'] .app-sidebar-inner
   .app-indicator-card:hover { transform: none !important; box-shadow: none !important; }
   .app-sidebar, .app-sidebar-inner { transition: none !important; }
 }
+
+
+/* CAMBIOS 11: las elecciones comparten retroalimentación de selección con
+   transiciones suaves; la preferencia de movimiento reducido las anula arriba. */
+.app-choice {
+  transition: background-color 190ms ease, border-color 190ms ease,
+    box-shadow 190ms ease, transform 190ms ease;
+}
+.app-choice:has(input:checked) { background-color: var(--app-control-hover); }
+.app-choice:focus-within { border-color: var(--app-primary-bg); }
+@keyframes app-preference-check { from { opacity: 0; transform: scale(.65); } to { opacity: 1; transform: scale(1); } }
+.app-choice-check, .app-choice-selected > svg:last-child {
+  animation: app-preference-check 190ms cubic-bezier(.2,.85,.2,1.15) both;
+}
+@media (hover: hover) and (pointer: fine) {
+  .app-choice:hover { background-color: var(--app-control-hover); }
+}
+
+/* Opción de desenfoque de la aplicación: los paneles vuelven a ser opacos.
+   El fondo del modal respeta su color, pero nunca difumina mientras está apagada. */
+html[data-blur='off'] .app-header {
+  background-color: var(--app-panel-bg) !important;
+  -webkit-backdrop-filter: none !important;
+  backdrop-filter: none !important;
+}
+html[data-blur='off'] .app-modal-overlay {
+  -webkit-backdrop-filter: none !important;
+  backdrop-filter: none !important;
+}
+
+/* Indicador de categoría en el rail: línea gruesa, gris, sin alterar tamaños,
+   márgenes ni posición de las opciones del sidebar. */
+.app-sidebar-category-dash {
+  display: block;
+  width: 20px;
+  height: 3px;
+  border-radius: 999px;
+  background-color: #94a3b8;
+}
+html.dark .app-sidebar-category-dash { background-color: #64748b; }
+html.black-theme .app-sidebar-category-dash { background-color: #898989; }
+
+/* Disclosure del modo de navegación: entrada y salida como el menú de cuenta.
+   Sigue montado pero no interactivo cuando está cerrado (inert + aria-hidden). */
+.app-sidebar-options {
+  visibility: hidden;
+  opacity: 0;
+  transform: translateY(5px);
+  pointer-events: none;
+  transition: opacity 180ms ease, transform 180ms ease, visibility 0s linear 180ms;
+}
+.app-sidebar-options[data-open='true'] {
+  visibility: visible;
+  opacity: 1;
+  transform: translateY(0);
+  pointer-events: auto;
+  transition-delay: 0s;
+}
+.app-sidebar-mode-button { white-space: nowrap; }
+.app-sidebar-mode-button svg { flex-shrink: 0; }

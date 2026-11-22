@@ -1,5 +1,5 @@
 // Opciones de apariencia y notificaciones. Nuevas preferencias se agregarán aquí.
-import { Bell, Check, Clapperboard, Globe2, Layers3, MonitorCog, RefreshCw, Send, Server, SlidersHorizontal } from 'lucide-react';
+import { Bell, Check, Clapperboard, Eye, Globe2, Layers3, MonitorCog, RefreshCw, Send, Server, SlidersHorizontal } from 'lucide-react';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { normalizeLocale, type Locale } from '../../i18n';
@@ -23,7 +23,7 @@ export function SettingsPage({ token, apiStatus, onCheckApi }: {
 }) {
   const { t } = useTranslation();
   const [savingLocale, setSavingLocale] = useState(false);
-  const { theme, toastPosition, modalBackdrop, animationsEnabled, locale, setLocale, setTheme, setToastPosition, setModalBackdrop, setAnimationsEnabled } = useSettings();
+  const { theme, toastPosition, modalBackdrop, animationsEnabled, blurEnabled, locale, setLocale, setTheme, setToastPosition, setModalBackdrop, setAnimationsEnabled, setBlurEnabled } = useSettings();
   // El idioma es un dato del perfil propio; este endpoint solo cambia language_code.
   async function changeLocale(next: Locale) {
     const previous = locale;
@@ -88,13 +88,30 @@ export function SettingsPage({ token, apiStatus, onCheckApi }: {
     <section className="app-panel rounded-2xl border border-slate-200 bg-white p-6 dark:border-[#23456A] dark:bg-[#0A1F3D] xl:col-span-2">
       <h3 className="flex items-center gap-2 text-lg font-semibold"><Clapperboard size={21}/> {t('settings.animations')}</h3>
       <p className="app-muted mb-5 mt-2 text-sm text-slate-500 dark:text-slate-300">{t('settings.animationsHint')}</p>
-      <label className="app-choice flex cursor-pointer items-start gap-3 rounded-xl border border-slate-200 p-4 dark:border-[#23456A]">
+      <label className={`app-choice flex cursor-pointer items-start gap-3 rounded-xl border p-4 ${animationsEnabled ? 'app-choice-selected' : 'border-slate-200 dark:border-[#23456A]'}`}>
         <input type="checkbox" role="switch" checked={animationsEnabled} onChange={event => setAnimationsEnabled(event.target.checked)}
           className="app-preference-radio mt-0.5 size-5 shrink-0 accent-sky-500"/>
         <span className="min-w-0 flex-1">
           <span className="block text-sm font-semibold">{t('settings.enableAnimations')}</span>
           <span className="app-muted mt-1 block text-xs">{t(animationsEnabled ? 'settings.on' : 'settings.off')} {t('settings.reduced')}</span>
         </span>
+        {animationsEnabled && <Check className="app-choice-check shrink-0" size={18} aria-hidden="true"/>}
+      </label>
+    </section>
+
+    {/* La opción global afecta superficies translúcidas y blur de modales;
+        la preferencia particular del velo sigue guardada para cuando se reactive. */}
+    <section className="app-panel rounded-2xl border p-5 sm:p-6 xl:col-span-2">
+      <h3 className="flex items-center gap-2 text-lg font-semibold"><Eye size={21}/> {t('settings.blurEffects')}</h3>
+      <p className="app-muted mb-4 mt-2 text-sm">{t('settings.blurEffectsHint')}</p>
+      <label className={`app-choice flex cursor-pointer items-start gap-3 rounded-xl border p-4 ${blurEnabled ? 'app-choice-selected' : 'border-slate-200 dark:border-[#23456A]'}`}>
+        <input type="checkbox" role="switch" checked={blurEnabled} onChange={event => setBlurEnabled(event.target.checked)}
+          className="app-preference-radio mt-0.5 size-5 shrink-0 accent-sky-500"/>
+        <span className="min-w-0 flex-1">
+          <span className="block text-sm font-semibold">{t('settings.enableBlur')}</span>
+          <span className="app-muted mt-1 block text-xs">{t(blurEnabled ? 'settings.blurOn' : 'settings.blurOff')}</span>
+        </span>
+        {blurEnabled && <Check className="app-choice-check shrink-0" size={18} aria-hidden="true"/>}
       </label>
     </section>
 
