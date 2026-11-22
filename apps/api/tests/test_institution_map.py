@@ -5,9 +5,10 @@ No escriben en Supabase ni requieren conexión remota.
 from uuid import UUID
 
 from fastapi.testclient import TestClient
-from app.main import app
+
 from app.core.database import require_engine
 from app.core.security import authenticated_user_id
+from app.main import app
 
 client = TestClient(app)
 
@@ -28,8 +29,9 @@ def test_put_requires_token() -> None:
 
 
 def test_out_of_bounds_is_rejected() -> None:
-    from app.routers.organizations import OrganizationCreate
     from pydantic import ValidationError
+
+    from app.routers.organizations import OrganizationCreate
     try:
         OrganizationCreate(**{**PAYLOAD, 'latitude': 130})
     except ValidationError:
@@ -39,8 +41,9 @@ def test_out_of_bounds_is_rejected() -> None:
 
 
 def test_invalid_timezone_is_rejected() -> None:
-    from app.routers.organizations import OrganizationCreate
     from pydantic import ValidationError
+
+    from app.routers.organizations import OrganizationCreate
     try:
         OrganizationCreate(**{**PAYLOAD, 'timezone': 'NoEsZona/Inventada'})
     except ValidationError:

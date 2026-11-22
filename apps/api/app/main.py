@@ -4,12 +4,12 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.core.config import get_settings
-from app.routers.organizations import router as organizations_router
 from app.routers.academic import router as academic_router
-from app.routers.user_administration import router as user_administration_router
 from app.routers.institutional_users import router as institutional_users_router
+from app.routers.organizations import router as organizations_router
 from app.routers.profile import router as profile_router
 from app.routers.profile_details import router as profile_details_router
+from app.routers.user_administration import router as user_administration_router
 
 settings = get_settings()
 app = FastAPI(title="EduMaster.ai API", version="0.1.0", docs_url="/docs")

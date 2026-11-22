@@ -109,9 +109,10 @@ def test_sql_failure_returns_controlled_cors_response() -> None:
 
 def test_rejects_legacy_code_when_creating_new_institution() -> None:
     """El formato histórico puede existir en BD, pero no admite nuevas altas."""
-    from pydantic import ValidationError
-    from app.routers.organizations import OrganizationCreate
     import pytest
+    from pydantic import ValidationError
+
+    from app.routers.organizations import OrganizationCreate
 
     with pytest.raises(ValidationError):
         OrganizationCreate(**{**PAYLOAD, "code": "instituto-lima"})
@@ -119,9 +120,10 @@ def test_rejects_legacy_code_when_creating_new_institution() -> None:
 
 def test_rejects_code_with_wrong_country_prefix() -> None:
     """El prefijo ISO no debe contradecir el país declarado."""
-    from pydantic import ValidationError
-    from app.routers.organizations import OrganizationCreate
     import pytest
+    from pydantic import ValidationError
+
+    from app.routers.organizations import OrganizationCreate
 
     with pytest.raises(ValidationError, match="debe comenzar por pe-"):
         OrganizationCreate(**{**PAYLOAD, "code": "co-unmsm-demo"})

@@ -8,9 +8,9 @@ from uuid import UUID
 import pytest
 from fastapi.testclient import TestClient
 
-from app.main import app
-from app.core.security import authenticated_user_id
 from app.core.database import require_engine
+from app.core.security import authenticated_user_id
+from app.main import app
 
 ACTOR = UUID('11111111-1111-4111-8111-111111111111')
 ORG = UUID('22222222-2222-4222-8222-222222222222')

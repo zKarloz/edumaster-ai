@@ -3,6 +3,7 @@ from uuid import UUID
 
 import pytest
 from fastapi.testclient import TestClient
+
 from app.core.database import require_engine
 from app.core.security import authenticated_user_id
 from app.main import app

@@ -1,5 +1,6 @@
 """Pruebas básicas de endpoints públicos y de protección de rutas."""
 from fastapi.testclient import TestClient
+
 from app.main import app
 
 client = TestClient(app)
