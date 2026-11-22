@@ -437,17 +437,67 @@ html[data-blur='off'] .app-modal-overlay {
   backdrop-filter: none !important;
 }
 
-/* Indicador de categoría en el rail: línea gruesa, gris, sin alterar tamaños,
-   márgenes ni posición de las opciones del sidebar. */
+/* CAMBIOS 12: la categoría colapsada usa exactamente la misma raya que el
+   separador superior de «Modo de navegación»: 1px y var(--app-panel-border).
+   El encabezado conserva su altura para no desplazar las opciones inferiores. */
 .app-sidebar-category-dash {
   display: block;
-  width: 20px;
-  height: 3px;
-  border-radius: 999px;
-  background-color: #94a3b8;
+  width: 100%;
+  height: 0;
+  border-top: 1px solid var(--app-panel-border);
 }
-html.dark .app-sidebar-category-dash { background-color: #64748b; }
-html.black-theme .app-sidebar-category-dash { background-color: #898989; }
+
+/* El listado se sigue desplazando con rueda, teclado y táctil, pero sin que la
+   barra reduzca el ancho del rail y mueva/deforme los iconos. */
+.app-sidebar-scroll { scrollbar-width: none; }
+.app-sidebar-scroll::-webkit-scrollbar { display: none; }
+.app-sidebar-nav-link { box-sizing: border-box; }
+.app-sidebar-icon-slot {
+  display: inline-flex;
+  flex: 0 0 19px;
+  width: 19px;
+  height: 19px;
+  align-items: center;
+  justify-content: center;
+}
+.app-sidebar-icon-slot svg { display: block; flex: none; width: 19px; height: 19px; }
+
+/* Estados de las tres opciones: resaltado siempre visible, sin marca de check.
+   Hover distinto y de mayor contraste. No depende de clases de navegación de
+   módulos, que antes no aplicaban correctamente en los temas claro y oscuro. */
+:root {
+  --app-mode-selected-bg: #e1ebf8;
+  --app-mode-hover-bg: #cbdcf0;
+  --app-mode-selected-text: #164c80;
+}
+html.dark {
+  --app-mode-selected-bg: #285374;
+  --app-mode-hover-bg: #153957;
+  --app-mode-selected-text: #f0f8ff;
+}
+html.black-theme {
+  --app-mode-selected-bg: #414141;
+  --app-mode-hover-bg: #2c2c2c;
+  --app-mode-selected-text: #ffffff;
+}
+button.app-sidebar-mode-option {
+  background-color: transparent;
+  color: var(--app-text);
+  transition: background-color 170ms ease, color 170ms ease;
+}
+button.app-sidebar-mode-option[aria-pressed='true'] {
+  background-color: var(--app-mode-selected-bg);
+  color: var(--app-mode-selected-text);
+  font-weight: 600;
+}
+button.app-sidebar-mode-option:hover {
+  background-color: var(--app-mode-hover-bg);
+  color: var(--app-mode-selected-text);
+}
+html[data-motion='off'] button.app-sidebar-mode-option { transition: none !important; }
+@media (prefers-reduced-motion: reduce) {
+  button.app-sidebar-mode-option { transition: none !important; }
+}
 
 /* Disclosure del modo de navegación: entrada y salida como el menú de cuenta.
    Sigue montado pero no interactivo cuando está cerrado (inert + aria-hidden). */

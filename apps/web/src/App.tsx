@@ -340,6 +340,11 @@ export default function App() {
   const canViewAcademicActivity = memberships.some(m => m.roles.some(role => ['institution_admin', 'coordinator', 'instructor'].includes(role)));
   const canManageAcademicOrganization = useCallback((orgId: string) => memberships.some(item => item.organization_id === orgId && item.roles.some(role => ['institution_admin', 'coordinator'].includes(role))), [memberships]);
   const title = t(`nav.${section === 'dashboard' ? 'dashboard' : section}`);
+  // La categoría superior procede de la misma definición del menú: al cambiar
+  // de módulo o idioma, la cabecera refleja su contexto sin texto fijo.
+  const currentCategoryKey = section === 'profile'
+    ? 'nav.account'
+    : navGroups.find(group => group.sections.some(id => id === section))?.label ?? 'nav.platform';
   const signedIn = Boolean(session);
   const isDemo = false;
   const rows = orgs;
@@ -446,8 +451,9 @@ export default function App() {
                 Boolean(link && (link.id !== 'users' || canManageUserAdministration) && (link.id !== 'activity' || canViewAcademicActivity)));
               if (!visible.length) return null;
               return <div key={group.label} className="space-y-1">
-                <p aria-label={t(group.label)} className={`px-3 pb-1 text-xs font-semibold uppercase tracking-widest app-meta-text text-slate-400 ${!sidebarWide ? 'md:flex md:min-h-4 md:items-center md:justify-center' : ''}`}>
+                <p aria-label={t(group.label)} className={`app-sidebar-group-heading h-5 px-3 pb-1 text-xs font-semibold uppercase tracking-widest app-meta-text text-slate-400 ${!sidebarWide ? 'md:flex md:min-h-4 md:items-center md:px-0' : ''}`}>
                   <span className={sidebarWide ? '' : 'md:hidden'}>{t(group.label)}</span>
+                  {/* En modo rail, el mismo separador horizontal que en el pie. */}
                   {!sidebarWide && <span aria-hidden="true" className="app-sidebar-category-dash hidden md:block"/>}
                 </p>
                 {visible.map(link => {
@@ -456,9 +462,10 @@ export default function App() {
                   return <button key={link.id} onClick={event => { if (event.detail > 0) event.currentTarget.blur(); navTo(link.id); }} type="button"
                     title={!sidebarWide ? t(`nav.${link.id}`) : undefined}
                     aria-label={t(`nav.${link.id}`)} aria-current={active ? 'page' : undefined}
-                    className={`flex w-full min-h-11 items-center gap-3 rounded-xl px-3 py-3 text-left text-sm font-medium transition-colors ${active ? 'app-nav-active bg-[#087FE5]/10 text-[#087FE5] dark:bg-[#103963] dark:text-[#20C8F5]' : 'app-nav-inactive text-slate-500 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-[#163B63]'}`}>
-                    <Icon size={19} className="shrink-0"/>
-                    <span className={`whitespace-nowrap ${!sidebarWide ? 'md:hidden' : ''}`}>{t(`nav.${link.id}`)}</span>
+                    className={`app-sidebar-nav-link flex w-full min-h-11 min-w-0 flex-nowrap items-center gap-3 overflow-hidden rounded-xl px-3 py-3 text-left text-sm font-medium transition-colors ${active ? 'app-nav-active bg-[#087FE5]/10 text-[#087FE5] dark:bg-[#103963] dark:text-[#20C8F5]' : 'app-nav-inactive text-slate-500 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-[#163B63]'}`}>
+                    {/* La celda fija mantiene la coordenada X incluso al contraer. */}
+                    <span className="app-sidebar-icon-slot" aria-hidden="true"><Icon size={19}/></span>
+                    <span className={`min-w-0 truncate whitespace-nowrap ${!sidebarWide ? 'md:hidden' : ''}`}>{t(`nav.${link.id}`)}</span>
                   </button>;
                 })}
               </div>;
@@ -479,9 +486,8 @@ export default function App() {
                     if (event.detail > 0) event.currentTarget.blur();
                     else sidebarModeTrigger.current?.focus();
                   }}
-                  className={`app-account-action flex w-full items-center gap-2 rounded-lg p-2 text-left text-sm ${sidebarMode === mode ? 'app-nav-active' : ''}`}>
+                  className="app-sidebar-mode-option flex w-full items-center gap-2 rounded-lg p-2 text-left text-sm">
                   <Icon size={18} className="shrink-0"/><span className="whitespace-nowrap">{t(`nav.${mode === 'expanded' ? 'expand' : mode === 'collapsed' ? 'collapse' : 'dynamic'}`)}</span>
-                  {sidebarMode === mode && <CheckCircle2 size={15} className="ml-auto shrink-0"/>}
                 </button>)}
             </div>
             <button ref={sidebarModeTrigger} type="button" aria-expanded={sidebarOptionsOpen}
@@ -502,7 +508,7 @@ export default function App() {
         <header className="app-header sticky top-0 z-20 flex min-h-20 flex-wrap items-center justify-between gap-3 border-b border-slate-200 bg-white/95 px-5 backdrop-blur md:px-8 dark:border-[#163B63] dark:bg-[#081B35]/95">
           <div className="flex items-center gap-3">
             <button type="button" className="rounded-lg p-2 md:hidden" aria-expanded={mobileMenu} aria-controls="edumaster-sidebar" aria-label={t('labels.k7af767cd6a')} onClick={() => setMobileMenu(true)}><Menu size={22}/></button>
-            <div><span className="app-meta-text text-xs text-slate-400">{`EduMaster.ai / ${t('nav.administration')}`}</span><h1 className="text-xl font-bold">{title}</h1></div>
+            <div><span className="app-meta-text text-xs text-slate-400">{`EduMaster.ai / ${t(currentCategoryKey)}`}</span><h1 className="text-xl font-bold">{title}</h1></div>
           </div>
           <div className="flex items-center gap-2">
             <AccountMenu key={session.user.id} identity={accountIdentity} roleLabel={accountRoleLabel} userId={session.user.id} photo={avatar.photo} photoLoading={avatar.loading}
