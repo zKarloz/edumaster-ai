@@ -1,0 +1,5 @@
+# Configuración local de Ruff para FastAPI (se aplica desde apps/api).
+# Mantiene las demás reglas activas y reconoce Depends/Query como valores
+# declarativos seguros en la firma de los endpoints de FastAPI.
+[tool.ruff.lint.flake8-bugbear]
+extend-immutable-calls = ["fastapi.Depends", "fastapi.Query"]

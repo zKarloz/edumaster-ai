@@ -4,8 +4,8 @@ No devuelve fecha de nacimiento ni sexo al administrador institucional. Todo
 acceso se verifica contra identidad JWT, institución y membresía en SQL.
 """
 import logging
-from datetime import date
 import re
+from datetime import date
 from typing import Literal
 from uuid import UUID
 
@@ -45,7 +45,8 @@ class PersonalDetails(BaseModel):
         if value in ('', None):
             return None
         if not isinstance(value, str):
-            raise ValueError('Idioma no válido')
+            # Pydantic convierte ValueError en HTTP 422; TypeError no se transforma.
+            raise ValueError('Idioma no válido')  # noqa: TRY004
         return value.strip()
 
     @field_validator('language_code')
