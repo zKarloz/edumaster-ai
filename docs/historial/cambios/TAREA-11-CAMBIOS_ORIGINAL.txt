@@ -1,0 +1,12 @@
+CAMBIOS 1:
+
+- Crear un módulo de configuración, ahí iremos llenando de a poco opciones de acuerdo a la preferencia de cada usuario.
+- En el módulo de configuración: Agregar un tercer tema "Negro", a diferencia del tema oscuro, este tendría escalas de grises como paleta.
+- En el módulo de configuración: Elegir donde debe aparecer la notificación flotante, abajo en la derecha, arriba en la derecha, arriba en el centro del módulo o abajo en el centro del módulo. Agregar animación simple de deslizamiento suave al aparecer y desaparecer.
+- Quitar del sidebar la tarjeta de Multiinstitución V1.
+- El sidebar podrá ser desplegable, y tendrá animación suave al abrirse o cerrarse. La animación suave de apertura y cierre también debe estar para pantallas pequeñas.
+- En pantallas pequeñas: Con el sidebar desplegado, presionar en cualquier lado que no sea del sidebar, automáticamente se cierra el sidebar. Agregar adicionalmente un botón "X" para cerrarlo manualmente.
+- En módulos largos cuando aparece el scrollbar, el contenido se mueve hacia la izquierda, podríamos poner una ubicación fija al contenido de cada módulo, para que no se vea esa deformación.
+- Decorar scrollbar de acuerdo al tema seleccionado, lo más simple posible.
+- Al cambiar por cada módulo, hacer una animación de levantamiento del contenido hacia arriba, de manera sutil.
+- Al presionar una barra de búsqueda para escribir, se pone un borde rectangular en donde va el texto, puedes quitar ese borde de ahí, y mejor ponerle ese mismo borde pero a toda la barra de búsqueda, de la manera más simple posible.

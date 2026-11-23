@@ -6,26 +6,28 @@ import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import { useNavigate } from 'react-router';
 import { useTranslation } from 'react-i18next';
 import {
-  ArrowDown, ArrowLeft, ArrowUp, BookOpen, ChevronDown, ChevronRight,
+  ArrowDown, ArrowLeft, ArrowUp, BookOpen,
   ClipboardList, FileCheck2, FileText, FolderOpen, LayoutDashboard,
-  Pencil, Plus, RefreshCcw, ShieldCheck,
+  Pencil, Plus, RefreshCcw,
 } from 'lucide-react';
 import { Modal } from '../../components/shared/Modal';
+import { Accordion } from '../../components/shared/Accordion';
 import { OptionSelect } from '../../components/shared/OptionSelect';
 import { Spinner } from '../../components/shared/Spinner';
 import { useToast } from '../../components/shared/Toast';
-import { sectionPaths, courseBasePath } from '../../routes';
+import { sectionPaths } from '../../routes';
 import { courseCardStyle, courseIcon } from './courseAppearance';
 
 type State = 'draft' | 'published' | 'archived';
 type Direction = 'up' | 'down';
+type Source = 'base' | 'offering';
 interface Lesson {
   id: string; module_id: string; title: string; content: string | null;
   position: number; status: State; updated_at: string;
 }
 interface Unit {
   id: string; title: string; description: string | null;
-  position: number; status: State; updated_at: string; lessons: Lesson[];
+  position: number; status: State; source: Source; updated_at: string; lessons: Lesson[];
 }
 interface Course {
   course_id: string; offering_id?: string;
@@ -33,10 +35,10 @@ interface Course {
   course_status: string; offering_status?: string; period?: string;
   appearance_icon?: string; appearance_color?: string;
 }
-interface Workspace {course: Course; role: 'manager' | 'instructor' | 'student'; can_edit_base: boolean; units: Unit[]}
+interface Workspace {course: Course; role: 'manager' | 'instructor' | 'student'; can_edit_base: boolean; can_edit_offering: boolean; units: Unit[]}
 interface Props {organizationId: string; offeringId?: string; courseId?: string; token: string}
 
-type ContentDialog = {kind: 'unit'; current?: Unit} | {kind: 'lesson'; unitId: string; current?: Lesson} | null;
+type ContentDialog = {kind: 'unit'; source: Source; current?: Unit} | {kind: 'lesson'; source: Source; unitId: string; current?: Lesson} | null;
 const API = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 const secondary = 'app-secondary-button inline-flex min-h-10 items-center justify-center gap-2 rounded-xl border px-3 py-2 text-sm disabled:opacity-40';
 const primary = 'app-primary-button inline-flex min-h-10 items-center justify-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold disabled:opacity-40';
@@ -71,6 +73,8 @@ export function CourseWorkspacePage({organizationId, offeringId, courseId, token
   const [revision,setRevision] = useState(0);
   const [tab,setTab] = useState<'overview'|'content'>('overview');
   const [expanded,setExpanded] = useState<string[]>([]);
+  // Por defecto, ocultar unidades archivadas sin perder acceso desde el filtro.
+  const [unitFilter,setUnitFilter] = useState<'current'|'all'|State>('current');
   const [dialog,setDialog] = useState<ContentDialog>(null);
   const [title,setTitle] = useState('');
   const [body,setBody] = useState('');
@@ -81,7 +85,14 @@ export function CourseWorkspacePage({organizationId, offeringId, courseId, token
   const workspacePath = offeringId
     ? `${root}/course-offerings/${offeringId}/workspace`
     : `${root}/courses/${courseId || ''}/workspace`;
-  const editing = Boolean(!offeringId && workspace?.can_edit_base);
+  const isBase = !offeringId;
+  const editing = Boolean(workspace?.can_edit_base || (offeringId && workspace?.can_edit_offering));
+  const canEditSource = (source: Source): boolean =>
+    source === 'base' ? Boolean(workspace?.can_edit_base) : Boolean(offeringId && workspace?.can_edit_offering);
+  // CAMBIOS 19: cada rol crea solo su tipo de unidad. El gestor conserva
+  // can_edit_offering para supervisar y editar contenido docente existente.
+  const canCreateBaseUnit = workspace?.role === 'manager' && canEditSource('base');
+  const canCreateOfferingUnit = workspace?.role === 'instructor' && canEditSource('offering');
 
   useEffect(() => {
     const controller = new AbortController();
@@ -95,10 +106,11 @@ export function CourseWorkspacePage({organizationId, offeringId, courseId, token
   }, [workspacePath, token, revision, t]);
 
   const units = workspace?.units ?? [];
+  const visibleUnits = units.filter(unit => unitFilter === 'all'
+    || (unitFilter === 'current' ? unit.status !== 'archived' : unit.status === unitFilter));
   const publishedUnits = useMemo(() => units.filter(unit => unit.status === 'published').length,[units]);
   const publishedLessons = useMemo(() => units.reduce((total,unit) => total + unit.lessons.filter(lesson => lesson.status === 'published').length,0),[units]);
   const Icon = courseIcon(workspace?.course.appearance_icon);
-  const isBase = !offeringId;
 
   function showEditor(next: NonNullable<ContentDialog>) {
     setDialog(next);
@@ -111,14 +123,18 @@ export function CourseWorkspacePage({organizationId, offeringId, courseId, token
   /** Las rutas se construyen a partir de los UUID recibidos del backend. */
   async function save(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!dialog || !editing || !workspace) return;
+    if (!dialog || !canEditSource(dialog.source) || !workspace) return;
     setSaving(true); setFormError('');
     try {
       const isUnit = dialog.kind === 'unit';
       const currentId = dialog.current?.id;
-      const path = isUnit
-        ? (currentId ? `${root}/course-modules/${currentId}` : `${root}/courses/${workspace.course.course_id}/modules`)
-        : (currentId ? `${root}/lessons/${currentId}` : `${root}/course-modules/${dialog.unitId}/lessons`);
+      const path = dialog.source === 'base'
+        ? (isUnit
+          ? (currentId ? `${root}/course-modules/${currentId}` : `${root}/courses/${workspace.course.course_id}/modules`)
+          : (currentId ? `${root}/lessons/${currentId}` : `${root}/course-modules/${dialog.unitId}/lessons`))
+        : (isUnit
+          ? (currentId ? `${root}/offering-modules/${currentId}` : `${root}/course-offerings/${offeringId}/modules`)
+          : (currentId ? `${root}/offering-lessons/${currentId}` : `${root}/offering-modules/${dialog.unitId}/lessons`));
       // Evita reescribir contenido publicado sin control de versiones.
       // Si está publicado, primero debe pasarse a borrador en una operación aparte.
       const values: Record<string,string|null> = {};
@@ -140,13 +156,17 @@ export function CourseWorkspacePage({organizationId, offeringId, courseId, token
   }
 
   /** Reordena con la operación transaccional del backend, sin datos optimistas. */
-  async function move(kind:'unit'|'lesson', itemId:string, parentId:string, direction:Direction) {
-    if (!editing || !workspace) return;
+  async function move(kind:'unit'|'lesson', source:Source, itemId:string, parentId:string, direction:Direction) {
+    if (!canEditSource(source) || !workspace) return;
     setSaving(true);
     try {
-      const path = kind==='unit'
-        ? `${root}/courses/${workspace.course.course_id}/modules/${itemId}/move`
-        : `${root}/course-modules/${parentId}/lessons/${itemId}/move`;
+      const path = source === 'base'
+        ? (kind==='unit'
+          ? `${root}/courses/${workspace.course.course_id}/modules/${itemId}/move`
+          : `${root}/course-modules/${parentId}/lessons/${itemId}/move`)
+        : (kind==='unit'
+          ? `${root}/course-offerings/${offeringId}/modules/${itemId}/move`
+          : `${root}/offering-modules/${parentId}/lessons/${itemId}/move`);
       await api(path,token,{method:'PATCH',body:{direction}});
       setRevision(value=>value+1);
     } catch (reason) {
@@ -181,23 +201,13 @@ export function CourseWorkspacePage({organizationId, offeringId, courseId, token
             <p className="mt-1 text-sm text-white/90">{workspace.course.code}{workspace.course.period ? ` · ${workspace.course.period}`:''}</p>
           </div>
         </div>
-        <div className="flex flex-wrap items-center justify-between gap-3 px-5 py-3 sm:px-6">
-          <div className="flex items-center gap-2 text-sm app-muted"><ShieldCheck size={17}/>
-            <span>{t(isBase?'workspace.base':workspace.role==='student'?'workspace.studentSpace':'workspace.offeringSpace')}</span>
-          </div>
-          {Boolean(offeringId && workspace.can_edit_base) && <button className={secondary} type="button"
-            onClick={()=>navigate(courseBasePath(organizationId,workspace.course.course_id))}>
-            <Pencil size={15}/>{t('workspace.editBase')}
-          </button>}
+        <div className="grid grid-cols-2 gap-2 p-3 sm:p-4" role="tablist" aria-label={t('workspace.sections')}>
+          <button role="tab" aria-selected={tab==='overview'} className={`${secondary} ${tab==='overview'?'app-workspace-active':''}`}
+            onClick={()=>setTab('overview')} type="button"><LayoutDashboard size={17}/>{t('workspace.overview')}</button>
+          <button role="tab" aria-selected={tab==='content'} className={`${secondary} ${tab==='content'?'app-workspace-active':''}`}
+            onClick={()=>setTab('content')} type="button"><BookOpen size={17}/>{t('workspace.content')}</button>
         </div>
       </section>
-
-      <div className="flex flex-wrap gap-2" role="tablist" aria-label={t('workspace.sections')}>
-        <button role="tab" aria-selected={tab==='overview'} className={`${secondary} ${tab==='overview'?'app-workspace-active':''}`}
-          onClick={()=>setTab('overview')} type="button"><LayoutDashboard size={16}/>{t('workspace.overview')}</button>
-        <button role="tab" aria-selected={tab==='content'} className={`${secondary} ${tab==='content'?'app-workspace-active':''}`}
-          onClick={()=>setTab('content')} type="button"><BookOpen size={16}/>{t('workspace.content')}</button>
-      </div>
 
       {tab==='overview' ? <section className="space-y-4" role="tabpanel">
         <div className="grid gap-3 sm:grid-cols-3">
@@ -226,57 +236,76 @@ export function CourseWorkspacePage({organizationId, offeringId, courseId, token
           <div><h2 className="font-semibold">{t('workspace.unitsAndLessons')}</h2>
             <p className="app-muted mt-1 text-xs">{t(editing?'workspace.editorHint':workspace.role==='student'?'workspace.publishedOnly':'workspace.previewHint')}</p>
           </div>
-          {editing && <button className={primary} type="button" onClick={()=>showEditor({kind:'unit'})}><Plus size={17}/>{t('workspace.addUnit')}</button>}
-        </div>
-        {units.length===0 && <div className="app-panel rounded-2xl border px-5 py-10 text-center">
-          <FolderOpen className="app-muted mx-auto mb-3" size={32}/><p className="font-medium">{t('workspace.emptyUnits')}</p>
-          <p className="app-muted mt-1 text-sm">{t(editing?'workspace.emptyEditor':'workspace.emptyReader')}</p>
-        </div>}
-        {units.map((unit,index)=>{
-          const open=expanded.includes(unit.id);
-          return <article key={unit.id} className="app-panel overflow-hidden rounded-2xl border">
-            <div className="flex items-start gap-2 p-3 sm:p-4">
-              <button type="button" onClick={()=>toggleUnit(unit.id)} aria-expanded={open}
-                aria-controls={`unit-${unit.id}`} className="flex min-w-0 flex-1 items-center gap-3 rounded-xl px-2 py-2 text-left">
-                <span className="app-workspace-unit-symbol flex size-10 shrink-0 items-center justify-center rounded-xl"><FolderOpen size={21}/></span>
-                <span className="min-w-0 flex-1"><span className="block font-semibold">{unit.position}. {unit.title}</span>
-                  <span className="app-muted mt-1 block text-xs">{t('workspace.lessonCount',{count:unit.lessons.length})}</span></span>
-                {open?<ChevronDown size={18} className="app-muted shrink-0"/>:<ChevronRight size={18} className="app-muted shrink-0"/>}
-              </button>
-              {workspace.role!=='student' && <StateBadge status={unit.status}/>}
-              {editing && <div className="flex shrink-0 flex-col gap-1 sm:flex-row">
-                <button type="button" className="app-workspace-icon-button" title={t('workspace.moveUp')} aria-label={`${t('workspace.moveUp')}: ${unit.title}`}
-                  disabled={saving||index===0} onClick={()=>void move('unit',unit.id,unit.id,'up')}><ArrowUp size={16}/></button>
-                <button type="button" className="app-workspace-icon-button" title={t('workspace.moveDown')} aria-label={`${t('workspace.moveDown')}: ${unit.title}`}
-                  disabled={saving||index===units.length-1} onClick={()=>void move('unit',unit.id,unit.id,'down')}><ArrowDown size={16}/></button>
-                <button type="button" className="app-workspace-icon-button" title={t('workspace.editUnit')} aria-label={`${t('workspace.editUnit')}: ${unit.title}`}
-                  disabled={saving} onClick={()=>showEditor({kind:'unit',current:unit})}><Pencil size={16}/></button>
-              </div>}
-            </div>
-            {open && <div id={`unit-${unit.id}`} className="app-workspace-unit-content space-y-3 border-t p-4 sm:p-5">
-              {unit.description && <p className="app-muted whitespace-pre-wrap text-sm">{unit.description}</p>}
-              {unit.lessons.length===0 && <p className="app-muted text-sm">{t('workspace.noLessons')}</p>}
-              {unit.lessons.map((lesson,lessonIndex)=><div key={lesson.id} className="app-workspace-lesson rounded-xl border p-3 sm:p-4">
-                <div className="flex flex-wrap items-center gap-3">
-                  <FileText size={18} className="app-muted shrink-0"/>
-                  <span className="min-w-0 flex-1 font-medium text-sm">{lesson.position}. {lesson.title}</span>
-                  {workspace.role!=='student' && <StateBadge status={lesson.status}/>}
-                  {editing && <div className="flex items-center gap-1">
-                    <button type="button" className="app-workspace-icon-button" title={t('workspace.moveUp')} disabled={saving||lessonIndex===0}
-                      aria-label={`${t('workspace.moveUp')}: ${lesson.title}`} onClick={()=>void move('lesson',lesson.id,unit.id,'up')}><ArrowUp size={16}/></button>
-                    <button type="button" className="app-workspace-icon-button" title={t('workspace.moveDown')} disabled={saving||lessonIndex===unit.lessons.length-1}
-                      aria-label={`${t('workspace.moveDown')}: ${lesson.title}`} onClick={()=>void move('lesson',lesson.id,unit.id,'down')}><ArrowDown size={16}/></button>
-                    <button type="button" className="app-workspace-icon-button" title={t('workspace.editLesson')} disabled={saving}
-                      aria-label={`${t('workspace.editLesson')}: ${lesson.title}`} onClick={()=>showEditor({kind:'lesson',unitId:unit.id,current:lesson})}><Pencil size={16}/></button>
-                  </div>}
-                </div>
-                {lesson.content && <p className="app-muted mt-3 whitespace-pre-wrap text-sm leading-relaxed">{lesson.content}</p>}
-              </div>)}
-              {editing && <button className={secondary} type="button" onClick={()=>showEditor({kind:'lesson',unitId:unit.id})}>
-                <Plus size={16}/>{t('workspace.addLesson')}
-              </button>}
+          <div className="flex flex-wrap items-center gap-2">
+            {workspace.role!=='student' && <div className="min-w-44">
+              <OptionSelect ariaLabel={t('workspace.filterUnits')} value={unitFilter}
+                onChange={value=>setUnitFilter(value as typeof unitFilter)} options={[
+                  {value:'current',label:t('workspace.currentUnits')},
+                  {value:'published',label:t('workspace.published')},
+                  {value:'draft',label:t('workspace.draft')},
+                  {value:'archived',label:t('workspace.archived')},
+                  {value:'all',label:t('workspace.allUnits')},
+                ]}/>
             </div>}
-          </article>;
+            {canCreateBaseUnit && <button className={primary} type="button" onClick={()=>showEditor({kind:'unit',source:'base'})}>
+              <Plus size={17}/>{t('workspace.addBaseUnit')}
+            </button>}
+            {canCreateOfferingUnit && <button className={primary} type="button" onClick={()=>showEditor({kind:'unit',source:'offering'})}>
+              <Plus size={17}/>{t('workspace.addOfferingUnit')}
+            </button>}
+          </div>
+        </div>
+        {visibleUnits.length===0 && <div className="app-panel rounded-2xl border px-5 py-10 text-center">
+          <FolderOpen className="app-muted mx-auto mb-3" size={32}/><p className="font-medium">{t('workspace.emptyUnits')}</p>
+          <p className="app-muted mt-1 text-sm">{t(units.length>0?'workspace.noFilterResults':editing?'workspace.emptyEditor':'workspace.emptyReader')}</p>
+        </div>}
+        {visibleUnits.map(unit=>{
+          const open=expanded.includes(unit.id);
+          const editable=canEditSource(unit.source);
+          // El índice se calcula solo dentro del mismo origen; no se mezclan órdenes.
+          const siblings=units.filter(item=>item.source===unit.source);
+          const indexAmongSiblings=siblings.findIndex(item=>item.id===unit.id);
+          const actions=editable ? <>
+            <button type="button" className="app-workspace-icon-button" title={t('workspace.moveUp')}
+              aria-label={`${t('workspace.moveUp')}: ${unit.title}`} disabled={saving||indexAmongSiblings===0}
+              onClick={()=>void move('unit',unit.source,unit.id,unit.id,'up')}><ArrowUp size={16}/></button>
+            <button type="button" className="app-workspace-icon-button" title={t('workspace.moveDown')}
+              aria-label={`${t('workspace.moveDown')}: ${unit.title}`} disabled={saving||indexAmongSiblings===siblings.length-1}
+              onClick={()=>void move('unit',unit.source,unit.id,unit.id,'down')}><ArrowDown size={16}/></button>
+            <button type="button" className="app-workspace-icon-button" title={t('workspace.editUnit')}
+              aria-label={`${t('workspace.editUnit')}: ${unit.title}`} disabled={saving}
+              onClick={()=>showEditor({kind:'unit',source:unit.source,current:unit})}><Pencil size={16}/></button>
+          </> : undefined;
+          return <Accordion key={unit.id} open={open} onToggle={()=>toggleUnit(unit.id)}
+            title={`${unit.position}. ${unit.title}`} subtitle={t('workspace.lessonCount',{count:unit.lessons.length})}
+            icon={<FolderOpen size={21}/>} actions={actions} actionsLabel={t('workspace.unitActions')}
+            badge={workspace.role!=='student'?<StateBadge status={unit.status}/>:undefined}>
+            {workspace.role!=='student' && <div className="flex flex-wrap items-center gap-2 text-xs app-muted">
+              <span>{t(unit.source==='base'?'workspace.institutional':'workspace.ofThisOffering')}</span>
+              <span className="sm:hidden"><StateBadge status={unit.status}/></span>
+            </div>}
+            {unit.description && <p className="app-muted whitespace-pre-wrap text-sm">{unit.description}</p>}
+            {unit.lessons.length===0 && <p className="app-muted text-sm">{t('workspace.noLessons')}</p>}
+            {unit.lessons.map((lesson,lessonIndex)=><div key={lesson.id} className="app-workspace-lesson rounded-xl border p-3 sm:p-4">
+              <div className="flex flex-wrap items-center gap-3">
+                <FileText size={18} className="app-muted shrink-0"/>
+                <span className="min-w-0 flex-1 font-medium text-sm">{lesson.position}. {lesson.title}</span>
+                {workspace.role!=='student' && <StateBadge status={lesson.status}/>}
+                {editable && <div className="flex items-center gap-1">
+                  <button type="button" className="app-workspace-icon-button" title={t('workspace.moveUp')} disabled={saving||lessonIndex===0}
+                    aria-label={`${t('workspace.moveUp')}: ${lesson.title}`} onClick={()=>void move('lesson',unit.source,lesson.id,unit.id,'up')}><ArrowUp size={16}/></button>
+                  <button type="button" className="app-workspace-icon-button" title={t('workspace.moveDown')} disabled={saving||lessonIndex===unit.lessons.length-1}
+                    aria-label={`${t('workspace.moveDown')}: ${lesson.title}`} onClick={()=>void move('lesson',unit.source,lesson.id,unit.id,'down')}><ArrowDown size={16}/></button>
+                  <button type="button" className="app-workspace-icon-button" title={t('workspace.editLesson')} disabled={saving}
+                    aria-label={`${t('workspace.editLesson')}: ${lesson.title}`} onClick={()=>showEditor({kind:'lesson',source:unit.source,unitId:unit.id,current:lesson})}><Pencil size={16}/></button>
+                </div>}
+              </div>
+              {lesson.content && <p className="app-muted mt-3 whitespace-pre-wrap text-sm leading-relaxed">{lesson.content}</p>}
+            </div>)}
+            {editable && <button className={secondary} type="button" onClick={()=>showEditor({kind:'lesson',source:unit.source,unitId:unit.id})}>
+              <Plus size={16}/>{t('workspace.addLesson')}
+            </button>}
+          </Accordion>;
         })}
       </section>}
     </>}

@@ -66,7 +66,7 @@ async function request<T>(path: string, token: string, signal?: AbortSignal, bod
     const payload: { detail?: string | Array<{ msg?: string }> } = await response.json().catch(() => ({}));
     const detail = typeof payload.detail === 'string' ? payload.detail : Array.isArray(payload.detail)
       ? payload.detail.map(item => item.msg).join('; ') : 'Error al procesar la solicitud.';
-    throw new Error(`${detail} (HTTP ${response.status})`);
+    throw new Error(detail);
   }
   return response.json() as Promise<T>;
 }

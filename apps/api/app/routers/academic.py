@@ -5,6 +5,7 @@ Las FK compuestas existentes en PostgreSQL refuerzan el aislamiento entre tenant
 No crea cuentas de Auth ni publica resultados de IA a estudiantes.
 """
 import logging
+from typing import Literal
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -157,6 +158,7 @@ async def institutional_offerings(
     offset: int = Query(0, ge=0),
     period: str | None = Query(None, max_length=80),
     offering_status: str | None = Query(None, pattern=r"^(planned|open|closed|cancelled)$"),
+    course_status: str | None = Query("published", pattern=r"^(draft|published|archived)$"),
     search: str = Query("", max_length=100),
     year: int | None = Query(None, ge=2000, le=2100),
     current: bool = False,
@@ -170,13 +172,14 @@ async def institutional_offerings(
         WHERE off.organization_id=:organization_id
           AND (CAST(:period AS text) IS NULL OR off.period=CAST(:period AS text))
           AND (CAST(:offering_status AS text) IS NULL OR off.status=CAST(:offering_status AS text))
+          AND (CAST(:course_status AS text) IS NULL OR c.status=CAST(:course_status AS text))
           AND (c.title ILIKE :search OR c.code ILIKE :search)
           AND (CAST(:year_pattern AS text) IS NULL OR off.period ILIKE CAST(:year_pattern AS text))
           AND (NOT :current OR off.status='open')
     """
     parameters = {
         "organization_id": organization_id, "period": period,
-        "offering_status": offering_status, "search": f"%{search.strip()}%",
+        "offering_status": offering_status, "course_status": course_status, "search": f"%{search.strip()}%",
         "year_pattern": f"%{year}%" if year is not None else None, "current": current,
     }
     try:
@@ -199,6 +202,54 @@ async def institutional_offerings(
         return {"items": [dict(item) for item in rows], "total": total, "limit": limit, "offset": offset}
     except SQLAlchemyError as exc:
         raise _db_error(exc, "No se pudieron consultar las ofertas académicas") from exc
+
+
+class CourseStatusUpdate(BaseModel):
+    """No confundir estado editorial del curso con estado de una oferta."""
+
+    model_config = ConfigDict(extra="forbid")
+    status: Literal["draft", "published", "archived"]
+
+
+@router.patch("/{organization_id}/courses/{course_id}/status")
+async def change_course_status(
+    organization_id: UUID, course_id: UUID, payload: CourseStatusUpdate,
+    auth_id: UUID = Depends(authenticated_user_id),
+    engine: AsyncEngine = Depends(require_engine),
+) -> dict:
+    """Archivar oculta el catálogo por defecto; no borra ofertas ni matrículas."""
+    try:
+        async with engine.begin() as conn:
+            actor = await _require_scope(conn, auth_id, organization_id, manage=True)
+            # Archivar un curso con matrículas activas interrumpiría su acceso.
+            if payload.status != "published":
+                active = (await conn.execute(text("""
+                    SELECT EXISTS (
+                      SELECT 1 FROM app.enrollments e
+                      JOIN app.course_offerings off ON off.organization_id=e.organization_id
+                        AND off.id=e.offering_id
+                      WHERE off.organization_id=:org AND off.course_id=:course_id
+                        AND e.status='active'
+                    )
+                """), {"org": organization_id, "course_id": course_id})).scalar_one()
+                if active:
+                    raise HTTPException(status_code=409,
+                        detail="No se puede ocultar un curso con matrículas activas")
+            result = (await conn.execute(text("""
+                UPDATE app.courses SET status=:state
+                WHERE organization_id=:org AND id=:course_id
+                RETURNING id::text AS id, status
+            """), {"org": organization_id, "course_id": course_id,
+                   "state": payload.status})).mappings().first()
+            if not result:
+                raise HTTPException(status_code=404, detail="Curso no disponible")
+            await conn.execute(text("""
+                INSERT INTO app.audit_logs (organization_id, actor_id, action, resource, resource_id)
+                VALUES (:org, :actor, 'change_status', 'courses', :course_id)
+            """), {"org": organization_id, "actor": actor, "course_id": course_id})
+        return dict(result)
+    except SQLAlchemyError as exc:
+        raise _db_error(exc, "No se pudo cambiar el estado del curso") from exc
 
 
 @router.get("/{organization_id}/course-periods")
@@ -277,6 +328,7 @@ async def my_courses(
           AND (CAST(:enrollment_status AS text) IS NULL OR e.status=CAST(:enrollment_status AS text))
           AND (CAST(:year_pattern AS text) IS NULL OR off.period ILIKE CAST(:year_pattern AS text))
           AND (c.title ILIKE :search OR c.code ILIKE :search)
+          AND c.status='published'
           AND (NOT :current OR (e.status='active' AND off.status='open'))
     """
     params = {"organization_id": organization_id, "auth_id": auth_id,

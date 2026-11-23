@@ -732,13 +732,66 @@ html[data-motion='off'] .app-profile-photo-edit { transition: none !important; }
 }
 
 
-/* v26 · Espacio académico: colores de la paleta compartida y estados neutrales.
-   La presentación respeta tema Negro y preferencias de movimiento. */
+/* CAMBIOS 19: insignias de estado semánticas, compartidas por unidades y
+   lecciones. Paletas suaves e independientes para Claro, Oscuro y Negro. */
+:root {
+  --workspace-published-bg: #dcfce7;
+  --workspace-published-border: #86efac;
+  --workspace-published-text: #166534;
+  --workspace-draft-bg: #f1f5f9;
+  --workspace-draft-border: #cbd5e1;
+  --workspace-draft-text: #475569;
+  --workspace-archived-bg: #fef3c7;
+  --workspace-archived-border: #fcd34d;
+  --workspace-archived-text: #92400e;
+}
+html.dark:not(.black-theme) {
+  --workspace-published-bg: #173b30;
+  --workspace-published-border: #356a50;
+  --workspace-published-text: #a7e7bd;
+  --workspace-draft-bg: #29394d;
+  --workspace-draft-border: #52627a;
+  --workspace-draft-text: #d1d9e3;
+  --workspace-archived-bg: #3b301e;
+  --workspace-archived-border: #80643c;
+  --workspace-archived-text: #efd08d;
+}
+html.black-theme {
+  --workspace-published-bg: #212d25;
+  --workspace-published-border: #49644f;
+  --workspace-published-text: #a5d3af;
+  --workspace-draft-bg: #292929;
+  --workspace-draft-border: #575757;
+  --workspace-draft-text: #d1d1d1;
+  --workspace-archived-bg: #302b20;
+  --workspace-archived-border: #65583c;
+  --workspace-archived-text: #d9c18a;
+}
 .app-workspace-banner { background: var(--course-accent); color: #fff; }
-.app-workspace-state { border-color: var(--app-panel-border); color: var(--app-text); }
-.app-workspace-published { color: #15803d; border-color: color-mix(in srgb,#15803d 40%,var(--app-panel-border)); }
-.app-workspace-draft { color: var(--app-muted-text); }
-.app-workspace-archived { opacity: .78; }
+.app-workspace-state {
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+  white-space: nowrap;
+  background-color: var(--workspace-badge-bg);
+  border-color: var(--workspace-badge-border);
+  color: var(--workspace-badge-text);
+}
+.app-workspace-published {
+  --workspace-badge-bg: var(--workspace-published-bg);
+  --workspace-badge-border: var(--workspace-published-border);
+  --workspace-badge-text: var(--workspace-published-text);
+}
+.app-workspace-draft {
+  --workspace-badge-bg: var(--workspace-draft-bg);
+  --workspace-badge-border: var(--workspace-draft-border);
+  --workspace-badge-text: var(--workspace-draft-text);
+}
+.app-workspace-archived {
+  --workspace-badge-bg: var(--workspace-archived-bg);
+  --workspace-badge-border: var(--workspace-archived-border);
+  --workspace-badge-text: var(--workspace-archived-text);
+}
 .app-workspace-active { border-color: var(--app-primary-bg); background: var(--app-control-hover); }
 .app-workspace-unit-symbol { background: var(--app-control-hover); color: var(--app-text); }
 .app-workspace-unit-content { border-color: var(--app-panel-border); }
@@ -758,7 +811,6 @@ html[data-motion='off'] .app-profile-photo-edit { transition: none !important; }
   border-color: var(--app-text);
 }
 .app-workspace-icon-button:disabled { opacity: .35; cursor: not-allowed; }
-html.black-theme .app-workspace-published { color: #c1c1c1; border-color: #777; }
 html.black-theme .app-workspace-active { border-color: #929292; }
 html.black-theme .app-course-appearance-trigger { border-color: #777; background: #292929; }
 html[data-motion='off'] .app-workspace-icon-button, html[data-motion='off'] .app-course-appearance-trigger { transition: none !important; }
@@ -776,3 +828,24 @@ html[data-motion='off'] .app-workspace-icon-button, html[data-motion='off'] .app
 html.black-theme .app-course-appearance-trigger.app-course-appearance-grid {
   background: rgb(20 20 20 / 74%); color:#fff; border-color:rgb(255 255 255 / 50%);
 }
+
+/* v27.1: animación explícita de transform, incluso cuando cambien las utilidades Tailwind. */
+.app-accordion-arrow { transition: transform 180ms ease; transform-origin: center; }
+.app-accordion-mobile-actions {
+  background: var(--app-panel-bg);
+  color: var(--app-text);
+  border-color: var(--app-panel-border);
+}
+html[data-motion='off'] .app-accordion-arrow { transition: none !important; }
+@media (prefers-reduced-motion: reduce) {
+  .app-accordion-arrow { transition: none !important; }
+}
+
+/* v27.1: panel de acciones compartido y neutro para Claro/Oscuro/Negro. */
+.app-context-menu { background: var(--app-panel-bg); color: var(--app-text); border-color: var(--app-panel-border); }
+.app-context-menu-item { color: var(--app-text); transition: background-color 150ms ease; }
+.app-context-menu-item:hover:not(:disabled), .app-context-menu-item:focus-visible {
+  background: var(--app-control-hover); outline-offset: -2px;
+}
+html[data-motion='off'] .app-context-menu-item { transition: none !important; }
+@media (prefers-reduced-motion: reduce) { .app-context-menu-item { transition: none !important; } }

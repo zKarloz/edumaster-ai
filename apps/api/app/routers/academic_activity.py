@@ -160,7 +160,7 @@ async def activity_offerings(
     sql = text(f"""
         SELECT off.id::text AS id, c.title AS course_title, c.code AS course_code,
           off.period, off.status, off.instructor_id::text AS instructor_id,
-          c.id::text AS course_id,
+          c.id::text AS course_id, c.status AS course_status,
           c.appearance_icon AS course_icon, c.appearance_color AS course_color,
           off.appearance_icon_override AS offering_icon_override,
           off.appearance_color_override AS offering_color_override,

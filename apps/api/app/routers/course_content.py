@@ -136,7 +136,7 @@ async def _content(conn: AsyncConnection, org: UUID, course_id: UUID,
         module = by_module.get(lesson["module_id"])
         if module is not None:
             module["lessons"].append(dict(lesson))
-    return list(by_module.values())
+    return [{**unit, "source": "base"} for unit in by_module.values()]
 
 
 @router.get("/{organization_id}/course-offerings/{offering_id}/workspace")
@@ -183,9 +183,16 @@ async def offering_workspace(
             # La matrícula no autoriza borradores; el personal asignado sí puede previsualizarlos.
             preview = manager or assigned
             units = await _content(conn, organization_id, UUID(row["course_id"]), preview=preview)
+            # El material docente se lee exclusivamente de la oferta visitada.
+            # La autorización de lectura ya se comprobó antes de ejecutar ambas consultas.
+            from app.routers.offering_content import offering_units
+            units.extend(await offering_units(conn, organization_id, offering_id, preview=preview))
         return {"course": {key: value for key, value in row.items() if key not in ("assigned", "enrolled")},
                 "role": "manager" if manager else "instructor" if assigned else "student",
-                "can_edit_base": manager, "units": units}
+                "can_edit_base": manager and row["course_status"] != "archived",
+                "can_edit_offering": (manager or assigned) and row["offering_status"] in ("planned", "open")
+                  and row["course_status"] != "archived",
+                "units": units}
     except SQLAlchemyError as exc:
         raise _database_failure(exc) from exc
 
@@ -208,7 +215,7 @@ async def base_course_workspace(
             if not row:
                 raise HTTPException(status_code=404, detail="Curso no disponible")
             units = await _content(conn, organization_id, course_id, preview=True)
-        return {"course": dict(row), "role": "manager", "can_edit_base": True, "units": units}
+        return {"course": dict(row), "role": "manager", "can_edit_base": row["course_status"] != "archived", "can_edit_offering": False, "units": units}
     except SQLAlchemyError as exc:
         raise _database_failure(exc) from exc
 
@@ -360,8 +367,8 @@ async def update_lesson(
         raise _database_failure(exc) from exc
 
 
-async def _swap_positions(conn: AsyncConnection, org: UUID, *, table: Literal["course_modules", "lessons"],
-                          parent_field: Literal["course_id", "module_id"], parent_id: UUID,
+async def _swap_positions(conn: AsyncConnection, org: UUID, *, table: Literal["course_modules", "lessons", "offering_modules", "offering_lessons"],
+                          parent_field: Literal["course_id", "offering_id", "module_id"], parent_id: UUID,
                           record_id: UUID, direction: Literal["up", "down"]) -> bool:
     """Intercambio con posición temporal positiva: respeta UNIQUE y CHECK(position>0)."""
     # Nombres de tabla/campo sólo proceden de Literals de código, no del cliente.

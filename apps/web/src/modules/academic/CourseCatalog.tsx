@@ -7,12 +7,13 @@ import { useNavigate } from 'react-router';
 import { courseOfferingPath, courseBasePath } from '../../routes';
 import i18n from '../../i18n';
 import {
-  BookOpen, CalendarDays, ChevronLeft, ChevronRight, GraduationCap, LayoutGrid, List,
-  Palette, RefreshCcw, RotateCcw, Search, UsersRound,
+  CalendarDays, ChevronLeft, ChevronRight, GraduationCap, LayoutGrid, List,
+  Palette, RotateCcw, Search, Settings2, UsersRound,
 } from 'lucide-react';
 import { OptionSelect } from '../../components/shared/OptionSelect';
 import { Spinner } from '../../components/shared/Spinner';
 import { Modal } from '../../components/shared/Modal';
+import { ResponsiveActionMenu } from '../../components/shared/ResponsiveActionMenu';
 import { useToast } from '../../components/shared/Toast';
 import {
   COLOR_KEYS, COURSE_COLORS, ICON_KEYS, courseCardStyle, courseIcon,
@@ -29,7 +30,7 @@ interface CourseRow {
 }
 interface InstructorOffering {
   id: string; course_id: string; course_title: string; course_code: string;
-  period: string; status: string; active_enrollments: number;
+  period: string; status: string; course_status: string; active_enrollments: number;
   course_icon: string; course_color: string;
   offering_icon_override: string | null; offering_color_override: string | null;
   appearance_icon: string; appearance_color: string;
@@ -59,6 +60,15 @@ async function saveAppearance(path:string, method:'PATCH'|'PUT'|'DELETE', token:
   }
 }
 
+/** Cambio de estado institucional autorizado exclusivamente por FastAPI. */
+async function saveCourseState(path:string,token:string,status:string):Promise<void> {
+  const response=await fetch(`${API}${path}`,{method:'PATCH',headers:{Authorization:`Bearer ${token}`,'Content-Type':'application/json'},body:JSON.stringify({status})});
+  if(!response.ok) {
+    const error:{detail?:unknown}=await response.json().catch(()=>({}));
+    throw new Error(typeof error.detail==='string'?error.detail:'No se pudo actualizar el estado.');
+  }
+}
+
 function statusLabel(item:CourseRow, role:CourseRole):string {
   return i18n.t(role==='student'
     ? (statusStudent[item.enrollment_status || ''] || 'course.unknown')
@@ -76,6 +86,7 @@ export function CourseCatalog({organizationId, token, role, refreshKey}:Props) {
   const [periods,setPeriods] = useState<string[]>([]);
   const [period,setPeriod] = useState('all');
   const [status,setStatus] = useState('all');
+  const [courseStatus,setCourseStatus] = useState('published');
   const [search,setSearch] = useState('');
   const [debounced,setDebounced] = useState('');
   const [page,setPage] = useState(0);
@@ -85,10 +96,13 @@ export function CourseCatalog({organizationId, token, role, refreshKey}:Props) {
   const [error,setError] = useState('');
   const [appearanceRefresh,setAppearanceRefresh] = useState(0);
   const [selected,setSelected] = useState<CourseRow|null>(null);
+  const [dialogMode,setDialogMode] = useState<'appearance'|'status'|null>(null);
   const [editIcon,setEditIcon] = useState('book-open');
   const [editColor,setEditColor] = useState('blue');
   const [saving,setSaving] = useState(false);
   const [saveError,setSaveError] = useState('');
+  const [statusError,setStatusError] = useState('');
+  const [nextCourseStatus,setNextCourseStatus] = useState('published');
   const isStudent = role==='student';
   const canEdit = role!=='student';
   const currentYear = new Date().getFullYear();
@@ -98,9 +112,9 @@ export function CourseCatalog({organizationId, token, role, refreshKey}:Props) {
     return ()=>window.clearTimeout(id);
   },[search]);
   useEffect(()=>{
-    setPeriod('all');setStatus('all');setSearch('');setPage(0);setRows([]);setSelected(null);
+    setPeriod('all');setStatus('all');setCourseStatus('published');setSearch('');setPage(0);setRows([]);setSelected(null);setDialogMode(null);
   },[organizationId,role]);
-  useEffect(()=>setPage(0),[period,status,debounced]);
+  useEffect(()=>setPage(0),[period,status,courseStatus,debounced]);
   useEffect(()=>{
     if(!organizationId){setPeriods([]);return;}
     const controller=new AbortController();
@@ -122,7 +136,7 @@ export function CourseCatalog({organizationId, token, role, refreshKey}:Props) {
           if(controller.signal.aborted)return;
           const all:CourseRow[]=data.items.map(off=>({
             id:off.course_id, code:off.course_code,title:off.course_title,
-            status:'published', offering_id:off.id,period:off.period,
+            status:off.course_status, offering_id:off.id,period:off.period,
             offering_status:off.status,enrolled_count:off.active_enrollments,
             course_icon:off.course_icon,course_color:off.course_color,
             offering_icon_override:off.offering_icon_override,
@@ -133,6 +147,7 @@ export function CourseCatalog({organizationId, token, role, refreshKey}:Props) {
             const periodMatches=period==='all'||(period==='current'?item.offering_status==='open'
               :period==='year'?item.period?.includes(String(currentYear)):item.period===period);
             return periodMatches&&(status==='all'||item.offering_status===status)
+              && item.status===courseStatus
               &&`${item.title} ${item.code}`.toLocaleLowerCase().includes(debounced.toLocaleLowerCase());
           });
           setTotal(filtered.length);setRows(filtered.slice(page*PAGE_SIZE,(page+1)*PAGE_SIZE));
@@ -145,20 +160,22 @@ export function CourseCatalog({organizationId, token, role, refreshKey}:Props) {
       else if(period==='year')qs.set('year',String(currentYear));
       else if(period!=='all')qs.set('period',period);
       if(status!=='all')qs.set(isStudent?'enrollment_status':'offering_status',status);
+      if(!isStudent)qs.set('course_status',courseStatus);
       void get<{items:CourseRow[];total:number}>(`${root}/${isStudent?'my-courses':'course-offerings'}?${qs}`,token,controller.signal)
         .then(data=>{if(!controller.signal.aborted){setRows(data.items);setTotal(data.total);}})
         .catch((reason:unknown)=>{if(!controller.signal.aborted)setError(reason instanceof Error?reason.message:'Error al consultar cursos');})
         .finally(()=>{if(!controller.signal.aborted)setLoading(false);});
     }
     return ()=>controller.abort();
-  },[organizationId,token,role,refreshKey,appearanceRefresh,period,status,debounced,page,currentYear,isStudent]);
+  },[organizationId,token,role,refreshKey,appearanceRefresh,period,status,courseStatus,debounced,page,currentYear,isStudent]);
 
   function changeView(value:'list'|'grid'){
     setView(value);
     try{localStorage.setItem('edumaster_cursos_vista',value);}catch{/* Almacenamiento no disponible */}
   }
-  function openAppearance(item:CourseRow){
-    setSelected(item);setSaveError('');
+  /** Cada acción abre su propio diálogo. El menú no altera las tarjetas ni los permisos. */
+  function openActionDialog(item:CourseRow, mode:'appearance'|'status'){
+    setDialogMode(mode);setSelected(item);setSaveError('');setStatusError('');setNextCourseStatus(item.status);
     // El gestor modifica el valor institucional. El docente modifica sólo su oferta.
     setEditIcon(role==='manager'?(item.course_icon||'book-open'):(item.appearance_icon||'book-open'));
     setEditColor(role==='manager'?(item.course_color||'blue'):(item.appearance_color||'blue'));
@@ -181,9 +198,24 @@ export function CourseCatalog({organizationId, token, role, refreshKey}:Props) {
           reset?'DELETE':'PUT',token,reset?undefined:{icon:editIcon,color:editColor});
       }
       notify(t(reset?'courseAppearance.restored':'courseAppearance.saved'),'success');
-      setSelected(null);setAppearanceRefresh(value=>value+1);
+      setSelected(null);setDialogMode(null);setAppearanceRefresh(value=>value+1);
     }catch(reason){setSaveError(reason instanceof Error?reason.message:t('courseAppearance.saveError'));}
     finally{setSaving(false);}
+  }
+
+  /** Actualiza el estado editorial sin eliminar ofertas, matrículas ni notas. */
+  async function updateCourseState(){
+    if (!selected || role!=='manager' || nextCourseStatus===selected.status) return;
+    setSaving(true);setStatusError('');
+    try {
+      await saveCourseState(`/api/v1/academic/organizations/${organizationId}/courses/${selected.id}/status`,token,nextCourseStatus);
+      notify(t('course.statusSaved'),'success');
+      setSelected(null);setDialogMode(null);
+      // Mantener el filtro actual: los archivados desaparecen hasta elegir Archivado.
+      setAppearanceRefresh(value=>value+1);
+    } catch (reason) {
+      setStatusError(reason instanceof Error?reason.message:t('workspace.saveError'));
+    } finally {setSaving(false);}
   }
 
   const totalPages=Math.max(1,Math.ceil(total/PAGE_SIZE));
@@ -201,7 +233,7 @@ export function CourseCatalog({organizationId, token, role, refreshKey}:Props) {
             className={`${btn} rounded-none border-0 ${view==='grid'?'app-accent bg-sky-500/10':''}`}><LayoutGrid size={17}/> {t('course.grid')}</button>
         </div>
       </div>
-      <div className="grid gap-3 md:grid-cols-[1fr_1fr_1fr]">
+      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
         <label className="space-y-1.5 text-sm"><span className="app-muted flex items-center gap-1"><CalendarDays size={15}/>{t('course.period')}</span>
           <OptionSelect ariaLabel={t('course.filterPeriod')} value={period} onChange={setPeriod} options={[
             {value:'all',label:t('course.allPeriods')},{value:'current',label:t('course.current')},
@@ -214,6 +246,12 @@ export function CourseCatalog({organizationId, token, role, refreshKey}:Props) {
           ]:[{value:'all',label:t('course.allOffers')},{value:'planned',label:t('course.planned')},
             {value:'open',label:t('course.open')},{value:'closed',label:t('course.closed')},
             ...(role==='manager'?[{value:'cancelled',label:t('course.cancelled')}]:[])]}/></label>
+        {!isStudent && <label className="space-y-1.5 text-sm"><span className="app-muted">{t('course.courseStatus')}</span>
+          <OptionSelect ariaLabel={t('course.courseStatus')} value={courseStatus} onChange={setCourseStatus} options={[
+            {value:'published',label:t('course.courseActive')},
+            {value:'draft',label:t('course.courseDraft')},
+            {value:'archived',label:t('course.courseArchived')},
+          ]}/></label>}
         <label className="space-y-1.5 text-sm"><span className="app-muted">{t('course.searchCourse')}</span>
           <div className="search-control app-input flex items-center gap-2 rounded-xl border px-3"><Search size={16} className="shrink-0"/>
             <input type="search" className="min-h-11 min-w-0 flex-1 bg-transparent outline-none focus:outline-none focus-visible:outline-none" placeholder={t('course.search')}
@@ -241,10 +279,14 @@ export function CourseCatalog({organizationId, token, role, refreshKey}:Props) {
                 <span className="app-info hidden rounded-lg border px-2 py-1 text-xs sm:block">{statusLabel(item,role)}</span>
                 <ChevronRight size={18} className="app-muted shrink-0 transition-transform group-hover:translate-x-0.5"/>
               </button>
-              {canEdit && <button type="button" title={t('courseAppearance.customize')} aria-label={`${t('courseAppearance.customize')}: ${item.title}`}
-                onClick={()=>openAppearance(item)} className="app-course-appearance-trigger mr-3 flex size-9 shrink-0 items-center justify-center rounded-lg border">
-                <Palette size={17}/>
-              </button>}
+              {canEdit && (role==='manager'||item.status!=='archived') &&
+                <ResponsiveActionMenu className="mr-3" label={`${t('course.actionMenu')}: ${item.title}`}
+                  sheetTitle={item.title} actions={[
+                    {id:'theme',label:t('courseAppearance.editTheme'),icon:<Palette size={17}/>,
+                      disabled:item.status==='archived',onSelect:()=>openActionDialog(item,'appearance')},
+                    ...(role==='manager' ? [{id:'status',label:t('course.changeStateMenu'),
+                      icon:<Settings2 size={17}/>,onSelect:()=>openActionDialog(item,'status')}] : []),
+                  ]}/> }
             </div>;
           })}
         </div>
@@ -265,10 +307,16 @@ export function CourseCatalog({organizationId, token, role, refreshKey}:Props) {
                 <span className="app-info self-start rounded-lg border px-2 py-1 text-xs">{statusLabel(item,role)}</span>
               </span>
             </button>
-            {canEdit && <button type="button" title={t('courseAppearance.customize')} aria-label={`${t('courseAppearance.customize')}: ${item.title}`}
-              onClick={()=>openAppearance(item)} className="app-course-appearance-trigger app-course-appearance-grid absolute right-3 top-3 flex size-9 items-center justify-center rounded-lg border bg-black/40 text-white">
-              <Palette size={17}/>
-            </button>}
+            {canEdit && (role==='manager'||item.status!=='archived') &&
+              <div className="absolute right-3 top-3">
+                <ResponsiveActionMenu className="app-course-appearance-grid" label={`${t('course.actionMenu')}: ${item.title}`}
+                  sheetTitle={item.title} actions={[
+                    {id:'theme',label:t('courseAppearance.editTheme'),icon:<Palette size={17}/>,
+                      disabled:item.status==='archived',onSelect:()=>openActionDialog(item,'appearance')},
+                    ...(role==='manager' ? [{id:'status',label:t('course.changeStateMenu'),
+                      icon:<Settings2 size={17}/>,onSelect:()=>openActionDialog(item,'status')}] : []),
+                  ]}/>
+              </div>}
           </div>;
         })}</div>)}
     {role==='instructor'&&total>=200&&<p className="app-muted text-xs">{t('course.maxOffers')}</p>}
@@ -279,23 +327,18 @@ export function CourseCatalog({organizationId, token, role, refreshKey}:Props) {
         <button className={btn} type="button" disabled={page+1>=totalPages} onClick={()=>setPage(p=>p+1)}>{t('course.next')}<ChevronRight size={15}/></button>
       </div>
     </div>}
-    <p className="app-muted flex items-center gap-2 text-xs"><RefreshCcw size={13}/>{t('course.source')}</p>
 
-    <Modal open={Boolean(selected)} title={t('courseAppearance.details')} onClose={()=>{if(!saving)setSelected(null);}}>
-      {selected&&<div className="space-y-5">
+    <Modal open={Boolean(selected && dialogMode)}
+      title={t(dialogMode==='status'?'course.changeStateMenu':'courseAppearance.editTheme')}
+      onClose={()=>{if(!saving){setSelected(null);setDialogMode(null);}}}>
+      {selected && <div className="space-y-5">
         <div className="app-course-detail-banner flex items-center gap-4 rounded-xl p-4"
           style={courseCardStyle(selected.appearance_color)}>
           <SelectedIcon size={36} className="shrink-0"/>
           <div className="min-w-0"><p className="text-lg font-semibold">{selected.title}</p>
             <p className="text-sm opacity-90">{selected.code} · {selected.period||t('course.noPeriod')}</p></div>
         </div>
-        {selected.description&&<p className="app-muted text-sm">{selected.description}</p>}
-        <div className="app-divider grid grid-cols-2 gap-3 border-b pb-4 text-sm">
-          <div><p className="app-muted text-xs">{t('course.period')}</p><p className="font-medium">{selected.period||'—'}</p></div>
-          <div><p className="app-muted text-xs">{t('course.state')}</p><p className="font-medium">{statusLabel(selected,role)}</p></div>
-        </div>
-        {canEdit&&<div className="space-y-4">
-          <div className="flex items-center gap-2"><Palette size={18}/><h3 className="font-semibold">{t('courseAppearance.customize')}</h3></div>
+        {dialogMode==='appearance' && canEdit && selected.status!=='archived' && <div className="space-y-4">
           <p className="app-muted text-sm">{t(role==='manager'?'courseAppearance.managerHint':'courseAppearance.teacherHint')}</p>
           <div><p className="mb-2 text-sm font-medium">{t('courseAppearance.color')}</p>
             <div className="flex flex-wrap gap-2" role="group" aria-label={t('courseAppearance.color')}>
@@ -334,10 +377,23 @@ export function CourseCatalog({organizationId, token, role, refreshKey}:Props) {
             </button>
           </div>
         </div>}
-        <button type="button" className="app-secondary-button inline-flex items-center gap-2 rounded-xl border px-4 py-2 text-sm"
-          onClick={()=>{const item=selected;setSelected(null);visitCourse(item);}}>
-          <BookOpen size={16}/>{t('workspace.enterCourse')}
-        </button>
+        {dialogMode==='status' && role==='manager' && <div className="space-y-3">
+          <p className="app-muted text-sm">{t('course.statusHelp')}</p>
+          <label className="block space-y-1.5 text-sm font-medium">
+            <span>{t('course.courseStatus')}</span>
+            <OptionSelect value={nextCourseStatus} onChange={setNextCourseStatus} ariaLabel={t('course.courseStatus')}
+              options={[{value:'published',label:t('course.courseActive')},{value:'draft',label:t('course.courseDraft')},
+                {value:'archived',label:t('course.courseArchived')}]}/>
+          </label>
+          {statusError && <p className="app-warning text-sm" role="alert">{statusError}</p>}
+          <div className="flex justify-end gap-2">
+            <button type="button" className={btn} disabled={saving}
+              onClick={()=>{setSelected(null);setDialogMode(null);}}>{t('common.cancel')}</button>
+            <button type="button" className="app-primary-button rounded-xl px-4 py-2 text-sm font-semibold disabled:opacity-50"
+              disabled={saving||nextCourseStatus===selected.status}
+              onClick={()=>void updateCourseState()}>{t('course.changeCourseStatus')}</button>
+          </div>
+        </div>}
       </div>}
     </Modal>
   </div>;
