@@ -730,3 +730,49 @@ html[data-motion='off'] .app-profile-photo-edit { transition: none !important; }
 @media (prefers-reduced-motion: reduce) {
   .app-profile-photo-edit { transition: none !important; }
 }
+
+
+/* v26 · Espacio académico: colores de la paleta compartida y estados neutrales.
+   La presentación respeta tema Negro y preferencias de movimiento. */
+.app-workspace-banner { background: var(--course-accent); color: #fff; }
+.app-workspace-state { border-color: var(--app-panel-border); color: var(--app-text); }
+.app-workspace-published { color: #15803d; border-color: color-mix(in srgb,#15803d 40%,var(--app-panel-border)); }
+.app-workspace-draft { color: var(--app-muted-text); }
+.app-workspace-archived { opacity: .78; }
+.app-workspace-active { border-color: var(--app-primary-bg); background: var(--app-control-hover); }
+.app-workspace-unit-symbol { background: var(--app-control-hover); color: var(--app-text); }
+.app-workspace-unit-content { border-color: var(--app-panel-border); }
+.app-workspace-lesson { border-color: var(--app-panel-border); background: var(--app-control-hover); }
+.app-workspace-icon-button, .app-course-appearance-trigger {
+  border-color: var(--app-panel-border);
+  color: var(--app-text);
+  background: var(--app-panel-bg);
+  transition: background 160ms ease, border-color 160ms ease;
+}
+.app-workspace-icon-button {
+  display: inline-flex; width: 34px; height: 34px; align-items: center; justify-content: center;
+  border-radius: 9px; border-width: 1px;
+}
+.app-workspace-icon-button:hover:not(:disabled), .app-course-appearance-trigger:hover {
+  background: var(--app-control-hover);
+  border-color: var(--app-text);
+}
+.app-workspace-icon-button:disabled { opacity: .35; cursor: not-allowed; }
+html.black-theme .app-workspace-published { color: #c1c1c1; border-color: #777; }
+html.black-theme .app-workspace-active { border-color: #929292; }
+html.black-theme .app-course-appearance-trigger { border-color: #777; background: #292929; }
+html[data-motion='off'] .app-workspace-icon-button, html[data-motion='off'] .app-course-appearance-trigger { transition: none !important; }
+@media (prefers-reduced-motion: reduce) {
+  .app-workspace-icon-button, .app-course-appearance-trigger { transition: none !important; }
+}
+
+/* La acción de apariencia sobre la cabecera coloreada conserva contraste. */
+.app-course-appearance-trigger.app-course-appearance-grid {
+  background: rgb(10 20 30 / 58%);
+  color: #fff;
+  border-color: rgb(255 255 255 / 50%);
+}
+.app-course-appearance-trigger.app-course-appearance-grid:hover { background: rgb(10 20 30 / 83%); }
+html.black-theme .app-course-appearance-trigger.app-course-appearance-grid {
+  background: rgb(20 20 20 / 74%); color:#fff; border-color:rgb(255 255 255 / 50%);
+}

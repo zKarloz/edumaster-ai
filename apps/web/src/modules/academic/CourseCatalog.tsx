@@ -3,9 +3,11 @@
  */
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useNavigate } from 'react-router';
+import { courseOfferingPath, courseBasePath } from '../../routes';
 import i18n from '../../i18n';
 import {
-  CalendarDays, ChevronLeft, ChevronRight, GraduationCap, LayoutGrid, List,
+  BookOpen, CalendarDays, ChevronLeft, ChevronRight, GraduationCap, LayoutGrid, List,
   Palette, RefreshCcw, RotateCcw, Search, UsersRound,
 } from 'lucide-react';
 import { OptionSelect } from '../../components/shared/OptionSelect';
@@ -65,6 +67,7 @@ function statusLabel(item:CourseRow, role:CourseRole):string {
 
 export function CourseCatalog({organizationId, token, role, refreshKey}:Props) {
   const {t} = useTranslation();
+  const navigate = useNavigate();
   const {notify} = useToast();
   const [view,setView] = useState<'list'|'grid'>(()=>{
     try {return localStorage.getItem('edumaster_cursos_vista')==='grid'?'grid':'list';}
@@ -154,11 +157,16 @@ export function CourseCatalog({organizationId, token, role, refreshKey}:Props) {
     setView(value);
     try{localStorage.setItem('edumaster_cursos_vista',value);}catch{/* Almacenamiento no disponible */}
   }
-  function openCourse(item:CourseRow){
+  function openAppearance(item:CourseRow){
     setSelected(item);setSaveError('');
     // El gestor modifica el valor institucional. El docente modifica sólo su oferta.
     setEditIcon(role==='manager'?(item.course_icon||'book-open'):(item.appearance_icon||'book-open'));
     setEditColor(role==='manager'?(item.course_color||'blue'):(item.appearance_color||'blue'));
+  }
+  /** La tarjeta abre su espacio académico; apariencia sigue en un control separado. */
+  function visitCourse(item:CourseRow){
+    if (item.offering_id) navigate(courseOfferingPath(organizationId,item.offering_id));
+    else if (role==='manager') navigate(courseBasePath(organizationId,item.id));
   }
   async function updateAppearance(reset=false){
     if(!selected||!organizationId||!canEdit)return;
@@ -220,34 +228,48 @@ export function CourseCatalog({organizationId, token, role, refreshKey}:Props) {
       ? <div className="space-y-2" aria-label={t('course.filtered')}>
           {rows.map(item=>{
             const Icon=courseIcon(item.appearance_icon);
-            return <button key={item.offering_id||item.id} type="button" onClick={()=>openCourse(item)}
-              aria-label={`${t('courseAppearance.openDetails')}: ${item.title} (${item.period||''})`}
-              className="app-course-list-card app-panel group relative flex min-h-22 w-full items-center gap-3 overflow-hidden rounded-2xl border px-4 py-3 text-left"
+            return <div key={item.offering_id||item.id}
+              className="app-course-list-card app-panel group relative flex min-h-22 w-full items-center gap-1 overflow-hidden rounded-2xl border text-left"
               style={courseCardStyle(item.appearance_color)}>
               <span aria-hidden="true" className="app-course-list-stripe"/>
-              <span className="app-course-list-icon flex size-11 shrink-0 items-center justify-center rounded-xl"><Icon size={23}/></span>
-              <span className="min-w-0 flex-1"><span className="block truncate font-semibold">{item.title}</span>
-                <span className="app-muted mt-1 block truncate text-xs">{item.code} · {item.period||t('course.noPeriod')}</span></span>
-              <span className="app-info hidden rounded-lg border px-2 py-1 text-xs sm:block">{statusLabel(item,role)}</span>
-              <ChevronRight size={18} className="app-muted shrink-0 transition-transform group-hover:translate-x-0.5"/>
-            </button>;
+              <button type="button" onClick={()=>visitCourse(item)}
+                aria-label={`${t('workspace.enterCourse')}: ${item.title} (${item.period||''})`}
+                className="flex min-w-0 flex-1 items-center gap-3 px-4 py-3 text-left focus-visible:outline-2 focus-visible:outline-offset-2">
+                <span className="app-course-list-icon flex size-11 shrink-0 items-center justify-center rounded-xl"><Icon size={23}/></span>
+                <span className="min-w-0 flex-1"><span className="block truncate font-semibold">{item.title}</span>
+                  <span className="app-muted mt-1 block truncate text-xs">{item.code} · {item.period||t('course.noPeriod')}</span></span>
+                <span className="app-info hidden rounded-lg border px-2 py-1 text-xs sm:block">{statusLabel(item,role)}</span>
+                <ChevronRight size={18} className="app-muted shrink-0 transition-transform group-hover:translate-x-0.5"/>
+              </button>
+              {canEdit && <button type="button" title={t('courseAppearance.customize')} aria-label={`${t('courseAppearance.customize')}: ${item.title}`}
+                onClick={()=>openAppearance(item)} className="app-course-appearance-trigger mr-3 flex size-9 shrink-0 items-center justify-center rounded-lg border">
+                <Palette size={17}/>
+              </button>}
+            </div>;
           })}
         </div>
       : <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">{rows.map(item=>{
           const Icon=courseIcon(item.appearance_icon);
-          return <button key={item.offering_id||item.id} type="button" onClick={()=>openCourse(item)}
-            className="app-course-grid-card app-panel group flex min-h-56 w-full flex-col overflow-hidden rounded-2xl border text-left"
-            style={courseCardStyle(item.appearance_color)}
-            aria-label={`${t('courseAppearance.openDetails')}: ${item.title} (${item.period||''})`}>
-            <span className="app-course-grid-banner flex min-h-24 w-full items-center justify-center"><Icon size={39} strokeWidth={1.7}/></span>
-            <span className="flex flex-1 flex-col gap-2 p-4">
-              <span className="font-semibold leading-snug">{item.title}</span>
-              <span className="app-muted text-xs">{item.code} · {item.period||t('course.noPeriod')}</span>
-              <span className="app-muted mt-auto flex items-center gap-2 pt-2 text-xs">{isStudent?<GraduationCap size={15}/>:<UsersRound size={15}/>} 
-                {isStudent?t('course.myEnrollment'):t('course.activeCount',{count:item.enrolled_count})}</span>
-              <span className="app-info self-start rounded-lg border px-2 py-1 text-xs">{statusLabel(item,role)}</span>
-            </span>
-          </button>;
+          return <div key={item.offering_id||item.id}
+            className="app-course-grid-card app-panel group relative flex min-h-56 w-full flex-col overflow-hidden rounded-2xl border text-left"
+            style={courseCardStyle(item.appearance_color)}>
+            <button type="button" onClick={()=>visitCourse(item)}
+              className="flex min-h-56 w-full flex-1 flex-col text-left focus-visible:outline-2 focus-visible:outline-offset-2"
+              aria-label={`${t('workspace.enterCourse')}: ${item.title} (${item.period||''})`}>
+              <span className="app-course-grid-banner flex min-h-24 w-full items-center justify-center"><Icon size={39} strokeWidth={1.7}/></span>
+              <span className="flex flex-1 flex-col gap-2 p-4">
+                <span className="font-semibold leading-snug">{item.title}</span>
+                <span className="app-muted text-xs">{item.code} · {item.period||t('course.noPeriod')}</span>
+                <span className="app-muted mt-auto flex items-center gap-2 pt-2 text-xs">{isStudent?<GraduationCap size={15}/>:<UsersRound size={15}/>} 
+                  {isStudent?t('course.myEnrollment'):t('course.activeCount',{count:item.enrolled_count})}</span>
+                <span className="app-info self-start rounded-lg border px-2 py-1 text-xs">{statusLabel(item,role)}</span>
+              </span>
+            </button>
+            {canEdit && <button type="button" title={t('courseAppearance.customize')} aria-label={`${t('courseAppearance.customize')}: ${item.title}`}
+              onClick={()=>openAppearance(item)} className="app-course-appearance-trigger app-course-appearance-grid absolute right-3 top-3 flex size-9 items-center justify-center rounded-lg border bg-black/40 text-white">
+              <Palette size={17}/>
+            </button>}
+          </div>;
         })}</div>)}
     {role==='instructor'&&total>=200&&<p className="app-muted text-xs">{t('course.maxOffers')}</p>}
     {!loading&&!error&&total>0&&<div className="flex flex-wrap items-center justify-between gap-3">
@@ -312,7 +334,10 @@ export function CourseCatalog({organizationId, token, role, refreshKey}:Props) {
             </button>
           </div>
         </div>}
-        <p className="app-muted text-xs">{t('courseAppearance.futureSpace')}</p>
+        <button type="button" className="app-secondary-button inline-flex items-center gap-2 rounded-xl border px-4 py-2 text-sm"
+          onClick={()=>{const item=selected;setSelected(null);visitCourse(item);}}>
+          <BookOpen size={16}/>{t('workspace.enterCourse')}
+        </button>
       </div>}
     </Modal>
   </div>;

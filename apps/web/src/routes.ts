@@ -12,6 +12,21 @@ export type Section = keyof typeof sectionPaths;
 const newDetail = /^\/academico\/actividad\/organizaciones\/([0-9a-f-]{36})\/ofertas\/([0-9a-f-]{36})\/matriculas\/([0-9a-f-]{36})\/?$/i;
 const oldDetail = /^\/app\/actividad\/organizaciones\/([0-9a-f-]{36})\/ofertas\/([0-9a-f-]{36})\/matriculas\/([0-9a-f-]{36})\/?$/i;
 
+/** Rutas profundas enlazables: siempre llevan institución y curso/oferta. */
+const offeringWorkspace = /^\/academico\/organizaciones\/([0-9a-f-]{36})\/ofertas\/([0-9a-f-]{36})\/?$/i;
+const baseWorkspace = /^\/academico\/organizaciones\/([0-9a-f-]{36})\/cursos\/([0-9a-f-]{36})\/?$/i;
+export function courseWorkspaceDetail(path: string) {
+  const offering = offeringWorkspace.exec(path);
+  if (offering) return {organizationId:offering[1]!, offeringId:offering[2]!, courseId:undefined};
+  const course = baseWorkspace.exec(path);
+  return course ? {organizationId:course[1]!, offeringId:undefined, courseId:course[2]!} : null;
+}
+export function courseOfferingPath(organizationId:string, offeringId:string):string {
+  return `/academico/organizaciones/${organizationId}/ofertas/${offeringId}`;
+}
+export function courseBasePath(organizationId:string, courseId:string):string {
+  return `/academico/organizaciones/${organizationId}/cursos/${courseId}`;
+}
 export function activityDetail(path: string) {
   const result = newDetail.exec(path);
   return result ? { organizationId: result[1]!, offeringId: result[2]!, enrollmentId: result[3]! } : null;
@@ -37,6 +52,7 @@ export function legacyRedirect(pathname: string): string | null {
 }
 export function sectionForPath(path: string): Section | null {
   if (newDetail.test(path)) return 'activity';
+  if (offeringWorkspace.test(path) || baseWorkspace.test(path)) return 'courses';
   const clean = path.replace(/\/$/, '') || '/';
   return (Object.entries(sectionPaths).find(([, value]) => value === clean)?.[0] as Section | undefined) ?? null;
 }

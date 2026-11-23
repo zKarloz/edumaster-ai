@@ -7,7 +7,7 @@ import { Activity, ArrowRight, BookOpen, Building2, CheckCircle2, ChevronDown, D
 import type { Session } from '@supabase/supabase-js';
 import { useLocation, useNavigate } from 'react-router';
 import { useTranslation } from 'react-i18next';
-import { activityDetail, enrollmentHistoryPath, legacyRedirect, sectionForPath, sectionPaths, type Section } from './routes';
+import { activityDetail, courseWorkspaceDetail, enrollmentHistoryPath, legacyRedirect, sectionForPath, sectionPaths, type Section } from './routes';
 import { DataTable, type Column } from './components/shared/DataTable';
 import { Modal } from './components/shared/Modal';
 import { Spinner } from './components/shared/Spinner';
@@ -18,6 +18,7 @@ import { SettingsPage } from './modules/settings/SettingsPage';
 import { LoginScreen } from './LoginScreen';
 import { OrganizationsPage } from './modules/organizations/OrganizationsPage';
 import { AcademicPage } from './modules/academic/AcademicPage';
+import { CourseWorkspacePage } from './modules/academic/CourseWorkspacePage';
 import { AcademicActivityPage } from './modules/academic/AcademicActivityPage';
 import { UsersPage } from './modules/users/UsersPage';
 import { InstitutionalUsersPage } from './modules/users/InstitutionalUsersPage';
@@ -68,6 +69,7 @@ export default function App() {
   const navigate = useNavigate();
   const section = sectionForPath(location.pathname) ?? 'dashboard';
   const detailRoute = activityDetail(location.pathname);
+  const courseRoute = courseWorkspaceDetail(location.pathname);
   const [apiStatus, setApiStatus] = useState<Connection>('checking');
   const [session, setSession] = useState<Session | null>(null);
   const [orgs, setOrgs] = useState<Organization[]>([]);
@@ -364,6 +366,11 @@ export default function App() {
     }
   }, [location.pathname, section, accessGranted, navigate, canManageUserAdministration, canViewAcademicActivity]);
   useEffect(() => {
+    if (!courseRoute || !accessGranted) return;
+    if (orgs.some(org=>org.id===courseRoute.organizationId) && academicOrgId!==courseRoute.organizationId)
+      setAcademicOrgId(courseRoute.organizationId);
+  }, [courseRoute?.organizationId, accessGranted, orgs, academicOrgId]);
+  useEffect(() => {
     if (!detailRoute || !accessGranted) return;
     if (orgs.some(org => org.id === detailRoute.organizationId) && academicOrgId !== detailRoute.organizationId)
       setAcademicOrgId(detailRoute.organizationId);
@@ -559,7 +566,9 @@ export default function App() {
           {section === 'profile' && accessToken && <ProfilePage key={session.user.id} identity={accountIdentity} token={accessToken}
             userId={session.user.id} photo={avatar.photo} photoLoading={avatar.loading} onIdentity={value => setIdentity({ id: session.user.id, value })}
             onSavePhoto={avatar.save} onRemovePhoto={avatar.remove}/>}
-          {(section === 'courses' || section === 'students' || section === 'enrollments') && accessToken && <AcademicPage
+          {section === 'courses' && courseRoute && accessToken && <CourseWorkspacePage
+            organizationId={courseRoute.organizationId} courseId={courseRoute.courseId} offeringId={courseRoute.offeringId} token={accessToken}/>}
+          {((section === 'courses' && !courseRoute) || section === 'students' || section === 'enrollments') && accessToken && <AcademicPage
             mode={section} organizations={orgs} organizationId={academicOrgId}
             onOrganizationChange={setAcademicOrgId} token={accessToken}
             courseRole={academicRole(academicOrgId)}
