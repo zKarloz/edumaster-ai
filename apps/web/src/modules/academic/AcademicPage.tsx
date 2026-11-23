@@ -2,7 +2,7 @@
 // Se reutilizan el modal, el selector con scroll y la tabla paginada del proyecto.
 import { useEffect, useState, type FormEvent, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
-import { BookOpen, GraduationCap, Plus, RefreshCcw, UsersRound, School, Info, MoreHorizontal } from 'lucide-react';
+import { Plus, RefreshCcw, School, Info, MoreHorizontal } from 'lucide-react';
 import { DataTable, type Column } from '../../components/shared/DataTable';
 import { Modal } from '../../components/shared/Modal';
 import { OptionSelect } from '../../components/shared/OptionSelect';
@@ -40,7 +40,6 @@ const API = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 const inputClass = 'app-input min-h-11 w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm dark:border-[#345578] dark:bg-[#112A48]';
 const mainButton = 'app-primary-button inline-flex items-center justify-center gap-2 rounded-xl bg-[#087FE5] px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-60';
 const secondaryButton = 'app-secondary-button inline-flex items-center gap-2 rounded-xl border border-slate-200 px-4 py-2.5 text-sm dark:border-[#345578]';
-const titleFor = { courses: 'Cursos', students: 'Estudiantes', enrollments: 'Matrículas' };
 const studentColumns: Column<Student>[] = [
   { header: 'Estudiante', key: 'full_name' }, { header: 'Correo', key: 'email' },
   { header: 'Código académico', key: 'external_code' },
@@ -203,7 +202,6 @@ export function AcademicPage({ mode, courseRole, organizations, organizationId, 
   const activeCourses = courses.filter(item => item.status === 'published' && item.offering_status === 'open' && item.offering_id);
   // Solo un estudiante activo puede matricularse: contar inactivos habilitaba por error el botón.
   const activeStudents = students.filter(item => item.status === 'active');
-  const icon = mode === 'courses' ? <BookOpen size={21}/> : mode === 'students' ? <GraduationCap size={21}/> : <UsersRound size={21}/>;
   return <div className="space-y-5">
     <div className="app-panel flex flex-wrap items-end justify-between gap-4 rounded-2xl border border-slate-200 bg-white p-5 dark:border-[#23456A] dark:bg-[#0A1F3D]">
       <div className="min-w-[220px] flex-1 space-y-2 sm:max-w-md">
@@ -220,8 +218,7 @@ export function AcademicPage({ mode, courseRole, organizations, organizationId, 
     {organizationId && <>
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h3 className="flex items-center gap-2 text-lg font-semibold">{icon}{titleFor[mode]}</h3>
-          <p className="app-muted mt-1 text-sm">{mode === 'courses'
+          <p className="app-muted text-sm">{mode === 'courses'
             ? 'Cursos y períodos académicos de la institución seleccionada.'
             : mode === 'students' ? 'Cuentas académicas verificadas y asociadas a esta institución.'
               : 'Inscripciones en ofertas abiertas de la misma institución.'}</p>

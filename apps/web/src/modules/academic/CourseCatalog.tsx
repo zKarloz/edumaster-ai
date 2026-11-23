@@ -207,8 +207,8 @@ export function CourseCatalog({organizationId, token, role, refreshKey}:Props) {
             {value:'open',label:t('course.open')},{value:'closed',label:t('course.closed')},
             ...(role==='manager'?[{value:'cancelled',label:t('course.cancelled')}]:[])]}/></label>
         <label className="space-y-1.5 text-sm"><span className="app-muted">{t('course.searchCourse')}</span>
-          <div className="app-input flex items-center gap-2 rounded-xl border px-3"><Search size={16}/>
-            <input className="min-h-11 min-w-0 flex-1 bg-transparent outline-none" placeholder={t('course.search')}
+          <div className="search-control app-input flex items-center gap-2 rounded-xl border px-3"><Search size={16} className="shrink-0"/>
+            <input type="search" className="min-h-11 min-w-0 flex-1 bg-transparent outline-none focus:outline-none focus-visible:outline-none" placeholder={t('course.search')}
               value={search} onChange={event=>setSearch(event.target.value)} maxLength={100}/></div></label>
       </div>
       <p className="app-muted text-xs">{t('course.yearHint')}</p>

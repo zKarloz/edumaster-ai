@@ -576,3 +576,68 @@ html[data-motion='off'] .app-course-list-card, html[data-motion='off'] .app-cour
 @media (prefers-reduced-motion: reduce) {
   .app-course-list-card, .app-course-grid-card { transition: none !important; transform: none !important; }
 }
+
+/* CAMBIOS 14: un foco completo para buscar cursos, sin rectángulo interior. */
+.search-control.app-input:focus-within {
+  border-color: var(--app-primary-bg);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--app-primary-bg) 24%, transparent);
+}
+.search-control.app-input input:focus,
+.search-control.app-input input:focus-visible { outline: none !important; box-shadow: none !important; }
+html.black-theme .search-control.app-input:focus-within {
+  border-color: #b4b4b4;
+  box-shadow: 0 0 0 2px rgb(180 180 180 / 22%);
+}
+
+/* El tema Negro requiere una regla más específica que .app-panel para el hover.
+   El realce es gris claro; no hereda el color elegido para el curso. */
+html.black-theme .app-course-list-card.app-panel:hover,
+html.black-theme .app-course-grid-card.app-panel:hover {
+  border-color: #b8b8b8;
+  box-shadow: 0 0 0 1px rgb(200 200 200 / 36%), 0 8px 24px rgb(245 245 245 / 7%);
+}
+html.black-theme .app-course-list-card.app-panel:focus-visible,
+html.black-theme .app-course-grid-card.app-panel:focus-visible {
+  border-color: #d0d0d0;
+  outline-color: #d0d0d0;
+}
+
+/* Portada de Perfil: desenfoque de la foto local, con alternativa estable sin foto.
+   La imagen es decorativa; los datos legibles están debajo, sobre la tarjeta. */
+.app-profile-cover {
+  background: linear-gradient(130deg,
+    color-mix(in srgb, var(--profile-cover-color) 82%, #111827) 0%,
+    color-mix(in srgb, var(--profile-cover-color) 36%, #101827) 55%,
+    color-mix(in srgb, var(--profile-cover-color) 68%, #64748b) 100%);
+  isolation: isolate;
+}
+.app-profile-cover-photo {
+  filter: blur(36px) saturate(1.3);
+  transform: scale(1.28);
+  opacity: .88;
+}
+.app-profile-cover-shade {
+  background: linear-gradient(180deg, rgb(0 0 0 / 22%), rgb(0 0 0 / 38%));
+}
+.app-profile-edit-button:hover, .app-profile-edit-button:focus-visible {
+  background: var(--app-control-hover);
+}
+.app-profile-remove { color: var(--app-muted-text); }
+.app-profile-remove:hover, .app-profile-remove:focus-visible {
+  background: var(--app-control-hover);
+  color: var(--app-text);
+}
+html[data-motion='off'] .app-profile-cover *,
+html[data-motion='off'] .app-profile-edit-button { transition: none !important; }
+@media (prefers-reduced-motion: reduce) {
+  .app-profile-cover *, .app-profile-edit-button { transition: none !important; }
+}
+
+/* Respeta la preferencia global de desenfoque: muestra un degradado estable. */
+html[data-blur='off'] .app-profile-cover-photo { display: none; }
+@keyframes profile-cover-appear { from { opacity: 0; } to { opacity: .88; } }
+html[data-motion='on'] .app-profile-cover-photo { animation: profile-cover-appear .35s ease-out both; }
+html[data-motion='off'] .app-profile-cover-photo { animation: none; }
+@media (prefers-reduced-motion: reduce) {
+  .app-profile-cover-photo { animation: none !important; }
+}

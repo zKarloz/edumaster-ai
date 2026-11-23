@@ -3,7 +3,7 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { useTranslation } from 'react-i18next';
 import i18n, { localeTag, normalizeLocale } from '../../i18n';
-import { Activity, ArrowLeft, BookOpen, ChevronLeft, ChevronRight, ClipboardCheck, GraduationCap, Plus, RefreshCcw, Save, Trash2, UserRound } from 'lucide-react';
+import { ArrowLeft, BookOpen, ChevronLeft, ChevronRight, ClipboardCheck, GraduationCap, Plus, RefreshCcw, Save, Trash2, UserRound } from 'lucide-react';
 import { DataTable, type Column } from '../../components/shared/DataTable';
 import { Modal } from '../../components/shared/Modal';
 import { OptionSelect } from '../../components/shared/OptionSelect';
@@ -274,10 +274,7 @@ export function AcademicActivityPage({ organizations, organizationId, onOrganiza
         <button type="button" className={secondary} disabled={!organizationId || loading} onClick={() => setRefresh(x => x + 1)}><RefreshCcw size={16}/> {t('activity.refresh')}</button>
       </div>
     </div>
-    <div className="flex flex-wrap items-start justify-between gap-3">
-      <div><h2 className="flex items-center gap-2 text-lg font-semibold"><Activity size={20}/> {t('activity.title')}</h2>
-        <p className="app-muted mt-1 text-sm">{t('activity.hint')}</p></div>
-    </div>
+    <p className="app-muted text-sm">{t('activity.hint')}</p>
     {loading && <Spinner label={t('activity.loadingOffers')}/>}
     {!loading && offerings.length === 0 && !error && <p className="app-info rounded-xl border p-4 text-sm">{t('activity.noOffers')}</p>}
     {offerings.length > 0 && <div className="app-panel space-y-4 rounded-2xl border p-5">
