@@ -508,7 +508,7 @@ export default function App() {
         <header className="app-header sticky top-0 z-20 flex min-h-20 flex-wrap items-center justify-between gap-3 border-b border-slate-200 bg-white/95 px-5 backdrop-blur md:px-8 dark:border-[#163B63] dark:bg-[#081B35]/95">
           <div className="flex items-center gap-3">
             <button type="button" className="rounded-lg p-2 md:hidden" aria-expanded={mobileMenu} aria-controls="edumaster-sidebar" aria-label={t('labels.k7af767cd6a')} onClick={() => setMobileMenu(true)}><Menu size={22}/></button>
-            <div><span className="app-meta-text text-xs text-slate-400">{`EduMaster.ai / ${t(currentCategoryKey)}`}</span><h1 className="text-xl font-bold">{title}</h1></div>
+            <div><div className="app-meta-text text-xs text-slate-400"><span>EduMaster.ai / </span><strong className="font-bold uppercase">{t(currentCategoryKey)}</strong></div><h1 className="text-xl font-bold">{title}</h1></div>
           </div>
           <div className="flex items-center gap-2">
             <AccountMenu key={session.user.id} identity={accountIdentity} roleLabel={accountRoleLabel} userId={session.user.id} photo={avatar.photo} photoLoading={avatar.loading}

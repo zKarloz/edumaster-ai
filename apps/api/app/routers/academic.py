@@ -112,12 +112,18 @@ async def list_courses(
     sql = text("""
         SELECT c.id::text AS id, c.code, c.title, c.description, c.level, c.status,
                off.id::text AS offering_id, off.period, off.status AS offering_status,
+               c.appearance_icon AS course_icon, c.appearance_color AS course_color,
+               off.appearance_icon_override AS offering_icon_override,
+               off.appearance_color_override AS offering_color_override,
+               COALESCE(off.appearance_icon_override,c.appearance_icon) AS appearance_icon,
+               COALESCE(off.appearance_color_override,c.appearance_color) AS appearance_color,
                (SELECT COUNT(*) FROM app.enrollments e
                 WHERE e.organization_id=c.organization_id AND e.offering_id=off.id
                   AND e.status='active') AS enrolled_count
         FROM app.courses c
         LEFT JOIN LATERAL (
-          SELECT id, period, status FROM app.course_offerings co
+          SELECT id, period, status, appearance_icon_override, appearance_color_override
+          FROM app.course_offerings co
           WHERE co.organization_id=c.organization_id AND co.course_id=c.id
           ORDER BY co.created_at DESC LIMIT 1
         ) off ON TRUE
@@ -180,6 +186,11 @@ async def institutional_offerings(
             rows = (await conn.execute(text("""
                 SELECT c.id::text AS id, c.code, c.title, c.description, c.level, c.status,
                   off.id::text AS offering_id, off.period, off.status AS offering_status,
+                  c.appearance_icon AS course_icon, c.appearance_color AS course_color,
+                  off.appearance_icon_override AS offering_icon_override,
+                  off.appearance_color_override AS offering_color_override,
+                  COALESCE(off.appearance_icon_override,c.appearance_icon) AS appearance_icon,
+                  COALESCE(off.appearance_color_override,c.appearance_color) AS appearance_color,
                   (SELECT COUNT(*) FROM app.enrollments e
                    WHERE e.organization_id=off.organization_id AND e.offering_id=off.id
                      AND e.status='active') AS enrolled_count
@@ -280,6 +291,11 @@ async def my_courses(
             rows = (await conn.execute(text("""
                 SELECT c.id::text AS id, c.code, c.title, c.description, c.level, c.status,
                   off.id::text AS offering_id, off.period, off.status AS offering_status,
+                  c.appearance_icon AS course_icon, c.appearance_color AS course_color,
+                  off.appearance_icon_override AS offering_icon_override,
+                  off.appearance_color_override AS offering_color_override,
+                  COALESCE(off.appearance_icon_override,c.appearance_icon) AS appearance_icon,
+                  COALESCE(off.appearance_color_override,c.appearance_color) AS appearance_color,
                   e.id::text AS enrollment_id, e.status AS enrollment_status,
                   1 AS enrolled_count
             """ + where + " ORDER BY e.enrolled_at DESC, e.id DESC LIMIT :limit OFFSET :offset"),

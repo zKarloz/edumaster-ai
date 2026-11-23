@@ -158,7 +158,7 @@ html.black-theme .app-status-warning > span { background-color: #aa9673; }
 /* Tema Negro: escala neutral, sin azul marino. Se utiliza sobre las clases dark existentes. */
 html.black-theme { color-scheme: dark; }
 html.black-theme .app-shell { color: #ebebeb; background: #080808; }
-html.black-theme .app-sidebar { background: #101010; border-color: #303030; }
+html.black-theme .app-sidebar { border-color: #303030; }
 html.black-theme .app-brand-symbol { background: #5b5b5b; }
 html.black-theme .app-brand-accent { color: #dedede; }
 html.black-theme .app-status-chip { background: #282828; color: #d5d5d5; }
@@ -467,7 +467,7 @@ html[data-blur='off'] .app-modal-overlay {
    módulos, que antes no aplicaban correctamente en los temas claro y oscuro. */
 :root {
   --app-mode-selected-bg: #e1ebf8;
-  --app-mode-hover-bg: #cbdcf0;
+  --app-mode-hover-bg: #edf2f8;
   --app-mode-selected-text: #164c80;
 }
 html.dark {
@@ -517,3 +517,62 @@ html[data-motion='off'] button.app-sidebar-mode-option { transition: none !impor
 }
 .app-sidebar-mode-button { white-space: nowrap; }
 .app-sidebar-mode-button svg { flex-shrink: 0; }
+
+/* CAMBIOS 13: una misma superficie de sidebar en todos los modos.
+   Negro usa #191919 en rail, expandido y overlay dinámico. */
+:root { --app-sidebar-bg: #ffffff; }
+html.dark:not(.black-theme) { --app-sidebar-bg: #071c37; }
+html.black-theme { --app-sidebar-bg: #191919; }
+.app-sidebar, .app-sidebar-inner { background-color: var(--app-sidebar-bg) !important; }
+
+/* Catálogo académico sin tabla: la franja y la cuadrícula comparten el color
+   de la paleta revisada. No se acepta CSS arbitrario desde PostgreSQL. */
+.app-course-list-card, .app-course-grid-card {
+  transition: transform 180ms ease, border-color 180ms ease, box-shadow 180ms ease;
+}
+.app-course-list-card:hover, .app-course-grid-card:hover {
+  border-color: var(--course-accent);
+  box-shadow: 0 8px 24px rgb(0 0 0 / 7%);
+}
+.app-course-list-card:focus-visible, .app-course-grid-card:focus-visible {
+  outline: 2px solid var(--course-accent);
+  outline-offset: 2px;
+}
+.app-course-list-stripe {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 5px;
+  background: var(--course-accent);
+}
+.app-course-list-icon {
+  color: var(--course-accent);
+  background: color-mix(in srgb, var(--course-accent) 13%, var(--app-panel-bg));
+}
+.app-course-grid-card.app-panel,
+html.black-theme .app-course-grid-card.app-panel {
+  background: color-mix(in srgb, var(--course-accent) 7%, var(--app-panel-bg));
+}
+.app-course-grid-banner {
+  background: var(--course-accent);
+  color: #fff;
+}
+.app-course-detail-banner {
+  background: var(--course-accent);
+  color: #fff;
+}
+.app-course-selection-preview { border-color: var(--course-accent); }
+.app-course-color-choice { border-color: transparent; }
+.app-course-color-choice[aria-pressed='true'] { outline: 2px solid var(--app-text); outline-offset: 2px; }
+.app-course-icon-choice { border-color: var(--app-panel-border); }
+.app-course-icon-choice:hover { background: var(--app-control-hover); }
+.app-course-icon-choice[aria-pressed='true'] { border-color: var(--app-primary-bg); background: var(--app-control-hover); }
+html[data-motion='on'] .app-course-list-card:hover, html[data-motion='on'] .app-course-grid-card:hover {
+  transform: translateY(-2px);
+}
+html[data-motion='off'] .app-course-list-card, html[data-motion='off'] .app-course-grid-card {
+  transition: none !important;
+  transform: none !important;
+}
+@media (prefers-reduced-motion: reduce) {
+  .app-course-list-card, .app-course-grid-card { transition: none !important; transform: none !important; }
+}

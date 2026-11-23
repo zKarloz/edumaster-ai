@@ -160,6 +160,12 @@ async def activity_offerings(
     sql = text(f"""
         SELECT off.id::text AS id, c.title AS course_title, c.code AS course_code,
           off.period, off.status, off.instructor_id::text AS instructor_id,
+          c.id::text AS course_id,
+          c.appearance_icon AS course_icon, c.appearance_color AS course_color,
+          off.appearance_icon_override AS offering_icon_override,
+          off.appearance_color_override AS offering_color_override,
+          COALESCE(off.appearance_icon_override,c.appearance_icon) AS appearance_icon,
+          COALESCE(off.appearance_color_override,c.appearance_color) AS appearance_color,
           u.full_name AS instructor_name,
           (SELECT COUNT(*) FROM app.enrollments e
            WHERE e.organization_id=off.organization_id AND e.offering_id=off.id
