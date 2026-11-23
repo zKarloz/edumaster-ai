@@ -248,7 +248,8 @@ html.black-theme .app-input:focus { border-color: #aaa; }
 .app-modal-overlay { isolation: isolate; }
 .app-modal-content { scrollbar-gutter: stable; }
 html.black-theme .app-modal-close:hover { background: #303030; }
-html.black-theme .app-modal > div:first-child { border-color: #404040; }
+/* La cabecera ahora es explícita: el primer hijo puede ser el tirador móvil. */
+html.black-theme .app-modal > .app-modal-heading { border-color: #383838; }
 /* Leaflet mantiene sus controles detrás del modal; el zoom se encuentra
    en la esquina inferior izquierda para no tapar los avisos superiores. */
 .institution-map { isolation: isolate; }
@@ -591,15 +592,16 @@ html.black-theme .search-control.app-input:focus-within {
 
 /* El tema Negro requiere una regla más específica que .app-panel para el hover.
    El realce es gris claro; no hereda el color elegido para el curso. */
+/* CAMBIOS 16: brillo moderado, neutro y visible en los dos formatos de Curso. */
 html.black-theme .app-course-list-card.app-panel:hover,
 html.black-theme .app-course-grid-card.app-panel:hover {
-  border-color: #b8b8b8;
-  box-shadow: 0 0 0 1px rgb(200 200 200 / 36%), 0 8px 24px rgb(245 245 245 / 7%);
+  border-color: #929292;
+  box-shadow: 0 0 0 1px rgb(175 175 175 / 20%), 0 8px 24px rgb(210 210 210 / 4%);
 }
 html.black-theme .app-course-list-card.app-panel:focus-visible,
 html.black-theme .app-course-grid-card.app-panel:focus-visible {
-  border-color: #d0d0d0;
-  outline-color: #d0d0d0;
+  border-color: #aaaaaa;
+  outline-color: #aaaaaa;
 }
 
 /* Portada de Perfil: desenfoque de la foto local, con alternativa estable sin foto.
@@ -642,6 +644,13 @@ html[data-motion='off'] .app-profile-cover-photo { animation: none; }
   .app-profile-cover-photo { animation: none !important; }
 }
 
+/* CAMBIOS 16: la división del encabezado del diálogo usa el borde del
+   tema activo. Evita heredar el azul del tema Oscuro en el tema Negro. */
+.app-modal-heading { border-color: var(--app-panel-border); }
+html.black-theme .app-modal-heading { border-color: #383838; }
+/* El tirador de los paneles inferiores es igualmente neutral en Negro. */
+html.black-theme .app-mobile-sheet-handle { background-color: #737373; }
+
 /* CAMBIOS 15: diálogo adaptable compartido. En teléfono actúa como un panel
    inferior (bottom sheet), en tablet/PC conserva el modal centrado existente. */
 @media (max-width: 639px) {
@@ -655,22 +664,51 @@ html[data-motion='off'] .app-profile-cover-photo { animation: none; }
     border-bottom: 0;
     animation: app-sheet-rise 260ms cubic-bezier(.22,1,.36,1) both;
   }
+  /* Área táctil de 36px: el gesto comienza SOLO en esta barra superior,
+     no en los campos ni en el contenido desplazable del diálogo. */
+  .app-mobile-sheet-drag-area {
+    display: flex;
+    flex: 0 0 36px;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    touch-action: none;
+    user-select: none;
+    cursor: grab;
+  }
+  .app-mobile-sheet-drag-area:active { cursor: grabbing; }
   .app-mobile-sheet-handle {
+    display: block;
     flex: 0 0 auto;
     width: 40px; height: 5px;
     border-radius: 99px;
     background: var(--app-control-border);
-    margin: 12px auto 0;
+  }
+  /* Durante el arrastre, sigue exactamente el dedo. Al soltar,
+     vuelve a su sitio o sale de la pantalla con una transición corta. */
+  .app-mobile-sheet[data-dragging='true'] {
+    animation: none !important;
+    transition: none !important;
+    will-change: transform;
+  }
+  .app-mobile-sheet[data-settling='true'] {
+    animation: none !important;
+    transition: transform 180ms cubic-bezier(.22, 1, .36, 1), opacity 180ms ease !important;
   }
   .app-mobile-sheet .app-modal-content { padding-bottom: max(24px, env(safe-area-inset-bottom)); }
 }
+/* En tablet y PC no hay tirador ni gesto; se conserva el modal centrado. */
+.app-mobile-sheet-drag-area { display: none; }
+@media (max-width: 639px) { .app-mobile-sheet-drag-area { display: flex; } }
 @keyframes app-sheet-rise {
   from { opacity: .75; transform: translateY(42px); }
   to { opacity: 1; transform: translateY(0); }
 }
 html[data-motion='off'] .app-mobile-sheet { animation: none !important; }
+html[data-motion='off'] .app-mobile-sheet[data-settling='true'] { transition: none !important; }
 @media (prefers-reduced-motion: reduce) {
   .app-mobile-sheet { animation: none !important; }
+  .app-mobile-sheet[data-settling='true'] { transition: none !important; }
 }
 /* En tablets táctiles tampoco existe hover: mantener visible el acceso a la foto. */
 @media (hover: none) {
