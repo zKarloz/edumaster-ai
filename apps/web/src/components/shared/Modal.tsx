@@ -10,6 +10,8 @@ interface ModalProps {
   title: string;
   onClose: () => void;
   children: ReactNode;
+  /** En teléfonos se presenta como panel inferior; en escritorio sigue centrado. */
+  mobileSheet?: boolean;
 }
 
 const FOCUSABLE = [
@@ -18,7 +20,7 @@ const FOCUSABLE = [
   '[tabindex]:not([tabindex="-1"])',
 ].join(',');
 
-export function Modal({ open, title, onClose, children }: ModalProps) {
+export function Modal({ open, title, onClose, children, mobileSheet = false }: ModalProps) {
   const titleId = useId();
   const closeRef = useRef<HTMLButtonElement>(null);
   const dialogRef = useRef<HTMLElement>(null);
@@ -76,9 +78,10 @@ export function Modal({ open, title, onClose, children }: ModalProps) {
   if (!open) return null;
 
   return createPortal(
-    <ModalBackdrop onClose={() => onCloseRef.current()}>
+    <ModalBackdrop onClose={() => onCloseRef.current()} mobileBottom={mobileSheet}>
       <section ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby={titleId}
-        className="app-modal flex max-h-[calc(100dvh-2rem)] w-full max-w-xl flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl dark:border-slate-700 dark:bg-[#0D2B52] sm:max-h-[calc(100dvh-3rem)]">
+        className={`app-modal flex max-h-[calc(100dvh-2rem)] w-full max-w-xl flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl dark:border-slate-700 dark:bg-[#0D2B52] sm:max-h-[calc(100dvh-3rem)] ${mobileSheet ? 'app-mobile-sheet' : ''}`}>
+        {mobileSheet && <div aria-hidden="true" className="app-mobile-sheet-handle"/>}
         <div className="flex shrink-0 items-start justify-between gap-4 border-b border-slate-200 px-5 py-4 dark:border-[#345578] sm:px-6">
           <h2 id={titleId} className="text-lg font-semibold text-slate-900 dark:text-white">{title}</h2>
           <button ref={closeRef} type="button" onClick={onClose} aria-label="Cerrar diálogo"

@@ -641,3 +641,48 @@ html[data-motion='off'] .app-profile-cover-photo { animation: none; }
 @media (prefers-reduced-motion: reduce) {
   .app-profile-cover-photo { animation: none !important; }
 }
+
+/* CAMBIOS 15: diálogo adaptable compartido. En teléfono actúa como un panel
+   inferior (bottom sheet), en tablet/PC conserva el modal centrado existente. */
+@media (max-width: 639px) {
+  .app-mobile-sheet-overlay { padding: 0; overflow: hidden; width: 100vw; }
+  .app-mobile-sheet-backdrop-inner { align-items: flex-end; }
+  .app-mobile-sheet {
+    width: 100%;
+    max-width: none;
+    max-height: 88dvh;
+    border-radius: 24px 24px 0 0;
+    border-bottom: 0;
+    animation: app-sheet-rise 260ms cubic-bezier(.22,1,.36,1) both;
+  }
+  .app-mobile-sheet-handle {
+    flex: 0 0 auto;
+    width: 40px; height: 5px;
+    border-radius: 99px;
+    background: var(--app-control-border);
+    margin: 12px auto 0;
+  }
+  .app-mobile-sheet .app-modal-content { padding-bottom: max(24px, env(safe-area-inset-bottom)); }
+}
+@keyframes app-sheet-rise {
+  from { opacity: .75; transform: translateY(42px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+html[data-motion='off'] .app-mobile-sheet { animation: none !important; }
+@media (prefers-reduced-motion: reduce) {
+  .app-mobile-sheet { animation: none !important; }
+}
+/* En tablets táctiles tampoco existe hover: mantener visible el acceso a la foto. */
+@media (hover: none) {
+  .app-profile-photo-edit {
+    opacity: 1 !important;
+    inset: auto 4px 4px auto;
+    width: 36px;
+    height: 36px;
+    background: rgb(0 0 0 / 75%);
+  }
+}
+html[data-motion='off'] .app-profile-photo-edit { transition: none !important; }
+@media (prefers-reduced-motion: reduce) {
+  .app-profile-photo-edit { transition: none !important; }
+}

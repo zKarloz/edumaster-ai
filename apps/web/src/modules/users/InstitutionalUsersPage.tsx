@@ -151,11 +151,11 @@ export function InstitutionalUsersPage({ token, organizations }: Props) {
     { header: 'Estado', key: 'status', render: item => <span className={item.status === 'active'
       ? 'rounded-lg bg-emerald-500/10 px-2 py-1 text-xs text-emerald-700 dark:text-emerald-300'
       : 'app-warning rounded-lg border px-2 py-1 text-xs'}>{item.status === 'active' ? 'Activo' : item.status === 'suspended' ? 'Suspendido' : item.status}</span> },
-    { header: 'Acciones', key: 'membership_id', render: item => <div className="flex flex-wrap items-center gap-2">
+    { header: 'Acciones', key: 'membership_id', render: item => <div className="flex w-max flex-nowrap items-center gap-2 whitespace-nowrap">
       <button type="button" aria-label={`Ver detalles de ${item.full_name}`} title="Ver detalles del usuario" onClick={() => setDetailUser(item)} className="app-secondary-button inline-flex items-center rounded-lg border p-2"><Ellipsis size={18}/></button>
       {protectedMember(item)
       ? <span className="app-muted inline-flex items-center gap-1 text-xs"><Shield size={14}/> {item.is_self ? 'Tu cuenta' : 'Cuenta protegida'}</span>
-      : <div className="flex flex-wrap gap-2">
+      : <div className="flex flex-nowrap items-center gap-2">
           <button type="button" className={buttonSecondary} disabled={item.status !== 'active'} onClick={() => openDialog('grant', item)} title={t('legacy.k23df5a5aa2')}><Plus size={15}/> {t('legacy.ka73f1345df')}</button>
           <button type="button" className={buttonSecondary} disabled={item.status !== 'active' || item.roles.length < 2 || !removableRolesFor(item)} onClick={() => openDialog('remove', item)} title="Retirar rol (se exige mantener al menos uno)"><UserRoundMinus size={15}/> {t('legacy.ka8e1962115')}</button>
           <button type="button" className={buttonSecondary} disabled={!['active', 'suspended'].includes(item.status)} onClick={() => openDialog('status', item)}>{item.status === 'active' ? 'Suspender' : 'Reactivar'}</button>

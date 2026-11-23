@@ -472,7 +472,7 @@ export default function App() {
           </nav>
           {/* El selector se mantiene montado para animar también el cierre.
               No se cierra al salir con el ratón: solo al elegir, Escape o clic fuera. */}
-          <div className="app-divider relative shrink-0 border-t pt-3" ref={sidebarModeRoot}>
+          <div className="app-divider relative hidden shrink-0 border-t pt-3 md:block" ref={sidebarModeRoot}>
             <div id="edumaster-sidebar-modes" role="group" aria-label={t('nav.sidebarMode')}
               data-open={sidebarOptionsOpen} inert={!sidebarOptionsOpen} aria-hidden={!sidebarOptionsOpen}
               className="app-panel app-sidebar-options absolute bottom-full left-0 z-50 mb-2 w-60 space-y-1 rounded-xl border p-2 shadow-xl">
@@ -504,10 +504,10 @@ export default function App() {
         </div>
       </aside>
       <div className="min-w-0 flex-1">
-        <header className="app-header sticky top-0 z-20 flex min-h-20 flex-wrap items-center justify-between gap-3 border-b border-slate-200 bg-white/95 px-5 backdrop-blur md:px-8 dark:border-[#163B63] dark:bg-[#081B35]/95">
-          <div className="flex items-center gap-3">
-            <button type="button" className="rounded-lg p-2 md:hidden" aria-expanded={mobileMenu} aria-controls="edumaster-sidebar" aria-label={t('labels.k7af767cd6a')} onClick={() => setMobileMenu(true)}><Menu size={22}/></button>
-            <div><div className="app-meta-text text-xs text-slate-400"><strong className="font-bold uppercase">{t(currentCategoryKey)}</strong></div><h1 className="text-xl font-bold">{title}</h1></div>
+        <header className="app-header sticky top-0 z-20 flex min-h-[64px] flex-wrap items-center justify-between gap-2 border-b border-slate-200 bg-white/95 px-3 py-2 backdrop-blur sm:min-h-20 sm:gap-3 sm:px-5 sm:py-0 md:px-8 dark:border-[#163B63] dark:bg-[#081B35]/95">
+          <div className="flex min-w-0 items-center gap-2 sm:gap-3">
+            <button type="button" className="shrink-0 rounded-lg p-1.5 sm:p-2 md:hidden" aria-expanded={mobileMenu} aria-controls="edumaster-sidebar" aria-label={t('labels.k7af767cd6a')} onClick={() => setMobileMenu(true)}><Menu size={22}/></button>
+            <div className="min-w-0"><div className="app-meta-text text-[10px] leading-tight text-slate-400 sm:text-xs"><strong className="font-bold uppercase">{t(currentCategoryKey)}</strong></div><h1 className="truncate text-base font-bold leading-tight sm:text-xl">{title}</h1></div>
           </div>
           <div className="flex items-center gap-2">
             <AccountMenu key={session.user.id} identity={accountIdentity} roleLabel={accountRoleLabel} userId={session.user.id} photo={avatar.photo} photoLoading={avatar.loading}
