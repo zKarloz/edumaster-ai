@@ -135,7 +135,7 @@ export function ProfilePage({ identity, token, userId, photo, photoLoading, onId
       onClose={() => setPhotoPreviewOpen(false)}>
       {photo && <img src={photo} alt={t('profile.photo')} className="mx-auto max-h-[65dvh] w-auto max-w-full rounded-xl object-contain"/>}
     </Modal>
-    <BottomSheet open={nameModal} title={t('profile.fullName')} onClose={() => { if (!savingName) setNameModal(false); }}>
+    <BottomSheet open={nameModal} title={t('profile.editName')} onClose={() => { if (!savingName) setNameModal(false); }}>
       <form className="space-y-4" onSubmit={event => void saveName(event)}>
         <label className="flex flex-col gap-1.5 text-sm font-medium">{t('profile.fullName')}
           <input className={field} value={name} onChange={event => setName(event.target.value)}

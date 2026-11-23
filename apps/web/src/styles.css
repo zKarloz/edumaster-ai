@@ -686,6 +686,12 @@ html.black-theme .app-mobile-sheet-handle { background-color: #737373; }
   }
   /* Durante el arrastre, sigue exactamente el dedo. Al soltar,
      vuelve a su sitio o sale de la pantalla con una transición corta. */
+  /* La animación de apertura solo debe ejecutarse una vez por montaje.
+     Si la reactivamos después de un arrastre corto, vuelve a entrar desde
+     abajo en vez de limitarse a regresar suavemente a su posición. */
+  .app-mobile-sheet[data-gesture-started='true'] {
+    animation: none !important;
+  }
   .app-mobile-sheet[data-dragging='true'] {
     animation: none !important;
     transition: none !important;

@@ -62,6 +62,10 @@ export function Modal({ open, title, onClose, children, mobileSheet = false }: M
     dragRef.current = { pointerId: event.pointerId, startY: event.clientY, startAt: performance.now(), offset: 0 };
     const dialog = dialogRef.current;
     if (dialog) {
+      // Una vez iniciado un gesto, impedir que vuelva a activarse el keyframe
+      // de entrada cuando termina el rebote y se limpia el transform inline.
+      // El atributo desaparece al desmontar el modal y abrirlo de nuevo.
+      dialog.dataset.gestureStarted = 'true';
       dialog.dataset.dragging = 'true';
       dialog.dataset.settling = 'false';
       dialog.style.transform = 'translate3d(0, 0, 0)';
