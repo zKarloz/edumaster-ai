@@ -10,7 +10,8 @@ import { Modal } from '../../components/shared/Modal';
 import { Spinner } from '../../components/shared/Spinner';
 import { useToast } from '../../components/shared/Toast';
 import { normalizeLocale, type Locale } from '../../i18n';
-import { canSendTextSubmission, taskLocalDateToISO } from './courseTaskRules';
+import { canSendTextSubmission, hasSubmissionContent, taskLocalDateToISO } from './courseTaskRules';
+import { TaskStagedFiles, TaskSubmissionFileList } from './TaskSubmissionFiles';
 
 interface Task {
   id: string; title: string; instructions: string; due_at: string | null;
@@ -110,6 +111,8 @@ export function CourseTasksPanel({organizationId,offeringId,token}:Props){
   const [due,setDue]=useState('');const [maxAttempts,setMaxAttempts]=useState(1);
   const [confirm,setConfirm]=useState<{task:Task;action:'publish'|'close'}|null>(null);
   const [answerTask,setAnswerTask]=useState<Task|null>(null);const [answer,setAnswer]=useState('');
+  const [attachmentCount,setAttachmentCount]=useState(0);
+  const [attachmentsBusy,setAttachmentsBusy]=useState(false);
   const [mineTask,setMineTask]=useState<Task|null>(null);const [mine,setMine]=useState<Submission[]>([]);
   const [selectedTask,setSelectedTask]=useState<Task|null>(null);
   const [submissions,setSubmissions]=useState<Submission[]>([]);const [total,setTotal]=useState(0);const [page,setPage]=useState(0);
@@ -160,11 +163,11 @@ export function CourseTasksPanel({organizationId,offeringId,token}:Props){
     void perform(()=>request(path,token,{method:edit?'PATCH':'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}),t.saved,()=>setEdit(undefined));
   }
   function submit(event:FormEvent<HTMLFormElement>){
-    event.preventDefault();if(!answerTask)return;
-    void perform(()=>request(`${root}/${answerTask.id}/submissions`,token,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({answer_text:answer.trim()})}),t.sentOk,()=>{setAnswer('');setAnswerTask(null);});
+    event.preventDefault();if(!answerTask||attachmentsBusy||!hasSubmissionContent(answer,attachmentCount))return;
+    void perform(()=>request(`${root}/${answerTask.id}/submissions`,token,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({answer_text:answer.trim()})}),t.sentOk,()=>{setAnswer('');setAttachmentCount(0);setAnswerTask(null);});
   }
   function submitReview(event:FormEvent<HTMLFormElement>){
-    event.preventDefault();if(!review||!selectedTask)return;
+    event.preventDefault();if(!review||review.status!=='submitted'||!selectedTask)return;
     void perform(()=>request(`${root}/${selectedTask.id}/submissions/${review.id}/review`,token,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({review_notes:reviewNotes.trim()})}),t.reviewOk,()=>setReview(null));
   }
   const fmt=(value:string|null)=>value?new Date(value).toLocaleString(language==='pt'?'pt-BR':language==='en'?'en-US':'es-PE'):'—';
@@ -173,7 +176,7 @@ export function CourseTasksPanel({organizationId,offeringId,token}:Props){
     {header:t.attemptNumber,key:'attempt_number'},
     {header:t.date,key:'submitted_at',render:row=>fmt(row.submitted_at)},
     {header:t.status,key:'status',render:row=>t[row.status]},
-    {header:t.actions,key:'id',render:row=><button type="button" className={secondary} disabled={busy||row.status!=='submitted'} onClick={()=>{setReview(row);setReviewNotes('');}}><Eye size={15}/>{t.review}</button>},
+    {header:t.actions,key:'id',render:row=><button type="button" className={secondary} disabled={busy} onClick={()=>{setReview(row);setReviewNotes(row.review_notes??'');}}><Eye size={15}/>{row.status==='submitted'?t.review:t.view}</button>},
   ];
   return <section className="space-y-4" role="tabpanel">
     <header className="flex flex-wrap items-center justify-between gap-3">
@@ -203,7 +206,7 @@ export function CourseTasksPanel({organizationId,offeringId,token}:Props){
           {editor&&task.status==='published'&&<button type="button" className={secondary} disabled={busy} onClick={()=>setConfirm({task,action:'close'})}><XCircle size={16}/>{t.close}</button>}
           {editor&&task.status!=='draft'&&<button type="button" className={secondary} onClick={()=>{setSelectedTask(task);setPage(0);}}><Eye size={16}/>{t.view}</button>}
           {!editor&&<><button type="button" className={secondary} onClick={()=>setMineTask(task)}><Eye size={16}/>{t.mine}</button>
-            {canAnswer&&<button type="button" className={primary} onClick={()=>{setAnswerTask(task);setAnswer('');}}><Send size={16}/>{t.send}</button>}
+            {canAnswer&&<button type="button" className={primary} onClick={()=>{setAnswerTask(task);setAnswer('');setAttachmentCount(0);}}><Send size={16}/>{t.send}</button>}
             {!canAnswer&&<span className="app-muted self-center text-xs">{overdue?t.late:t.locked}</span>}</>}
         </div>
       </article>;
@@ -226,19 +229,22 @@ export function CourseTasksPanel({organizationId,offeringId,token}:Props){
           void perform(()=>request(`${root}/${confirm.task.id}/${action}`,token,{method:'POST'}),action==='publish'?t.publishedOk:t.closedOk,()=>setConfirm(null));
         }}>{confirm?.action==='publish'?t.publish:t.close}</button></div>
     </Modal>
-    <Modal open={answerTask!==null} title={t.send} onClose={()=>{if(!busy)setAnswerTask(null);}}>
+    <Modal open={answerTask!==null} title={t.send} onClose={()=>{if(!busy&&!attachmentsBusy)setAnswerTask(null);}}>
       <form className="space-y-4" onSubmit={submit}>
         <strong className="block text-sm">{answerTask?.title}</strong>
-        <label className="block text-sm font-medium">{t.answer}<textarea rows={8} className={`${input} mt-1`} minLength={1} maxLength={10000} required value={answer} onChange={e=>setAnswer(e.target.value)}/></label>
+        <label className="block text-sm font-medium">{t.answer}<textarea rows={8} className={`${input} mt-1`} maxLength={10000} value={answer} onChange={e=>setAnswer(e.target.value)}/></label>
+        {answerTask&&<TaskStagedFiles root={root} taskId={answerTask.id} token={token} locale={language}
+          onCountChange={setAttachmentCount} onBusyChange={setAttachmentsBusy}/>}
         <p className="app-muted text-xs">{t.limits}</p>
-        <div className="flex justify-end gap-2"><button type="button" className={secondary} onClick={()=>setAnswerTask(null)} disabled={busy}>{t.cancel}</button><button type="submit" className={primary} disabled={busy||!answer.trim()}><Send size={16}/>{t.send}</button></div>
+        <div className="flex justify-end gap-2"><button type="button" className={secondary} onClick={()=>setAnswerTask(null)} disabled={busy||attachmentsBusy}>{t.cancel}</button><button type="submit" className={primary} disabled={busy||attachmentsBusy||!hasSubmissionContent(answer,attachmentCount)}><Send size={16}/>{t.send}</button></div>
       </form>
     </Modal>
     <Modal open={mineTask!==null} title={t.mine} onClose={()=>setMineTask(null)}>
       <div className="space-y-3">{mine.length===0&&<p className="app-muted text-sm">{t.noAttempts}</p>}
         {mine.map(item=><div key={item.id} className="app-panel space-y-2 rounded-xl border p-3 text-sm">
           <div className="flex items-center justify-between"><strong>{t.attemptNumber} {item.attempt_number}</strong><span className="app-muted">{t[item.status]}</span></div>
-          <p className="whitespace-pre-wrap">{item.answer_text}</p>
+          {item.answer_text&&<p className="whitespace-pre-wrap">{item.answer_text}</p>}
+          {mineTask&&<TaskSubmissionFileList root={root} taskId={mineTask.id} submissionId={item.id} token={token} locale={language}/>}
           {item.review_notes&&<p className="rounded-lg border p-2 whitespace-pre-wrap"><CheckCircle2 size={15} className="mr-1 inline"/>{item.review_notes}</p>}
         </div>)}
         <button type="button" className={secondary} onClick={()=>setMineTask(null)}>{t.back}</button>
@@ -258,10 +264,12 @@ export function CourseTasksPanel({organizationId,offeringId,token}:Props){
     <Modal open={review!==null} title={t.review} onClose={()=>{if(!busy)setReview(null);}}>
       <form onSubmit={submitReview} className="space-y-3">
         <p className="app-muted text-sm">{review?.student_name} · {t.attemptNumber} {review?.attempt_number}</p>
-        <p className="max-h-44 overflow-auto rounded-lg border p-3 text-sm whitespace-pre-wrap">{review?.answer_text}</p>
-        <label className="block text-sm font-medium">{t.notes}<textarea rows={5} className={`${input} mt-1`} required minLength={2} maxLength={3000} value={reviewNotes} onChange={e=>setReviewNotes(e.target.value)}/></label>
+        {review?.answer_text&&<p className="max-h-44 overflow-auto rounded-lg border p-3 text-sm whitespace-pre-wrap">{review.answer_text}</p>}
+        {review&&selectedTask&&<TaskSubmissionFileList root={root} taskId={selectedTask.id} submissionId={review.id} token={token} locale={language}/>}
+        {review?.status==='submitted'?<label className="block text-sm font-medium">{t.notes}<textarea rows={5} className={`${input} mt-1`} required minLength={2} maxLength={3000} value={reviewNotes} onChange={e=>setReviewNotes(e.target.value)}/></label>
+          :review?.review_notes&&<p className="rounded-lg border p-3 text-sm whitespace-pre-wrap">{review.review_notes}</p>}
         <p className="app-muted text-xs">{t.limits}</p>
-        <div className="flex justify-end gap-2"><button type="button" className={secondary} disabled={busy} onClick={()=>setReview(null)}>{t.cancel}</button><button type="submit" className={primary} disabled={busy||reviewNotes.trim().length<2}>{t.saveReview}</button></div>
+        <div className="flex justify-end gap-2"><button type="button" className={secondary} disabled={busy} onClick={()=>setReview(null)}>{t.cancel}</button>{review?.status==='submitted'&&<button type="submit" className={primary} disabled={busy||reviewNotes.trim().length<2}>{t.saveReview}</button>}</div>
       </form>
     </Modal>
   </section>;

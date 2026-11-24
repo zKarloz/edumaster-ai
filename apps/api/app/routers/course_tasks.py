@@ -1,4 +1,4 @@
-"""CAMBIOS 21 · v30.1: tareas por oferta y entregas textuales.
+"""CAMBIOS 21 · v30.2: tareas por oferta y entregas con adjuntos privados.
 
 El rol global no concede acceso: siempre se comprueban organización, oferta y
 matrícula. Las notas oficiales continúan en el módulo académico, sin mezclarlas
@@ -42,7 +42,8 @@ class TaskInput(BaseModel):
 
 class AnswerInput(BaseModel):
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
-    answer_text: str = Field(min_length=1, max_length=10000)
+    # La respuesta puede contener solo archivos. Se valida que exista texto o adjuntos.
+    answer_text: str = Field(default="", max_length=10000)
 
 
 class ReviewInput(BaseModel):
@@ -305,6 +306,19 @@ async def submit_task(organization_id: UUID, offering_id: UUID, task_id: UUID,
                    "enrollment_id": enrollment_id})).scalar_one())
             if count >= task["max_attempts"]:
                 raise HTTPException(status_code=409, detail="Se agotaron los intentos permitidos")
+            # Los archivos pendientes son del actor/matrícula, no IDs del cliente.
+            # Esta lectura está serializada por el bloqueo de la matrícula.
+            pending = int((await conn.execute(text("""
+                SELECT count(*) FROM app.task_submission_files
+                WHERE organization_id=:org AND offering_id=:offering_id
+                  AND task_id=:task_id AND enrollment_id=:enrollment_id
+                  AND submission_id IS NULL
+            """), {"org": organization_id, "offering_id": offering_id,
+                   "task_id": task_id, "enrollment_id": enrollment_id})).scalar_one())
+            if not payload.answer_text.strip() and pending == 0:
+                raise HTTPException(status_code=422, detail="Escribe una respuesta o adjunta un archivo")
+            if pending > 3:
+                raise HTTPException(status_code=409, detail="Demasiados adjuntos pendientes")
             # Validación en el reloj de PostgreSQL para evitar rebasar el plazo
             # entre la comprobación Python y el INSERT.
             row = (await conn.execute(text("""
@@ -322,8 +336,18 @@ async def submit_task(organization_id: UUID, offering_id: UUID, task_id: UUID,
                    "attempt_number": count + 1, "answer_text": payload.answer_text})).mappings().first()
             if row is None:
                 raise HTTPException(status_code=409, detail="Venció el plazo de entrega")
+            # La asociación a este intento es atómica con el INSERT. Si hay
+            # rollback, los archivos permanecen pendientes para reintentar.
+            await conn.execute(text("""
+                UPDATE app.task_submission_files SET submission_id=:submission_id
+                WHERE organization_id=:org AND offering_id=:offering_id
+                  AND task_id=:task_id AND enrollment_id=:enrollment_id
+                  AND submission_id IS NULL
+            """), {"submission_id": row["id"], "org": organization_id,
+                   "offering_id": offering_id, "task_id": task_id,
+                   "enrollment_id": enrollment_id})
             await _audit(conn, organization_id, ctx["actor"], "task.submit", "task_submissions", row["id"])
-        return {**dict(row), "id": str(row["id"])}
+        return {**dict(row), "id": str(row["id"]), "attachment_count": pending}
     except IntegrityError as exc:
         logger.info("Intento concurrente o matrícula/tarea incompatible")
         raise HTTPException(status_code=409, detail="La entrega entró en conflicto; recarga la tarea") from exc

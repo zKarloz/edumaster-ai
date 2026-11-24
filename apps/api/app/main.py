@@ -18,6 +18,7 @@ from app.routers.offering_content import router as offering_content_router
 from app.routers.organizations import router as organizations_router
 from app.routers.profile import router as profile_router
 from app.routers.profile_details import router as profile_details_router
+from app.routers.task_attachments import router as task_attachments_router
 from app.routers.user_administration import router as user_administration_router
 
 settings = get_settings()
@@ -35,6 +36,7 @@ app.include_router(academic_activity_router)
 app.include_router(course_appearance_router)
 app.include_router(course_content_router)
 app.include_router(course_tasks_router)
+app.include_router(task_attachments_router)
 app.include_router(offering_content_router)
 app.include_router(lesson_revisions_router)
 app.include_router(lesson_resources_router)

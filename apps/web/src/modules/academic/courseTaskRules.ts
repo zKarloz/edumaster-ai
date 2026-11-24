@@ -18,3 +18,8 @@ export function taskLocalDateToISO(value:string):string|null {
   if(!Number.isFinite(date.getTime()))throw new Error('Fecha de entrega inválida');
   return date.toISOString();
 }
+
+/** Se admite texto, solo adjuntos o ambos; los límites reales los impone FastAPI. */
+export function hasSubmissionContent(text:string, attachmentCount:number):boolean {
+  return text.trim().length>0 || (Number.isInteger(attachmentCount) && attachmentCount>0);
+}

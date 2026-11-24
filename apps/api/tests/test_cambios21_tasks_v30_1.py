@@ -56,7 +56,6 @@ def test_task_input_accepts_timezone():
 
 
 @pytest.mark.parametrize("model,value", [
-    (tasks.AnswerInput, {"answer_text": "  "}),
     (tasks.AnswerInput, {"answer_text": "x" * 10001}),
     (tasks.ReviewInput, {"review_notes": "!"}),
     (tasks.ReviewInput, {"review_notes": "x" * 3001}),
@@ -132,6 +131,8 @@ class Conn:
             return Result({"id": ENROLLMENT})
         if "SELECT count(*) FROM app.task_submissions" in sql:
             return Result(self.count)
+        if "SELECT count(*) FROM app.task_submission_files" in sql:
+            return Result(0)
         if "INSERT INTO app.task_submissions" in sql:
             return Result({"id": SUBMISSION, "attempt_number": self.count+1,
                            "submitted_at": datetime.now(UTC),

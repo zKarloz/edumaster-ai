@@ -100,3 +100,8 @@ La migración `009_lesson_revisions.sql` forma parte de la entrega v29.1. No eje
 - Migración 011: `database/migrations/011_course_tasks.sql` (ejecutar una sola vez tras respaldo y preflight)
 
 Las revisiones textuales de v30.1 **no son calificaciones oficiales**. Los archivos de entrega y las rúbricas se implementarán en incrementos posteriores.
+
+## CAMBIOS 21 · v30.2 — archivos de entregas
+
+- [Adjuntos privados en intentos de tareas](historial/incrementos/CAMBIOS21_V30_2.md)
+- Migración 012: `database/migrations/012_task_submission_files.sql` (ejecutar una sola vez, tras respaldo y preflight)
