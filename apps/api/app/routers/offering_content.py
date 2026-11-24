@@ -25,6 +25,7 @@ from app.routers.course_content import (
     _audit,
     _swap_positions,
 )
+from app.services.lesson_revision_compat import create_initial_draft, sync_legacy_update
 
 router = APIRouter(prefix="/api/v1/academic/organizations", tags=["offering-content"])
 logger = logging.getLogger(__name__)
@@ -203,6 +204,11 @@ async def create_offering_lesson(
                           title, content, position, status
             """), {"org": organization_id, "module_id": module_id,
                    "position": position, **payload.model_dump()})).mappings().one()
+            # El borrador y la lección se insertan en la misma transacción.
+            await create_initial_draft(
+                conn, organization_id, UUID(item["id"]), actor, "offering",
+                payload.title, payload.content,
+            )
             await _audit(conn, organization_id, actor, "create", "offering_lessons", UUID(item["id"]))
         return dict(item)
     except SQLAlchemyError as exc:
@@ -224,13 +230,18 @@ async def update_offering_lesson(
             offering_id = await _offering_from_lesson(conn, organization_id, lesson_id)
             actor = await _editor(conn, auth_id, organization_id, offering_id, lock=True)
             current = (await conn.execute(text("""
-                SELECT status FROM app.offering_lessons
+                SELECT status, title, content FROM app.offering_lessons
                 WHERE organization_id=:org AND id=:lesson_id FOR UPDATE
             """), {"org": organization_id, "lesson_id": lesson_id})).mappings().first()
             if not current:
                 raise HTTPException(status_code=404, detail="Lección de oferta no disponible")
-            if current["status"] == "published" and any(k in changes for k in ("title", "content")):
-                raise HTTPException(status_code=409, detail="Primero devuelve la lección a borrador")
+            # Los formularios heredados no pueden saltarse el historial editorial.
+            # La función valida transición y actualiza la revisión en la
+            # misma transacción que la proyección que sigue leyendo v28.
+            await sync_legacy_update(
+                conn, organization_id, lesson_id, actor, "offering",
+                current["status"], current["title"], current["content"], changes,
+            )
             item = (await conn.execute(text(f"""
                 UPDATE app.offering_lessons SET {assignment}
                 WHERE organization_id=:org AND id=:lesson_id AND EXISTS (

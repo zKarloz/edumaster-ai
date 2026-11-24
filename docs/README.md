@@ -66,3 +66,22 @@ migraciones, sobrescribir código o aplicar parches.
 Los archivos `.diff` históricos se conservan únicamente como referencia.
 Las migraciones SQL vigentes siguen en `database/migrations/`.
 Los dos PDFs enterprise son documentos fuente externos y no se redistribuyen en este ZIP.
+
+## Diseño y entrega actual · CAMBIOS 20 v29.1
+
+- [Entrega integrada de v29.1 — procedimiento y alcance](diseno/CAMBIOS20_V29_1_ENTREGA.md)
+
+## Historial técnico de revisión (no reinstalar)
+
+- [CAMBIOS 20 · v29.1 — Contratos API y estrategia de revisión](diseno/CAMBIOS20_V29_1_CONTRATOS.md)
+- [Migración 009 · Comprobaciones previas (solo lectura)](diseno/009_preflight_lectura.sql)
+- [Migración 009 · Comprobaciones posteriores (solo lectura)](diseno/009_postflight_lectura.sql)
+
+La migración `009_lesson_revisions.sql` forma parte de la entrega v29.1. No ejecutarla sin respaldo y sin seguir el procedimiento de instalación.
+
+- [CAMBIOS 20 · Revisión B de migración 009 y endpoints](diseno/CAMBIOS20_V29_1_REVISION_B.md) — documentación en revisión; no ejecutar SQL todavía.
+
+- [CAMBIOS 20 · Revisión C — compatibilidad transaccional y rutas activadas en código](diseno/CAMBIOS20_V29_1_REVISION_C.md) — paquete de revisión, todavía NO INSTALAR.
+
+- [CAMBIOS 20 · Revisión D — editor Tiptap en código](diseno/CAMBIOS20_V29_1_REVISION_D.md) — NO INSTALAR.
+- [CAMBIOS 20 · Revisión E — navegación segura y autenticación](diseno/CAMBIOS20_V29_1_REVISION_E.md) — NO INSTALAR.

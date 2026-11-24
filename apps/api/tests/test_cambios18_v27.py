@@ -75,8 +75,10 @@ class Conn:
             return Result((UNIT,) if self.has_module else None)
         if "MAX(position)" in sql:
             return Result(1)
-        if "SELECT status FROM app.offering_modules" in sql or "SELECT status FROM app.offering_lessons" in sql:
+        if "SELECT status FROM app.offering_modules" in sql:
             return Result({"status": "draft"})
+        if "SELECT status, title, content FROM app.offering_lessons" in sql:
+            return Result({"status": "draft", "title": "Lección nueva", "content": None})
         if "INSERT INTO app.offering_modules" in sql:
             return Result({"id": str(UNIT), "title": params["title"],
                            "description": params["description"], "position": params["position"],
@@ -85,6 +87,17 @@ class Conn:
             return Result({"id": str(LESSON), "module_id": str(UNIT),
                            "title": params["title"], "content": params["content"],
                            "position": params["position"], "status": "draft"})
+        # La transición de estado de la oferta sincroniza las revisiones.
+        if "FROM app.lesson_revisions" in sql and "revision_state=:state" in sql:
+            return Result({"id": LESSON, "title": "Lección nueva", "document_body": "",
+                           "document_format": "plain-text-v1", "lock_version": 1,
+                           "revision_number": None, "base_revision_id": None,
+                           "legacy_content_was_null": True}
+                          if params["state"] == "draft" else None)
+        if "SELECT COALESCE(MAX(revision_number)" in sql:
+            return Result(1)
+        if "INSERT INTO app.lesson_revisions" in sql or "UPDATE app.lesson_revisions" in sql:
+            return Result()
         if "UPDATE app.offering_modules SET" in sql:
             return Result({"id": str(UNIT), "title": "Unidad nueva", "position": 1,
                            "description": None, "status": params.get("status", "draft")})

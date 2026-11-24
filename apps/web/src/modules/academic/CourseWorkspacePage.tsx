@@ -3,7 +3,7 @@
  * Todos los datos son reales y llegan desde FastAPI con JWT y alcance institucional.
  */
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
-import { useNavigate } from 'react-router';
+import { useLocation, useNavigate } from 'react-router';
 import { useTranslation } from 'react-i18next';
 import {
   ArrowDown, ArrowLeft, ArrowUp, BookOpen,
@@ -15,7 +15,7 @@ import { Accordion } from '../../components/shared/Accordion';
 import { OptionSelect } from '../../components/shared/OptionSelect';
 import { Spinner } from '../../components/shared/Spinner';
 import { useToast } from '../../components/shared/Toast';
-import { sectionPaths } from '../../routes';
+import { lessonEditorPath, sectionPaths } from '../../routes';
 import { courseCardStyle, courseIcon } from './courseAppearance';
 
 type State = 'draft' | 'published' | 'archived';
@@ -66,13 +66,14 @@ function StateBadge({status}: {status: State}) {
 export function CourseWorkspacePage({organizationId, offeringId, courseId, token}: Props) {
   const {t} = useTranslation();
   const navigate = useNavigate();
+  const location = useLocation();
   const {notify} = useToast();
   const [workspace,setWorkspace] = useState<Workspace|null>(null);
   const [loading,setLoading] = useState(true);
   const [error,setError] = useState('');
   const [revision,setRevision] = useState(0);
-  const [tab,setTab] = useState<'overview'|'content'>('overview');
-  const [expanded,setExpanded] = useState<string[]>([]);
+  const [tab,setTab] = useState<'overview'|'content'>(()=>new URLSearchParams(location.search).get('tab')==='content'?'content':'overview');
+  const [expanded,setExpanded] = useState<string[]>(()=>{const unit=new URLSearchParams(location.search).get('unit');return unit?[unit]:[];});
   // Por defecto, ocultar unidades archivadas sin perder acceso desde el filtro.
   const [unitFilter,setUnitFilter] = useState<'current'|'all'|State>('current');
   const [dialog,setDialog] = useState<ContentDialog>(null);
@@ -297,7 +298,7 @@ export function CourseWorkspacePage({organizationId, offeringId, courseId, token
                   <button type="button" className="app-workspace-icon-button" title={t('workspace.moveDown')} disabled={saving||lessonIndex===unit.lessons.length-1}
                     aria-label={`${t('workspace.moveDown')}: ${lesson.title}`} onClick={()=>void move('lesson',unit.source,lesson.id,unit.id,'down')}><ArrowDown size={16}/></button>
                   <button type="button" className="app-workspace-icon-button" title={t('workspace.editLesson')} disabled={saving}
-                    aria-label={`${t('workspace.editLesson')}: ${lesson.title}`} onClick={()=>showEditor({kind:'lesson',source:unit.source,unitId:unit.id,current:lesson})}><Pencil size={16}/></button>
+                    aria-label={`${t('workspace.editLesson')}: ${lesson.title}`} onClick={()=>lesson.status==='archived' ? showEditor({kind:'lesson',source:unit.source,unitId:unit.id,current:lesson}) : navigate(`${lessonEditorPath(organizationId,lesson.id,unit.source,offeringId,courseId)}?unit=${unit.id}`)}><Pencil size={16}/></button>
                 </div>}
               </div>
               {lesson.content && <p className="app-muted mt-3 whitespace-pre-wrap text-sm leading-relaxed">{lesson.content}</p>}

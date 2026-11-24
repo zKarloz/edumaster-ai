@@ -20,6 +20,7 @@ from app.core.database import require_engine
 from app.core.security import authenticated_user_id
 from app.routers.academic import _require_scope
 from app.routers.academic_activity import ASSIGNED_INSTRUCTOR, _actor_scope
+from app.services.lesson_revision_compat import create_initial_draft, sync_legacy_update
 
 router = APIRouter(prefix="/api/v1/academic/organizations", tags=["course-content"])
 logger = logging.getLogger(__name__)
@@ -315,6 +316,11 @@ async def create_lesson(
                           title, content, position, status
             """), {"org": organization_id, "module_id": module_id,
                     "position": position, **payload.model_dump()})).mappings().one()
+            # El borrador y la lección se insertan en la misma transacción.
+            await create_initial_draft(
+                conn, organization_id, UUID(item["id"]), actor, "institutional",
+                payload.title, payload.content,
+            )
             await _audit(conn, organization_id, actor, "create", "lessons", UUID(item["id"]))
         return dict(item)
     except SQLAlchemyError as exc:
@@ -339,17 +345,21 @@ async def update_lesson(
             # No consultar metadatos de lecciones antes de validar el rol.
             await _require_scope(conn, auth_id, organization_id, manage=True)
             course_id = await _course_from_lesson(conn, organization_id, lesson_id)
-            actor = await _manager_course(conn, auth_id, organization_id, course_id)
+            actor = await _manager_course(conn, auth_id, organization_id, course_id, lock=True)
             current = (await conn.execute(text("""
-                SELECT status FROM app.lessons
+                SELECT status, title, content FROM app.lessons
                 WHERE organization_id=:org AND id=:lesson_id
                 FOR UPDATE
             """), {"org": organization_id, "lesson_id": lesson_id})).mappings().first()
             if not current:
                 raise HTTPException(status_code=404, detail="Lección no disponible")
-            if current["status"] == "published" and any(key in changes for key in ("title", "content")):
-                raise HTTPException(status_code=409,
-                    detail="Para modificar una lección publicada, pásala primero a borrador")
+            # Los formularios heredados no pueden saltarse el historial editorial.
+            # La función valida transición y actualiza la revisión en la
+            # misma transacción que la proyección que sigue leyendo v28.
+            await sync_legacy_update(
+                conn, organization_id, lesson_id, actor, "institutional",
+                current["status"], current["title"], current["content"], changes,
+            )
             item = (await conn.execute(text(f"""
                 UPDATE app.lessons SET {assignments}
                 WHERE organization_id=:org AND id=:lesson_id AND EXISTS (

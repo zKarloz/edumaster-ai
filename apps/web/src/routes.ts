@@ -15,6 +15,22 @@ const oldDetail = /^\/app\/actividad\/organizaciones\/([0-9a-f-]{36})\/ofertas\/
 /** Rutas profundas enlazables: siempre llevan institución y curso/oferta. */
 const offeringWorkspace = /^\/academico\/organizaciones\/([0-9a-f-]{36})\/ofertas\/([0-9a-f-]{36})\/?$/i;
 const baseWorkspace = /^\/academico\/organizaciones\/([0-9a-f-]{36})\/cursos\/([0-9a-f-]{36})\/?$/i;
+/** Editor enlazable para una lección concreta: origen explícito evita confundir IDs. */
+const offeringLessonEditor = /^\/academico\/organizaciones\/([0-9a-f-]{36})\/ofertas\/([0-9a-f-]{36})\/lecciones\/(base|offering)\/([0-9a-f-]{36})\/editar\/?$/i;
+const baseLessonEditor = /^\/academico\/organizaciones\/([0-9a-f-]{36})\/cursos\/([0-9a-f-]{36})\/lecciones\/base\/([0-9a-f-]{36})\/editar\/?$/i;
+export type LessonSource = 'base' | 'offering';
+export function lessonEditorDetail(path: string) {
+  const offering = offeringLessonEditor.exec(path);
+  if (offering) return {organizationId:offering[1]!, offeringId:offering[2]!, courseId:undefined, source:offering[3]! as LessonSource, lessonId:offering[4]!};
+  const base = baseLessonEditor.exec(path);
+  return base ? {organizationId:base[1]!, offeringId:undefined, courseId:base[2]!, source:'base' as const, lessonId:base[3]!} : null;
+}
+export function lessonEditorPath(organizationId:string, lessonId:string, source:LessonSource, offeringId?:string, courseId?:string):string {
+  if (offeringId) return `${courseOfferingPath(organizationId,offeringId)}/lecciones/${source}/${lessonId}/editar`;
+  if (source==='base' && courseId) return `${courseBasePath(organizationId,courseId)}/lecciones/base/${lessonId}/editar`;
+  throw new Error('El editor necesita el ID del curso o de la oferta');
+}
+
 export function courseWorkspaceDetail(path: string) {
   const offering = offeringWorkspace.exec(path);
   if (offering) return {organizationId:offering[1]!, offeringId:offering[2]!, courseId:undefined};
@@ -52,7 +68,7 @@ export function legacyRedirect(pathname: string): string | null {
 }
 export function sectionForPath(path: string): Section | null {
   if (newDetail.test(path)) return 'activity';
-  if (offeringWorkspace.test(path) || baseWorkspace.test(path)) return 'courses';
+  if (offeringWorkspace.test(path) || baseWorkspace.test(path) || offeringLessonEditor.test(path) || baseLessonEditor.test(path)) return 'courses';
   const clean = path.replace(/\/$/, '') || '/';
   return (Object.entries(sectionPaths).find(([, value]) => value === clean)?.[0] as Section | undefined) ?? null;
 }

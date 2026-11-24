@@ -1,13 +1,13 @@
 // Shell de Sprint 1: navegación, estado API, tema, componentes y Auth opcional.
 // Los ejemplos académicos están rotulados DEMO; nunca simulan datos reales.
-import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent, type PointerEvent as ReactPointerEvent } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, type FormEvent, type PointerEvent as ReactPointerEvent } from 'react';
 import { Activity, ArrowRight, BookOpen, Building2, CheckCircle2, ChevronDown, Database,
   GraduationCap, LayoutDashboard, LockKeyhole, Menu, Users, ClipboardList,
   Server, ShieldCheck, XCircle, Settings, PanelLeftClose, PanelLeftOpen, X } from 'lucide-react';
 import type { Session } from '@supabase/supabase-js';
 import { useLocation, useNavigate } from 'react-router';
 import { useTranslation } from 'react-i18next';
-import { activityDetail, courseWorkspaceDetail, enrollmentHistoryPath, legacyRedirect, sectionForPath, sectionPaths, type Section } from './routes';
+import { activityDetail, courseWorkspaceDetail, lessonEditorDetail, enrollmentHistoryPath, legacyRedirect, sectionForPath, sectionPaths, type Section } from './routes';
 import { DataTable, type Column } from './components/shared/DataTable';
 import { Modal } from './components/shared/Modal';
 import { Spinner } from './components/shared/Spinner';
@@ -19,6 +19,8 @@ import { LoginScreen } from './LoginScreen';
 import { OrganizationsPage } from './modules/organizations/OrganizationsPage';
 import { AcademicPage } from './modules/academic/AcademicPage';
 import { CourseWorkspacePage } from './modules/academic/CourseWorkspacePage';
+// Carga diferida: Tiptap no incrementa el bundle inicial de la plataforma.
+const LessonEditorPage = lazy(() => import('./modules/academic/LessonEditorPage').then(mod => ({default:mod.LessonEditorPage})));
 import { AcademicActivityPage } from './modules/academic/AcademicActivityPage';
 import { UsersPage } from './modules/users/UsersPage';
 import { InstitutionalUsersPage } from './modules/users/InstitutionalUsersPage';
@@ -70,6 +72,7 @@ export default function App() {
   const section = sectionForPath(location.pathname) ?? 'dashboard';
   const detailRoute = activityDetail(location.pathname);
   const courseRoute = courseWorkspaceDetail(location.pathname);
+  const lessonRoute = lessonEditorDetail(location.pathname);
   const [apiStatus, setApiStatus] = useState<Connection>('checking');
   const [session, setSession] = useState<Session | null>(null);
   const [orgs, setOrgs] = useState<Organization[]>([]);
@@ -324,15 +327,22 @@ export default function App() {
     finally { setAuthBusy(false); }
   }
 
-  // TypeScript no conserva el estrechamiento de `supabase` dentro de callbacks JSX.
-  // Esta función comprueba el cliente en su propio ámbito antes de cerrar sesión.
-  async function signOut() {
+  // Separa confirmar salida del cierre real: un borrador abierto puede
+  // bloquear el cierre de sesión mediante su modal compartido.
+  async function completeSignOut():Promise<boolean> {
     const client = supabase;
-    if (!client) return;
+    if (!client) return false;
     const { error } = await client.auth.signOut();
-    if (error) { notify(`No se pudo cerrar sesión: ${error.message}`); return; }
+    if (error) { notify(`No se pudo cerrar sesión: ${error.message}`); return false; }
     setSession(null); setIdentity(null); navigate('/iniciar-sesion', { replace: true }); setPassword(''); setAuthorizedUserId(null); setGlobalRoles([]); setMemberships([]); setAccountStatus('checking');
     notify('Sesión cerrada correctamente.', 'success');
+    return true;
+  }
+  async function signOut() {
+    // La lección puede impedir temporalmente esta acción hasta que el
+    // usuario confirme si desea descartar su borrador sin guardar.
+    if (!window.dispatchEvent(new Event('edumaster:before-signout', { cancelable: true }))) return;
+    await completeSignOut();
   }
 
   const institutionalAdminOrganizations = useMemo(() => orgs.filter(org =>
@@ -349,7 +359,10 @@ export default function App() {
     : navGroups.find(group => group.sections.some(id => id === section))?.label ?? 'nav.platform';
   const isDemo = false;
   const rows = orgs;
-  const navTo = (next: Section) => { navigate(sectionPaths[next]); setMobileMenu(false); };
+  const navTo = (next: Section) => {
+    // useBlocker en LessonEditorPage protege todas las navegaciones SPA.
+    navigate(sectionPaths[next]); setMobileMenu(false);
+  };
   const academicRole = (orgId: string): 'manager'|'instructor'|'student' => {
     const roles = memberships.find(item => item.organization_id === orgId)?.roles ?? [];
     return roles.some(role => role === 'institution_admin' || role === 'coordinator') ? 'manager'
@@ -566,9 +579,12 @@ export default function App() {
           {section === 'profile' && accessToken && <ProfilePage key={session.user.id} identity={accountIdentity} token={accessToken}
             userId={session.user.id} photo={avatar.photo} photoLoading={avatar.loading} onIdentity={value => setIdentity({ id: session.user.id, value })}
             onSavePhoto={avatar.save} onRemovePhoto={avatar.remove}/>}
+          {section === 'courses' && lessonRoute && accessToken && <Suspense fallback={<Spinner label={t('lessonEditor.loading')}/>}>
+            <LessonEditorPage key={`${lessonRoute.lessonId}:${lessonRoute.source}`} {...lessonRoute} token={accessToken} onConfirmSignOut={completeSignOut}/>
+          </Suspense>}
           {section === 'courses' && courseRoute && accessToken && <CourseWorkspacePage
             organizationId={courseRoute.organizationId} courseId={courseRoute.courseId} offeringId={courseRoute.offeringId} token={accessToken}/>}
-          {((section === 'courses' && !courseRoute) || section === 'students' || section === 'enrollments') && accessToken && <AcademicPage
+          {((section === 'courses' && !courseRoute && !lessonRoute) || section === 'students' || section === 'enrollments') && accessToken && <AcademicPage
             mode={section} organizations={orgs} organizationId={academicOrgId}
             onOrganizationChange={setAcademicOrgId} token={accessToken}
             courseRole={academicRole(academicOrgId)}

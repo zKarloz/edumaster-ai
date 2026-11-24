@@ -105,12 +105,24 @@ class Connection:
                            "position": params["position"], "status": "draft"})
         if "SELECT status FROM app.course_modules" in query:
             return Result({"status": self.current_status})
-        if "SELECT status FROM app.lessons" in query:
-            return Result({"status": self.current_status})
+        if "SELECT status, title, content FROM app.lessons" in query:
+            return Result({"status": self.current_status, "title": "Lección 1", "content": "Contenido de prueba"})
         if "UPDATE app.course_modules SET" in query and "RETURNING" in query:
             return Result({"id": str(UNIT), "title": params.get("title", "Unidad 1"),
                            "description": params.get("description"), "position": 1,
                            "status": params.get("status", "draft")})
+        # Simulador de revisiones v29.1: la compatibilidad se prueba en
+        # tests especializados además de mantener las pruebas v26.
+        if "FROM app.lesson_revisions" in query and "revision_state=:state" in query:
+            return Result({"id": LESSON, "title": "Lección 1", "document_body": "Contenido",
+                           "document_format": "plain-text-v1", "lock_version": 1,
+                           "revision_number": None, "base_revision_id": None,
+                           "legacy_content_was_null": False}
+                          if params["state"] == "draft" else None)
+        if "SELECT COALESCE(MAX(revision_number)" in query:
+            return Result(1)
+        if "INSERT INTO app.lesson_revisions" in query or "UPDATE app.lesson_revisions" in query:
+            return Result()
         if "UPDATE app.lessons SET" in query and "RETURNING" in query:
             return Result({"id": str(LESSON), "module_id": str(UNIT),
                            "title": params.get("title", "Lección 1"),
@@ -301,7 +313,8 @@ def test_published_material_requires_unpublish_before_text_edits():
         assert response.status_code == 409, response.text
         assert not any("UPDATE app.course_modules SET" in sql or "UPDATE app.lessons SET" in sql
                        for sql, _ in engine.conn.statements)
-    # Despublicar solo cambia el estado; no reescribe silenciosamente el texto.
+    # v29.1: publicado -> borrador está prohibido; se crea un borrador de
+    # revisión independiente, manteniendo la publicación visible.
     response = call("PATCH", f"/lessons/{LESSON}", Engine(manager=True, current_status="published"),
                     {"status": "draft"})
-    assert response.status_code == 200
+    assert response.status_code == 409
