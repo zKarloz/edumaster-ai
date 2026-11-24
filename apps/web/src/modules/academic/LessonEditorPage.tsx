@@ -8,6 +8,7 @@ import { useBlocker, useLocation, useNavigate } from 'react-router';
 import { useTranslation } from 'react-i18next';
 import { ArrowLeft, Eye, Pencil, RefreshCcw, Save, ShieldCheck } from 'lucide-react';
 import { RichTextEditor } from '../../components/shared/RichTextEditor';
+import { LessonResources } from './LessonResources';
 import { canonicalLessonDocument } from './lessonDocument';
 import { shouldBlockLessonNavigation } from './lessonNavigation';
 import { Spinner } from '../../components/shared/Spinner';
@@ -196,6 +197,7 @@ export function LessonEditorPage({organizationId,offeringId,courseId,lessonId,so
             disabled={saving||!dirty||preview} onClick={()=>void save()}><Save size={17}/>{saving?t('lessonEditor.saving'):t('lessonEditor.save')}</button>
         </div>
       </div>
+      <LessonResources draftPath={path} token={token} preview={preview}/>
     </>}
     <Modal open={blocker.state==='blocked'} title={t('lessonEditor.dirty')}
       onClose={()=>{if(blocker.state==='blocked') blocker.reset();}}>

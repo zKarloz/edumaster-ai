@@ -85,3 +85,7 @@ La migración `009_lesson_revisions.sql` forma parte de la entrega v29.1. No eje
 
 - [CAMBIOS 20 · Revisión D — editor Tiptap en código](diseno/CAMBIOS20_V29_1_REVISION_D.md) — NO INSTALAR.
 - [CAMBIOS 20 · Revisión E — navegación segura y autenticación](diseno/CAMBIOS20_V29_1_REVISION_E.md) — NO INSTALAR.
+
+## CAMBIOS 20 · v29.2 — recursos privados
+
+- [Recursos de lección, seguridad y límites de v29.2](historial/incrementos/CAMBIOS20_V29_2.md)

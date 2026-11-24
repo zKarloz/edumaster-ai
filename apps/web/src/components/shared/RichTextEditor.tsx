@@ -2,7 +2,7 @@
  * Sin HTML arbitrario, recursos adjuntos ni extensiones de pago en v29.1.
  */
 import { useState, type FormEvent } from 'react';
-import { EditorContent, useEditor } from '@tiptap/react';
+import { EditorContent, useEditor, useEditorState } from '@tiptap/react';
 import type { JSONContent } from '@tiptap/core';
 import StarterKit from '@tiptap/starter-kit';
 import { Bold, Heading1, Heading2, Heading3, Italic, Link2, Link2Off, List, ListOrdered,
@@ -36,6 +36,28 @@ export function RichTextEditor({value,onChange,readOnly=false}:Props) {
     editorProps:{attributes:{class:'app-rich-editor-content outline-none', 'aria-label':t('lessonEditor.pageTitle')}},
     onUpdate:({editor:instance})=>onChange?.(canonicalLessonDocument(instance.getJSON())),
   },[readOnly]);
+
+  // Tiptap 3 no vuelve a renderizar la barra en React automáticamente.
+  // La suscripción actualiza cada botón al activar una marca (incluso sin escribir)
+  // y también cuando cambia la selección, sin repintar en cada pulsación innecesaria.
+  const toolbarState=useEditorState({
+    editor,
+    selector:({editor:current})=>current?{
+      bold:current.isActive('bold'),
+      italic:current.isActive('italic'),
+      underline:current.isActive('underline'),
+      paragraph:current.isActive('paragraph'),
+      h1:current.isActive('heading',{level:1}),
+      h2:current.isActive('heading',{level:2}),
+      h3:current.isActive('heading',{level:3}),
+      bullets:current.isActive('bulletList'),
+      numbers:current.isActive('orderedList'),
+      quote:current.isActive('blockquote'),
+      link:current.isActive('link'),
+      canUndo:current.can().undo(),
+      canRedo:current.can().redo(),
+    }:null,
+  });
   if (!editor) return <div className="app-panel min-h-48 rounded-xl border p-4" aria-busy="true"/>;
 
   function tool(label:string, Icon:typeof Bold, execute:()=>void, active=false, enabled=true) {
@@ -69,23 +91,23 @@ export function RichTextEditor({value,onChange,readOnly=false}:Props) {
   return <>
     <div className="app-rich-editor rounded-xl border overflow-hidden">
       {!readOnly && <div role="toolbar" aria-label={t('lessonEditor.format')} className="app-rich-editor-toolbar flex items-center gap-1 overflow-x-auto p-2">
-        {tool(t('lessonEditor.bold'),Bold,()=>editor.chain().focus().toggleBold().run(),editor.isActive('bold'))}
-        {tool(t('lessonEditor.italic'),Italic,()=>editor.chain().focus().toggleItalic().run(),editor.isActive('italic'))}
-        {tool(t('lessonEditor.underline'),UnderlineIcon,()=>editor.chain().focus().toggleUnderline().run(),editor.isActive('underline'))}
+        {tool(t('lessonEditor.bold'),Bold,()=>editor.chain().focus().toggleBold().run(),toolbarState?.bold ?? false)}
+        {tool(t('lessonEditor.italic'),Italic,()=>editor.chain().focus().toggleItalic().run(),toolbarState?.italic ?? false)}
+        {tool(t('lessonEditor.underline'),UnderlineIcon,()=>editor.chain().focus().toggleUnderline().run(),toolbarState?.underline ?? false)}
         <span className="app-editor-toolbar-separator mx-1 h-6 w-px shrink-0"/>
-        {tool(t('lessonEditor.paragraph'),RotateCcw,()=>editor.chain().focus().setParagraph().run(),editor.isActive('paragraph'))}
-        {tool(t('lessonEditor.h1'),Heading1,()=>editor.chain().focus().toggleHeading({level:1}).run(),editor.isActive('heading',{level:1}))}
-        {tool(t('lessonEditor.h2'),Heading2,()=>editor.chain().focus().toggleHeading({level:2}).run(),editor.isActive('heading',{level:2}))}
-        {tool(t('lessonEditor.h3'),Heading3,()=>editor.chain().focus().toggleHeading({level:3}).run(),editor.isActive('heading',{level:3}))}
+        {tool(t('lessonEditor.paragraph'),RotateCcw,()=>editor.chain().focus().setParagraph().run(),toolbarState?.paragraph ?? false)}
+        {tool(t('lessonEditor.h1'),Heading1,()=>editor.chain().focus().toggleHeading({level:1}).run(),toolbarState?.h1 ?? false)}
+        {tool(t('lessonEditor.h2'),Heading2,()=>editor.chain().focus().toggleHeading({level:2}).run(),toolbarState?.h2 ?? false)}
+        {tool(t('lessonEditor.h3'),Heading3,()=>editor.chain().focus().toggleHeading({level:3}).run(),toolbarState?.h3 ?? false)}
         <span className="app-editor-toolbar-separator mx-1 h-6 w-px shrink-0"/>
-        {tool(t('lessonEditor.bullets'),List,()=>editor.chain().focus().toggleBulletList().run(),editor.isActive('bulletList'))}
-        {tool(t('lessonEditor.numbers'),ListOrdered,()=>editor.chain().focus().toggleOrderedList().run(),editor.isActive('orderedList'))}
-        {tool(t('lessonEditor.quote'),Quote,()=>editor.chain().focus().toggleBlockquote().run(),editor.isActive('blockquote'))}
-        {tool(t('lessonEditor.link'),Link2,openLink,editor.isActive('link'))}
-        {tool(t('lessonEditor.removeLink'),Link2Off,()=>editor.chain().focus().unsetLink().run(),false,editor.isActive('link'))}
+        {tool(t('lessonEditor.bullets'),List,()=>editor.chain().focus().toggleBulletList().run(),toolbarState?.bullets ?? false)}
+        {tool(t('lessonEditor.numbers'),ListOrdered,()=>editor.chain().focus().toggleOrderedList().run(),toolbarState?.numbers ?? false)}
+        {tool(t('lessonEditor.quote'),Quote,()=>editor.chain().focus().toggleBlockquote().run(),toolbarState?.quote ?? false)}
+        {tool(t('lessonEditor.link'),Link2,openLink,toolbarState?.link ?? false)}
+        {tool(t('lessonEditor.removeLink'),Link2Off,()=>editor.chain().focus().unsetLink().run(),false,toolbarState?.link ?? false)}
         <span className="app-editor-toolbar-separator mx-1 h-6 w-px shrink-0"/>
-        {tool(t('lessonEditor.undo'),Undo2,()=>editor.chain().focus().undo().run(),false,editor.can().undo())}
-        {tool(t('lessonEditor.redo'),Redo2,()=>editor.chain().focus().redo().run(),false,editor.can().redo())}
+        {tool(t('lessonEditor.undo'),Undo2,()=>editor.chain().focus().undo().run(),false,toolbarState?.canUndo ?? false)}
+        {tool(t('lessonEditor.redo'),Redo2,()=>editor.chain().focus().redo().run(),false,toolbarState?.canRedo ?? false)}
       </div>}
       <EditorContent editor={editor} className={readOnly?'app-rich-preview':'app-rich-editor-surface'}/>
     </div>

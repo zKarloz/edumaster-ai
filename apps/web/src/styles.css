@@ -863,10 +863,19 @@ html[data-motion='off'] .app-context-menu-item { transition: none !important; }
   scrollbar-width: thin;
 }
 .app-editor-tool { color: var(--app-text); flex: 0 0 auto; }
-.app-editor-tool:hover:not(:disabled), .app-editor-tool-active {
+/* El estado activo es independiente del hover: se aprecia desde el primer clic.
+   Los tokens conservan la paleta del tema Claro/Oscuro/Negro y aria-pressed
+   indica el estado también a lectores de pantalla. */
+.app-editor-tool:hover:not(:disabled) {
   background: var(--app-panel-bg);
   box-shadow: inset 0 0 0 1px var(--app-control-border);
 }
+.app-editor-tool[aria-pressed='true'] {
+  background: color-mix(in srgb, var(--app-primary-bg) 26%, var(--app-panel-bg));
+  color: var(--app-text);
+  box-shadow: inset 0 0 0 1px var(--app-primary-bg);
+}
+.app-editor-tool[aria-pressed='true'] svg { stroke-width: 2.6; }
 .app-editor-toolbar-separator { background: var(--app-control-border); }
 .app-rich-editor-surface .app-rich-editor-content {
   min-height: 280px;
@@ -903,4 +912,11 @@ html.black-theme .app-rich-editor:focus-within { border-color: #a8a8a8; }
 }
 @media (prefers-reduced-motion: reduce) {
   .app-editor-tool, .app-editor-tab-active { transition: none; }
+}
+
+/* CAMBIOS 20 v29.2: recursos privados del editor en los tres temas.
+   Usa los tokens de superficie compartidos, sin colores rígidos de tema. */
+.app-editor-resource-item {
+  background: var(--app-control-hover);
+  border-color: var(--app-panel-border);
 }
