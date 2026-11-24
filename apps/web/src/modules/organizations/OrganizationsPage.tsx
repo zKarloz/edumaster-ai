@@ -2,7 +2,8 @@
 // El frontend filtra únicamente instituciones que la API ya autorizó.
 import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Building2, Edit3, Globe2, MapPin, Plus, RefreshCcw, Search, SlidersHorizontal } from 'lucide-react';
+import { normalizeLocale } from '../../i18n';
+import { Building2, CheckCircle2, Edit3, Globe2, MapPin, Plus, Search, SlidersHorizontal } from 'lucide-react';
 import { Modal } from '../../components/shared/Modal';
 import { OptionSelect } from '../../components/shared/OptionSelect';
 import { Spinner } from '../../components/shared/Spinner';
@@ -16,12 +17,18 @@ interface Props {
   loading: boolean;
   error: string;
   canManage: boolean;
-  onRefresh: () => void;
+  activeOrganizationId: string;
+  onChooseOrganization: (id:string)=>void;
   onSave: (input: OrganizationInput, id?: string) => Promise<void>;
 }
 
-export function OrganizationsPage({ organizations, loading, error, canManage, onRefresh, onSave }: Props) {
-  const { t } = useTranslation();
+export function OrganizationsPage({ organizations, loading, error, canManage, activeOrganizationId, onChooseOrganization, onSave }: Props) {
+  const { t, i18n } = useTranslation();
+  const copy={
+    es:{title:'Institución de trabajo',none:'Sin institución seleccionada',help:'Selecciona otra institución en el listado o mapa y pulsa «Usar esta institución» para cambiar el contexto de todos los módulos.',active:'Contexto activo',use:'Usar esta institución',current:'Institución activa'},
+    en:{title:'Working institution',none:'No institution selected',help:'Choose an institution in the list or map, then use “Use this institution” to change context across modules.',active:'Active context',use:'Use this institution',current:'Active institution'},
+    pt:{title:'Instituição de trabalho',none:'Nenhuma instituição selecionada',help:'Escolha outra instituição na lista ou mapa e use “Usar esta instituição” para alterar o contexto em todos os módulos.',active:'Contexto ativo',use:'Usar esta instituição',current:'Instituição ativa'},
+  }[normalizeLocale(i18n.language)];
   const [search, setSearch] = useState('');
   const [country, setCountry] = useState('all');
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -64,15 +71,22 @@ export function OrganizationsPage({ organizations, loading, error, canManage, on
         <p className="mt-2 text-2xl font-bold tabular-nums">{card.value}</p>
       </div>)}
     </section>
+    {/* El módulo Instituciones es el único lugar para cambiar el contexto.
+        La selección de mapa/listado no lo altera hasta pulsar la acción. */}
+    <section className="app-panel flex flex-wrap items-center justify-between gap-3 rounded-2xl border p-4 sm:p-5" aria-label={copy.title}>
+      <div className="min-w-0">
+        <p className="app-muted text-xs font-semibold uppercase tracking-wide">{copy.title}</p>
+        <p className="mt-1 font-semibold">{organizations.find(org=>org.id===activeOrganizationId)?.name??copy.none}</p>
+        <p className="app-muted mt-1 text-xs">{copy.help}</p>
+      </div>
+      <span className="app-workspace-state app-workspace-published inline-flex items-center gap-1.5 rounded-lg border px-3 py-2 text-xs font-semibold"><CheckCircle2 size={15}/> {copy.active}</span>
+    </section>
     <div className="flex flex-wrap items-center justify-between gap-3">
       <div>
         <h3 className="text-lg font-bold">{t('legacy.kb5b9036927')}</h3>
         <p className="mt-1 text-sm app-muted">{t('legacy.k305eed0f7c')}</p>
       </div>
       <div className="flex gap-2">
-        <button type="button" onClick={onRefresh} className="app-secondary-button inline-flex items-center gap-2 rounded-xl border border-slate-200 px-3 py-2.5 text-sm dark:border-[#345578]" aria-label="Actualizar instituciones">
-          <RefreshCcw size={16}/> <span className="hidden sm:inline">{t('legacy.kc725f8bffa')}</span>
-        </button>
         {canManage && <button type="button" onClick={() => { setEditing(null); setSaveError(''); }} className="app-primary-button inline-flex items-center gap-2 rounded-xl bg-[#087FE5] px-4 py-2.5 text-sm font-semibold text-white">
           <Plus size={17}/> {t('legacy.kb5d3b3f9e1')}
         </button>}
@@ -115,6 +129,10 @@ export function OrganizationsPage({ organizations, loading, error, canManage, on
           <p className="text-sm font-bold">{selected.name}</p>
           <p className="mt-1 text-xs app-muted">{selected.address || selected.city || 'Ubicación sin dirección'} · {countryName(selected.country_code)}</p>
           <p className="mt-1 text-xs app-muted">{t('legacy.k86495ddbe2')} {selected.timezone}</p>
+          <button type="button" onClick={()=>onChooseOrganization(selected.id)} disabled={selected.id===activeOrganizationId}
+            className="app-primary-button mt-3 inline-flex min-h-11 items-center gap-2 rounded-lg px-3 py-2 text-sm font-semibold disabled:opacity-50">
+            <CheckCircle2 size={16}/>{selected.id===activeOrganizationId?copy.current:copy.use}
+          </button>
           {canManage && <button type="button" onClick={() => { setEditing(selected); setSaveError(''); }}
             className="app-secondary-button mt-3 inline-flex items-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-xs font-semibold dark:border-[#345578]">
             <Edit3 size={14}/> {t('legacy.kaf2eecff8b')}

@@ -15,6 +15,62 @@ const oldDetail = /^\/app\/actividad\/organizaciones\/([0-9a-f-]{36})\/ofertas\/
 /** Rutas profundas enlazables: siempre llevan institución y curso/oferta. */
 const offeringWorkspace = /^\/academico\/organizaciones\/([0-9a-f-]{36})\/ofertas\/([0-9a-f-]{36})\/?$/i;
 const baseWorkspace = /^\/academico\/organizaciones\/([0-9a-f-]{36})\/cursos\/([0-9a-f-]{36})\/?$/i;
+/** Vista única de tarea para estudiantes y docentes; incluye crear borrador. */
+const taskPage = /^\/academico\/organizaciones\/([0-9a-f-]{36})\/ofertas\/([0-9a-f-]{36})\/tareas\/([0-9a-f-]{36}|nueva)\/?$/i;
+export function courseTaskDetail(path:string){
+  const match=taskPage.exec(path);
+  return match?{organizationId:match[1]!,offeringId:match[2]!,taskId:match[3]!}:null;
+}
+export function courseTaskPath(organizationId:string,offeringId:string,taskId:string):string{
+  return `${courseOfferingPath(organizationId,offeringId)}/tareas/${taskId}`;
+}
+export function newCourseTaskPath(organizationId:string,offeringId:string):string{
+  return courseTaskPath(organizationId,offeringId,'nueva');
+}
+/** Lista docente enlazable, acotada a institución/oferta/tarea. */
+const taskSubmissions = /^\/academico\/organizaciones\/([0-9a-f-]{36})\/ofertas\/([0-9a-f-]{36})\/tareas\/([0-9a-f-]{36})\/entregas\/?$/i;
+/** Historial individual del estudiante, sin identificadores de otras matrículas. */
+const myTaskSubmissions = /^\/academico\/organizaciones\/([0-9a-f-]{36})\/ofertas\/([0-9a-f-]{36})\/tareas\/([0-9a-f-]{36})\/mis-entregas\/?$/i;
+export function myTaskSubmissionsDetail(path:string){
+  const match=myTaskSubmissions.exec(path);
+  return match?{organizationId:match[1]!,offeringId:match[2]!,taskId:match[3]!}:null;
+}
+export function myTaskSubmissionsPath(organizationId:string,offeringId:string,taskId:string):string{
+  return `${courseOfferingPath(organizationId,offeringId)}/tareas/${taskId}/mis-entregas`;
+}
+/** Revisión individual: la URL nunca autoriza el acceso por sí sola. */
+const submissionReview = /^\/academico\/organizaciones\/([0-9a-f-]{36})\/ofertas\/([0-9a-f-]{36})\/tareas\/([0-9a-f-]{36})\/entregas\/([0-9a-f-]{36})\/revisar\/?$/i;
+export function taskSubmissionsDetail(path:string){
+  const match=taskSubmissions.exec(path);
+  return match?{organizationId:match[1]!,offeringId:match[2]!,taskId:match[3]!}:null;
+}
+export function taskSubmissionsPath(organizationId:string,offeringId:string,taskId:string):string{
+  return `${courseOfferingPath(organizationId,offeringId)}/tareas/${taskId}/entregas`;
+}
+export function taskReviewDetail(path:string){
+  const match=submissionReview.exec(path);
+  return match?{organizationId:match[1]!,offeringId:match[2]!,taskId:match[3]!,submissionId:match[4]!}:null;
+}
+export function taskReviewPath(organizationId:string,offeringId:string,taskId:string,submissionId:string):string{
+  return `${taskSubmissionsPath(organizationId,offeringId,taskId)}/${submissionId}/revisar`;
+}
+/** Crear una lección en página completa, con unidad y origen explícitos.
+ * La URL no evita las verificaciones de autorización de FastAPI. */
+const newOfferingLesson = /^\/academico\/organizaciones\/([0-9a-f-]{36})\/ofertas\/([0-9a-f-]{36})\/unidades\/([0-9a-f-]{36})\/lecciones\/(base|offering)\/nueva\/?$/i;
+const newBaseLesson = /^\/academico\/organizaciones\/([0-9a-f-]{36})\/cursos\/([0-9a-f-]{36})\/unidades\/([0-9a-f-]{36})\/lecciones\/base\/nueva\/?$/i;
+export function newLessonDetail(path: string) {
+  const offering = newOfferingLesson.exec(path);
+  if (offering) return {organizationId:offering[1]!,offeringId:offering[2]!,courseId:undefined,
+    unitId:offering[3]!,source:offering[4]! as LessonSource};
+  const base = newBaseLesson.exec(path);
+  return base ? {organizationId:base[1]!,offeringId:undefined,courseId:base[2]!,
+    unitId:base[3]!,source:'base' as const} : null;
+}
+export function newLessonPath(organizationId:string,unitId:string,source:LessonSource,offeringId?:string,courseId?:string):string {
+  if (offeringId) return `${courseOfferingPath(organizationId,offeringId)}/unidades/${unitId}/lecciones/${source}/nueva`;
+  if (source==='base' && courseId) return `${courseBasePath(organizationId,courseId)}/unidades/${unitId}/lecciones/base/nueva`;
+  throw new Error('La lección necesita la unidad y el curso o la oferta');
+}
 /** Editor enlazable para una lección concreta: origen explícito evita confundir IDs. */
 const offeringLessonEditor = /^\/academico\/organizaciones\/([0-9a-f-]{36})\/ofertas\/([0-9a-f-]{36})\/lecciones\/(base|offering)\/([0-9a-f-]{36})\/editar\/?$/i;
 const baseLessonEditor = /^\/academico\/organizaciones\/([0-9a-f-]{36})\/cursos\/([0-9a-f-]{36})\/lecciones\/base\/([0-9a-f-]{36})\/editar\/?$/i;
@@ -68,7 +124,7 @@ export function legacyRedirect(pathname: string): string | null {
 }
 export function sectionForPath(path: string): Section | null {
   if (newDetail.test(path)) return 'activity';
-  if (offeringWorkspace.test(path) || baseWorkspace.test(path) || offeringLessonEditor.test(path) || baseLessonEditor.test(path)) return 'courses';
+  if (newOfferingLesson.test(path) || newBaseLesson.test(path) || taskPage.test(path) || offeringWorkspace.test(path) || baseWorkspace.test(path) || submissionReview.test(path) || taskSubmissions.test(path) || myTaskSubmissions.test(path) || offeringLessonEditor.test(path) || baseLessonEditor.test(path)) return 'courses';
   const clean = path.replace(/\/$/, '') || '/';
   return (Object.entries(sectionPaths).find(([, value]) => value === clean)?.[0] as Section | undefined) ?? null;
 }

@@ -1,7 +1,7 @@
 /** Editor compartido de texto rico: Tiptap OSS con nodos restringidos por FastAPI.
  * Sin HTML arbitrario, recursos adjuntos ni extensiones de pago en v29.1.
  */
-import { useState, type FormEvent } from 'react';
+import { useRef, useState, type FormEvent, type PointerEvent as ReactPointerEvent } from 'react';
 import { EditorContent, useEditor, useEditorState } from '@tiptap/react';
 import type { JSONContent } from '@tiptap/core';
 import StarterKit from '@tiptap/starter-kit';
@@ -23,6 +23,8 @@ export function RichTextEditor({value,onChange,readOnly=false}:Props) {
   const [linkHref,setLinkHref]=useState('');
   const [linkError,setLinkError]=useState('');
   const [range,setRange]=useState<{from:number;to:number}|null>(null);
+  // Identifica el clic sintético posterior a una pulsación táctil ya procesada.
+  const touchTool=useRef<{label:string;at:number}|null>(null);
   const editor=useEditor({
     extensions:[StarterKit.configure({
       heading:{levels:[1,2,3]},
@@ -61,8 +63,22 @@ export function RichTextEditor({value,onChange,readOnly=false}:Props) {
   if (!editor) return <div className="app-panel min-h-48 rounded-xl border p-4" aria-busy="true"/>;
 
   function tool(label:string, Icon:typeof Bold, execute:()=>void, active=false, enabled=true) {
+    const onPointerDown=(event:ReactPointerEvent<HTMLButtonElement>)=>{
+      // iOS puede perder la selección al cambiar el foco del editor al botón.
+      // En táctil ejecutamos antes de ese cambio; mouse sigue usando onClick.
+      if(event.pointerType==='touch' && enabled){
+        event.preventDefault();
+        touchTool.current={label,at:Date.now()};
+        execute();
+      }
+    };
     return <button key={label} type="button" aria-label={label} title={label} aria-pressed={active}
-      disabled={!enabled} onClick={execute}
+      disabled={!enabled} onPointerDown={onPointerDown}
+      onMouseDown={event=>event.preventDefault()}
+      onClick={()=>{
+        if(touchTool.current?.label===label && Date.now()-touchTool.current.at<800)return;
+        execute();
+      }}
       className={`app-editor-tool rounded-lg p-2 disabled:opacity-35 ${active?'app-editor-tool-active':''}`}>
       <Icon size={17}/>
     </button>;

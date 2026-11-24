@@ -22,7 +22,7 @@ interface Member {
   is_protected: boolean;
   is_self: boolean;
 }
-interface Props { token: string; organizations: Organization[] }
+interface Props { token: string; organizations: Organization[]; organizationId: string }
 type Dialog = 'add' | 'grant' | 'remove' | 'status' | null;
 type MemberRole = 'coordinator' | 'instructor' | 'student' | 'analyst' | 'ml_engineer';
 const API = import.meta.env.VITE_API_URL || 'http://localhost:8000';
@@ -51,11 +51,11 @@ function readableError(data: unknown, status: number) {
   return `La API respondió HTTP ${status}`;
 }
 
-export function InstitutionalUsersPage({ token, organizations }: Props) {
+export function InstitutionalUsersPage({ token, organizations, organizationId }: Props) {
   const { t } = useTranslation();
   const { notify } = useToast();
-  const [organizationId, setOrganizationId] = useState('');
   const [members, setMembers] = useState<Member[]>([]);
+  const selectedAuthorized=organizations.some(org=>org.id===organizationId);
   const [query, setQuery] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -70,12 +70,6 @@ export function InstitutionalUsersPage({ token, organizations }: Props) {
   const [review, setReview] = useState(false);
   const [busy, setBusy] = useState(false);
   const [dialogError, setDialogError] = useState('');
-
-  // El administrador nunca puede elegir una institución fuera de su listado autorizado.
-  useEffect(() => {
-    const first = organizations[0];
-    if (!organizations.some(item => item.id === organizationId)) setOrganizationId(first?.id ?? '');
-  }, [organizations, organizationId]);
 
   useEffect(() => {
     setMembers([]); setError('');
@@ -174,15 +168,12 @@ export function InstitutionalUsersPage({ token, organizations }: Props) {
     <section className="app-panel space-y-4 rounded-2xl border p-5 sm:p-6">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div><h3 className="text-lg font-semibold">{t('legacy.k43fafce483')}</h3><p className="app-muted mt-1 text-sm">{t('legacy.kb75e4247be')}</p></div>
-        <button type="button" className={buttonPrimary} disabled={!organizationId} onClick={() => openDialog('add')}><UserRoundPlus size={17}/> {t('legacy.k354a7ee56f')}</button>
+        <button type="button" className={buttonPrimary} disabled={!selectedAuthorized} onClick={() => openDialog('add')}><UserRoundPlus size={17}/> {t('legacy.k354a7ee56f')}</button>
       </div>
-      <div className="grid gap-3 md:grid-cols-2">
-        <div className="space-y-1.5"><label className="text-sm font-medium">{t('legacy.k11c7df0b0a')}</label>
-          <OptionSelect ariaLabel={t('legacy.kc342a804db')} value={organizationId} onChange={setOrganizationId}
-            options={organizations.map(item => ({ value: item.id, label: item.name, suffix: item.code }))}/></div>
-        <div className="space-y-1.5"><label htmlFor="member-search" className="text-sm font-medium">{t('legacy.k950be1414e')}</label>
-          <input id="member-search" className={inputStyle} placeholder={t('labels.kdcb280502d')} value={query} onChange={event => setQuery(event.target.value)}/></div>
+      <div className="space-y-1.5"><label htmlFor="member-search" className="text-sm font-medium">{t('legacy.k950be1414e')}</label>
+        <input id="member-search" className={inputStyle} placeholder={t('labels.kdcb280502d')} value={query} onChange={event=>setQuery(event.target.value)}/>
       </div>
+      {!selectedAuthorized && organizations.length>0 && <p role="status" className="app-info rounded-xl border p-3 text-sm">La institución actual no está bajo tu administración. Selecciona una institución que administras desde Instituciones.</p>}
       {loading && <Spinner label="Cargando usuarios institucionales..."/>}
       {error && <div role="alert" className="app-warning rounded-xl border p-4 text-sm">{error}</div>}
       {!loading && !error && <DataTable<Member> key={organizationId} rows={filtered} label="Usuarios institucionales" columns={columns} pageSize={8}/>}

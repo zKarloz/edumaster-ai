@@ -920,3 +920,138 @@ html.black-theme .app-rich-editor:focus-within { border-color: #a8a8a8; }
   background: var(--app-control-hover);
   border-color: var(--app-panel-border);
 }
+
+/* CAMBIOS 21 v30.2.2 · Legibilidad de Cursos en Claro/Oscuro/Negro.
+   Las clases de estado comparten los tokens del espacio académico. */
+.app-task-card,.app-task-review-section,.app-task-review-header,.app-course-unit {
+  border-color: var(--app-control-border);
+  border-width: 1.5px;
+  box-shadow: 0 1px 3px rgb(15 23 42 / 5%);
+}
+.app-task-card:hover { border-color: var(--app-primary-bg); }
+.app-task-meta > span {
+  display: inline-flex;align-items: center;gap: .4rem;
+  padding: .4rem .65rem;border: 1px solid var(--app-control-border);
+  border-radius: .65rem;background: var(--app-control-hover);
+  color: var(--app-text);
+}
+.app-task-submission-state { display: inline-flex;align-items: center;gap: .3rem; }
+.app-task-submission-submitted {
+  background: var(--workspace-draft-bg);border-color: var(--workspace-draft-border);color: var(--workspace-draft-text);
+}
+.app-task-submission-reviewed {
+  background: var(--workspace-published-bg);border-color: var(--workspace-published-border);color: var(--workspace-published-text);
+}
+.app-task-form > label {
+  padding: .85rem;border: 1px solid var(--app-control-border);
+  border-radius: .85rem;background: var(--app-panel-bg);
+}
+.app-task-form textarea,.app-task-form input { border-color: var(--app-control-border); }
+.app-task-file-panel,.app-task-answer {
+  background: var(--app-control-hover);border-color: var(--app-control-border);
+}
+.app-task-file-item { background: var(--app-panel-bg);border-color: var(--app-control-border); }
+.app-course-unit .app-workspace-unit-content {
+  border-top-width: 1.5px;border-color: var(--app-control-border);
+  background: color-mix(in srgb, var(--app-control-hover) 45%, var(--app-panel-bg));
+}
+.app-course-unit .app-workspace-lesson { border-width: 1.5px;border-color: var(--app-control-border); }
+html.black-theme .app-task-card:hover { border-color: #aaa; }
+/* Contraste visible y persistente en Safari/iOS, sin depender solo de color-mix. */
+.app-editor-tool { min-width: 38px;min-height: 40px;touch-action: manipulation; }
+.app-editor-tool[aria-pressed='true'] {
+  background: #d5eaff;color: #064d83;
+  box-shadow: inset 0 0 0 2px #087fe5;
+}
+html.dark:not(.black-theme) .app-editor-tool[aria-pressed='true'] {
+  background: #184b6f;color: #e2f5ff;box-shadow: inset 0 0 0 2px #48beff;
+}
+html.black-theme .app-editor-tool[aria-pressed='true'] {
+  background: #454545;color: #fff;box-shadow: inset 0 0 0 2px #bdbdbd;
+}
+.app-editor-tool[aria-pressed='true']:hover:not(:disabled) { background: #c4e1ff; }
+html.dark:not(.black-theme) .app-editor-tool[aria-pressed='true']:hover:not(:disabled) { background: #206087; }
+html.black-theme .app-editor-tool[aria-pressed='true']:hover:not(:disabled) { background: #555; }
+/* Esqueleto visual discreto: nunca muestra información hasta que /me autorice. */
+.app-session-skeleton { background: var(--app-control-hover);border: 1px solid var(--app-panel-border); }
+@media (prefers-reduced-motion: no-preference) {
+  .app-session-skeleton { animation: app-skeleton-pulse 1.5s ease-in-out infinite alternate; }
+}
+@keyframes app-skeleton-pulse { from { opacity: .55; } to { opacity: 1; } }
+
+/* v30.2.3: el visor publicado tiene un límite propio en Claro/Oscuro/Negro.
+   El control compartido conserva su tipografía y el estado de solo lectura. */
+.app-published-lesson-outline {
+  border: 2px solid var(--app-control-border);
+  background: var(--app-panel-bg);
+  box-shadow: inset 0 0 0 1px var(--app-panel-border);
+}
+html.dark:not(.black-theme) .app-published-lesson-outline { border-color: #496985; }
+html.black-theme .app-published-lesson-outline { border-color: #777; }
+/* Pestañas móviles con tamaño natural y desplazamiento táctil horizontal. */
+.app-course-tabs-scroll {
+  overscroll-behavior-x: contain;
+  scroll-padding-inline: 12px;
+  scrollbar-width: thin;
+  -webkit-overflow-scrolling: touch;
+}
+/* Misma identidad del curso: pestañas un poco más oscuras que el banner.
+ * color-mix parte de una paleta validada, nunca de texto CSS sin filtrar.
+ */
+.app-course-tabs-scroll {
+  background: color-mix(in srgb, var(--course-accent, #2563eb) 78%, black);
+  border-top: 1px solid rgb(255 255 255 / 20%);
+}
+.app-course-tabs-scroll button.app-course-tab {
+  color: white;
+  background: rgb(255 255 255 / 9%);
+  border-color: rgb(255 255 255 / 38%);
+}
+.app-course-tabs-scroll button.app-course-tab:hover:not(:disabled) { background: rgb(255 255 255 / 21%); }
+.app-course-tabs-scroll button.app-course-tab[aria-selected='true'] {
+  background: rgb(255 255 255 / 26%);
+  border-color: rgb(255 255 255 / 85%);
+  box-shadow: inset 0 0 0 1px rgb(255 255 255 / 22%);
+}
+/* El color elegido para el curso se conserva también en tema Negro.
+ * La identidad cromática es una excepción local a la interfaz monocromática. */
+html.black-theme .app-course-tabs-scroll {
+  background: color-mix(in srgb, var(--course-accent, #2563eb) 78%, black);
+  filter: none;
+}
+.app-course-tab { flex: 0 0 auto; min-height: 44px; }
+.app-course-tab svg { flex: 0 0 auto; }
+@media (min-width: 640px) { .app-course-tab { flex: 1 1 0%; } }
+
+/* v30.2.7 · Pestañas largas del editor de lecciones, compartidas entre temas. */
+.app-editor-section-tabs {
+  background: var(--app-control-hover);
+  border: 1px solid var(--app-panel-border);
+}
+.app-editor-section-tab {
+  color: var(--app-muted-text);
+  border: 1px solid transparent;
+  min-width: 0;
+  transition: background-color .15s ease, border-color .15s ease, color .15s ease;
+}
+.app-editor-section-tab svg { flex-shrink: 0; }
+.app-editor-section-tab[aria-selected='true'] {
+  background: var(--app-panel-bg);
+  border-color: var(--app-control-border);
+  color: var(--app-text);
+  box-shadow: 0 2px 7px rgb(0 0 0 / 8%);
+}
+html.black-theme .app-editor-section-tab[aria-selected='true'] {
+  background: #353535;
+  border-color: #777777;
+  color: #fff;
+}
+/* El modal compartido contiene su desplazamiento sin alterar el scroll raíz.
+   El sidebar sticky conserva su geometría normal al abrir cualquier modal. */
+.app-modal-overlay,
+.app-modal-content {
+  overscroll-behavior: contain;
+}
+@media (min-width: 768px) {
+  .app-sidebar { align-self: flex-start; }
+}

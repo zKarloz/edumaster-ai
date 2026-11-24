@@ -6,7 +6,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent }
 import type { JSONContent } from '@tiptap/core';
 import { useBlocker, useLocation, useNavigate } from 'react-router';
 import { useTranslation } from 'react-i18next';
-import { ArrowLeft, Eye, Pencil, RefreshCcw, Save, Send, ShieldCheck } from 'lucide-react';
+import { ArrowLeft, BookOpen, Eye, Pencil, RefreshCcw, Save, Send, ShieldCheck } from 'lucide-react';
 import { RichTextEditor } from '../../components/shared/RichTextEditor';
 import { LessonResources } from './LessonResources';
 import { LessonRevisionHistory } from './LessonRevisionHistory';
@@ -64,6 +64,7 @@ export function LessonEditorPage({organizationId,offeringId,courseId,lessonId,so
   const [error,setError]=useState('');
   const [conflict,setConflict]=useState(false);
   const [preview,setPreview]=useState(false);
+  const [editorTab,setEditorTab]=useState<'content'|'history'>('content');
   const [logoutDialog,setLogoutDialog]=useState(false);
   const [confirmedLogout,setConfirmedLogout]=useState(false);
   const [reloadDialog,setReloadDialog]=useState(false);
@@ -190,7 +191,7 @@ export function LessonEditorPage({organizationId,offeringId,courseId,lessonId,so
     }
   }
 
-  return <section className="app-lesson-page mx-auto w-full max-w-5xl space-y-4" onKeyDown={keyboard}>
+  return <section className="app-lesson-page w-full space-y-4" onKeyDown={keyboard}>
     <div className="flex items-center justify-between gap-3">
       <button type="button" className="app-secondary-button inline-flex items-center gap-2 rounded-xl border px-3 py-2 text-sm"
         onClick={back}><ArrowLeft size={17}/>{t('lessonEditor.back')}</button>
@@ -202,6 +203,17 @@ export function LessonEditorPage({organizationId,offeringId,courseId,lessonId,so
       type="button"><RefreshCcw size={15}/>{t('lessonEditor.reload')}</button>}
     {!loading && !draft && <button className="app-secondary-button rounded-lg border px-3 py-2 text-sm" type="button" onClick={()=>void load()}>{t('workspace.retry')}</button>}
     {draft && !loading && <>
+      {/* Pestañas completas: el editor y sus recursos comparten una sección;
+          el historial conserva sus acciones y permisos en la segunda. */}
+      <div className="app-editor-section-tabs grid grid-cols-2 gap-2 rounded-xl p-1.5" role="tablist" aria-label={t('lessonEditor.pageTitle')}>
+        <button type="button" role="tab" id="lesson-tab-content" aria-controls="lesson-panel-content"
+          aria-selected={editorTab==='content'} className={`app-editor-section-tab flex min-h-12 items-center justify-center gap-2 rounded-lg px-3 py-2 text-sm font-semibold ${editorTab==='content'?'app-editor-section-active':''}`}
+          onClick={()=>setEditorTab('content')}><Pencil size={17}/><span>{t('lessonEditor.write')} · {t('lessonResources.heading')}</span></button>
+        <button type="button" role="tab" id="lesson-tab-history" aria-controls="lesson-panel-history"
+          aria-selected={editorTab==='history'} className={`app-editor-section-tab flex min-h-12 items-center justify-center gap-2 rounded-lg px-3 py-2 text-sm font-semibold ${editorTab==='history'?'app-editor-section-active':''}`}
+          onClick={()=>setEditorTab('history')}><BookOpen size={17}/><span>{t('lessonVersions.history')}</span></button>
+      </div>
+      {editorTab==='content' && <div id="lesson-panel-content" role="tabpanel" aria-labelledby="lesson-tab-content" className="space-y-4">
       <div className="app-panel rounded-2xl border p-4 sm:p-6 space-y-4">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
@@ -236,11 +248,12 @@ export function LessonEditorPage({organizationId,offeringId,courseId,lessonId,so
         </div>
       </div>
       <LessonResources key={draft.id} draftPath={path} token={token} preview={preview}/>
-      <div className="app-panel rounded-2xl border p-4 sm:p-5">
+      </div>}
+      {editorTab==='history' && <div id="lesson-panel-history" role="tabpanel" aria-labelledby="lesson-tab-history" className="app-panel rounded-2xl border p-4 sm:p-5">
         <LessonRevisionHistory path={path} token={token} draftId={draft.id}
           lockVersion={draft.lock_version} disabled={dirty||saving||publishing}
-          onRestored={()=>void load()}/>
-      </div>
+          onRestored={()=>{setEditorTab('content');void load();}}/>
+      </div>}
     </>}
     <Modal open={publishConfirm!==null} title={t('lessonVersions.confirmPublish')}
       onClose={()=>{if(!publishing)setPublishConfirm(null);}}>

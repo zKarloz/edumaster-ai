@@ -1,5 +1,6 @@
-// Modal compartido: portal a <body> para evitar contextos de apilamiento de Leaflet,
-// bloqueo de scroll del documento y navegación por teclado (Escape y foco contenido).
+// Modal compartido: portal a <body> para evitar contextos de apilamiento de Leaflet.
+// El fondo intercepta el scroll con overscroll-behavior (sin alterar el scroll raíz),
+// y el diálogo mantiene Escape, Tab, foco y la interacción táctil.
 import { useEffect, useId, useRef, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { X } from 'lucide-react';
@@ -113,15 +114,10 @@ export function Modal({ open, title, onClose, children, mobileSheet = false }: M
   useEffect(() => {
     if (!open) return;
     const previousFocus = document.activeElement as HTMLElement | null;
-    const html = document.documentElement;
-    const body = document.body;
-    const oldHtmlOverflow = html.style.overflow;
-    const oldBodyOverflow = body.style.overflow;
-
-    // Se bloquea solo el documento de fondo. El contenido del diálogo
-    // tiene su propia zona scrollable para pantallas pequeñas.
-    html.style.overflow = 'hidden';
-    body.style.overflow = 'hidden';
+    // No modificar overflow de <html> ni <body>: hacerlo rompe el contenedor
+    // scroll de elementos sticky como el sidebar y puede cambiar sus dimensiones.
+    // ModalBackdrop (portal a body) y app-modal-content contienen el scroll
+    // mediante overscroll-behavior; el foco se mantiene dentro del diálogo.
     closeRef.current?.focus();
 
     const onKeyDown = (event: KeyboardEvent) => {
@@ -154,8 +150,6 @@ export function Modal({ open, title, onClose, children, mobileSheet = false }: M
       document.removeEventListener('keydown', onKeyDown);
       clearTimers();
       dragRef.current = null;
-      html.style.overflow = oldHtmlOverflow;
-      body.style.overflow = oldBodyOverflow;
       previousFocus?.focus();
     };
   }, [open]);

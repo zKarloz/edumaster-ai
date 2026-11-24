@@ -2,7 +2,7 @@
 // Nunca se envían contraseñas ni claves de Supabase desde esta pantalla.
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react';
 import { useTranslation } from 'react-i18next';
-import { AlertTriangle, CheckCircle2, Ellipsis, Info, RefreshCw, ShieldCheck, UserPlus, UserRoundX } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, Ellipsis, Info, ShieldCheck, UserPlus, UserRoundX } from 'lucide-react';
 import { DataTable, type Column } from '../../components/shared/DataTable';
 import { Modal } from '../../components/shared/Modal';
 import { OptionSelect } from '../../components/shared/OptionSelect';
@@ -157,7 +157,6 @@ export function UsersPage({ token, organizations, canManage }: UsersPageProps) {
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div><h3 className="text-lg font-semibold">{t('legacy.k42ded52e50')}</h3><p className="app-muted mt-1 text-sm">{t('legacy.k4e2a063b43')}</p></div>
         <div className="flex gap-2">
-          <button type="button" className={secondaryButton} onClick={() => setRefresh(current => current + 1)} title="Actualizar lista"><RefreshCw size={17}/><span className="hidden sm:inline">{t('legacy.kc725f8bffa')}</span></button>
           <button type="button" onClick={openAssign} disabled={!organizations.length} className={primaryButton}><UserPlus size={17}/> {t('legacy.kfadb4f35c7')}</button>
         </div>
       </div>

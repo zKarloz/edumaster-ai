@@ -105,3 +105,24 @@ Las revisiones textuales de v30.1 **no son calificaciones oficiales**. Los archi
 
 - [Adjuntos privados en intentos de tareas](historial/incrementos/CAMBIOS21_V30_2.md)
 - Migración 012: `database/migrations/012_task_submission_files.sql` (ejecutar una sola vez, tras respaldo y preflight)
+
+## CAMBIOS 21 · v30.2.2 — estabilidad y experiencia del módulo Cursos
+
+- [Sesión discreta, editor táctil, descargas temporales, notificaciones y revisión de tareas en página](historial/incrementos/CAMBIOS21_V30_2_2.md)
+- **Sin migraciones SQL**: esta actualización conserva las estructuras 009–012 y sus controles de acceso.
+
+## CAMBIOS 21 · v30.2.4 — entregas de estudiante y contexto institucional
+
+- [Página Mis entregas y selección institucional única por roles autorizados](historial/hotfixes/CAMBIOS21_V30_2_4_CONTEXTO_Y_ENTREGAS.md)
+- **Sin migraciones SQL**. El backend conserva las comprobaciones de matrícula, oferta, rol e institución.
+
+- CAMBIOS 21 v30.2.5: fichas de tareas sin modales, eliminación de botones manuales Actualizar y pestañas coloreadas. Véase `historial/hotfixes/CAMBIOS21_V30_2_5_TAREAS_PAGINAS.md`.
+
+- CAMBIOS 21 v30.2.6: hora 23:59 por defecto sin forzar fecha, revisión docente integrada y color del curso en Negro. Véase `historial/hotfixes/CAMBIOS21_V30_2_6_TAREAS_REVISION_Y_COLOR.md`.
+
+### CAMBIOS 21 — v30.2.7
+
+- Crear lecciones desde una página con editor Tiptap; guardado versionado desde el inicio.
+- Editor y recursos agrupados en una pestaña; historial de revisiones separado.
+- Confirmación modal para publicar o cerrar tareas y estabilidad del sidebar con desenfoque.
+- Sin nuevas migraciones SQL.

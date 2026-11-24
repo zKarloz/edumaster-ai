@@ -7,12 +7,13 @@ import { Activity, ArrowRight, BookOpen, Building2, CheckCircle2, ChevronDown, D
 import type { Session } from '@supabase/supabase-js';
 import { useLocation, useNavigate } from 'react-router';
 import { useTranslation } from 'react-i18next';
-import { activityDetail, courseWorkspaceDetail, lessonEditorDetail, enrollmentHistoryPath, legacyRedirect, sectionForPath, sectionPaths, type Section } from './routes';
+import { activityDetail, courseWorkspaceDetail, lessonEditorDetail, newLessonDetail, taskReviewDetail, taskSubmissionsDetail, myTaskSubmissionsDetail, courseTaskDetail, enrollmentHistoryPath, legacyRedirect, sectionForPath, sectionPaths, type Section } from './routes';
 import { DataTable, type Column } from './components/shared/DataTable';
 import { Modal } from './components/shared/Modal';
 import { Spinner } from './components/shared/Spinner';
 import { useToast } from './components/shared/Toast';
 import { supabase } from './lib/supabase';
+import { chooseAcademicInstitution, maySelectAcademicInstitution } from './lib/institutionContext';
 import { useSettings } from './providers/SettingsProvider';
 import { SettingsPage } from './modules/settings/SettingsPage';
 import { LoginScreen } from './LoginScreen';
@@ -21,6 +22,10 @@ import { AcademicPage } from './modules/academic/AcademicPage';
 import { CourseWorkspacePage } from './modules/academic/CourseWorkspacePage';
 // Carga diferida: Tiptap no incrementa el bundle inicial de la plataforma.
 const LessonEditorPage = lazy(() => import('./modules/academic/LessonEditorPage').then(mod => ({default:mod.LessonEditorPage})));
+const LessonCreatePage = lazy(() => import('./modules/academic/LessonCreatePage').then(mod => ({default:mod.LessonCreatePage})));
+const TaskSubmissionsPage = lazy(() => import('./modules/academic/TaskSubmissionsPage').then(mod => ({default:mod.TaskSubmissionsPage})));
+const CourseTaskPage = lazy(() => import('./modules/academic/CourseTaskPage').then(mod => ({default:mod.CourseTaskPage})));
+const TaskSubmissionReviewPage = lazy(() => import('./modules/academic/TaskSubmissionReviewPage').then(mod => ({default:mod.TaskSubmissionReviewPage})));
 import { AcademicActivityPage } from './modules/academic/AcademicActivityPage';
 import { UsersPage } from './modules/users/UsersPage';
 import { InstitutionalUsersPage } from './modules/users/InstitutionalUsersPage';
@@ -59,7 +64,7 @@ const navGroups = [
 ] as const;
 
 export default function App() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const { theme, setTheme, sidebarMode, setSidebarMode, selectPreferenceScope, syncProfileLocale } = useSettings();
   const [sidebarHover, setSidebarHover] = useState(false);
   const [sidebarKeyboardFocus, setSidebarKeyboardFocus] = useState(false);
@@ -73,6 +78,11 @@ export default function App() {
   const detailRoute = activityDetail(location.pathname);
   const courseRoute = courseWorkspaceDetail(location.pathname);
   const lessonRoute = lessonEditorDetail(location.pathname);
+  const newLessonRoute = newLessonDetail(location.pathname);
+  const taskReviewRoute = taskReviewDetail(location.pathname);
+  const taskSubmissionsRoute = taskSubmissionsDetail(location.pathname);
+  const myTaskSubmissionsRoute = myTaskSubmissionsDetail(location.pathname);
+  const courseTaskRoute = courseTaskDetail(location.pathname);
   const [apiStatus, setApiStatus] = useState<Connection>('checking');
   const [session, setSession] = useState<Session | null>(null);
   const [orgs, setOrgs] = useState<Organization[]>([]);
@@ -82,6 +92,7 @@ export default function App() {
   const [globalRoles, setGlobalRoles] = useState<string[]>([]);
   const [memberships, setMemberships] = useState<Array<{ organization_id: string; roles: string[] }>>([]);
   const [academicOrgId, setAcademicOrgId] = useState('');
+  const contextUserRef = useRef<string|null>(null);
   const [loadingOrgs, setLoadingOrgs] = useState(false);
   const [showPermissions, setShowPermissions] = useState(false);
   const [mobileMenu, setMobileMenu] = useState(false);
@@ -182,6 +193,13 @@ export default function App() {
   // durante una renovación silenciosa para la MISMA identidad ya autorizada.
   // El backend sigue verificando el JWT y los permisos en cada petición protegida.
   const sessionUserId = session?.user.id ?? null;
+  // Al cambiar de cuenta no debemos reutilizar el contexto de otra persona.
+  useEffect(()=>{
+    if(contextUserRef.current!==sessionUserId){
+      contextUserRef.current=sessionUserId;
+      setAcademicOrgId('');
+    }
+  },[sessionUserId]);
   const accessToken = session?.access_token ?? null;
   useEffect(() => {
     if (!accessToken || !sessionUserId || accountStatus !== 'ready') return;
@@ -334,7 +352,7 @@ export default function App() {
     if (!client) return false;
     const { error } = await client.auth.signOut();
     if (error) { notify(`No se pudo cerrar sesión: ${error.message}`); return false; }
-    setSession(null); setIdentity(null); navigate('/iniciar-sesion', { replace: true }); setPassword(''); setAuthorizedUserId(null); setGlobalRoles([]); setMemberships([]); setAccountStatus('checking');
+    setSession(null); setIdentity(null); navigate('/iniciar-sesion', { replace: true }); setPassword(''); setAuthorizedUserId(null); setGlobalRoles([]); setMemberships([]); setAcademicOrgId(''); setAccountStatus('checking');
     notify('Sesión cerrada correctamente.', 'success');
     return true;
   }
@@ -349,9 +367,54 @@ export default function App() {
     memberships.some(item => item.organization_id === org.id && item.roles.includes('institution_admin'))),
     [orgs, memberships]);
   const canManageUserAdministration = globalRoles.includes('superadmin') || institutionalAdminOrganizations.length > 0;
+  // Solo administradores/coordinadores cambian el contexto desde Instituciones.
+  // Docentes y estudiantes reciben automáticamente su organización autorizada.
+  const canChooseInstitution = maySelectAcademicInstitution(globalRoles,memberships);
+  const canOpenInstitutions = canChooseInstitution;
+  const selectAcademicInstitution = useCallback((id:string) => {
+    if(!canChooseInstitution || !orgs.some(org=>org.id===id))return;
+    setAcademicOrgId(id);
+    if(sessionUserId){
+      try{localStorage.setItem(`edumaster:institution:${sessionUserId}`,id);}catch{/* Navegación disponible aunque el almacenamiento esté deshabilitado. */}
+    }
+  },[canChooseInstitution,orgs,sessionUserId]);
+  useEffect(()=>{
+    if(!accessGranted)return;
+    const ids=orgs.map(org=>org.id);
+    let saved:string|null=null;
+    if(canChooseInstitution && sessionUserId){
+      try{saved=localStorage.getItem(`edumaster:institution:${sessionUserId}`);}catch{/* Preferencia no disponible. */}
+    }
+    // Las rutas profundas ya autorizadas tienen prioridad sobre una preferencia
+    // guardada; así evitamos bucles A↔B y respetamos enlaces directos.
+    const routeOrgId=courseRoute?.organizationId??detailRoute?.organizationId??lessonRoute?.organizationId??newLessonRoute?.organizationId
+      ??taskReviewRoute?.organizationId??taskSubmissionsRoute?.organizationId??myTaskSubmissionsRoute?.organizationId
+      ??courseTaskRoute?.organizationId;
+    const next=routeOrgId && ids.includes(routeOrgId) ? routeOrgId
+      :chooseAcademicInstitution(ids,academicOrgId,saved,canChooseInstitution);
+    if(next!==academicOrgId)setAcademicOrgId(next);
+  },[accessGranted,orgs,sessionUserId,canChooseInstitution,academicOrgId,
+    courseRoute?.organizationId,detailRoute?.organizationId,lessonRoute?.organizationId,newLessonRoute?.organizationId,
+    taskReviewRoute?.organizationId,taskSubmissionsRoute?.organizationId,myTaskSubmissionsRoute?.organizationId,
+    courseTaskRoute?.organizationId]);
+
   const canViewAcademicActivity = memberships.some(m => m.roles.some(role => ['institution_admin', 'coordinator', 'instructor'].includes(role)));
   const canManageAcademicOrganization = useCallback((orgId: string) => memberships.some(item => item.organization_id === orgId && item.roles.some(role => ['institution_admin', 'coordinator'].includes(role))), [memberships]);
-  const title = t(`nav.${section === 'dashboard' ? 'dashboard' : section}`);
+  // La cabecera global presenta el contexto de las dos páginas docentes.
+  const academicLanguage = i18n.language.toLowerCase().startsWith('pt') ? 'pt' : i18n.language.toLowerCase().startsWith('en') ? 'en' : 'es';
+  const reviewNames = {
+    es: {list:'Revisar entregas', detail:'Revisar entrega', mine:'Mis entregas', taskDetail:'Tarea', newTask:'Nueva tarea', path:'Cursos / Actividades y tareas'},
+    en: {list:'Review submissions', detail:'Review submission', mine:'My submissions', taskDetail:'Assignment', newTask:'New assignment', path:'Courses / Assignments'},
+    pt: {list:'Revisar entregas', detail:'Revisar entrega', mine:'Minhas entregas', taskDetail:'Tarefa', newTask:'Nova tarefa', path:'Cursos / Tarefas'},
+  }[academicLanguage];
+  const title = taskReviewRoute ? reviewNames.detail : taskSubmissionsRoute ? reviewNames.list
+    : courseTaskRoute ? (courseTaskRoute.taskId==='nueva' ? reviewNames.newTask : reviewNames.taskDetail)
+    : newLessonRoute ? t('workspace.addLesson') : lessonRoute ? t('lessonEditor.pageTitle')
+    : myTaskSubmissionsRoute ? reviewNames.taskDetail
+    : t(`nav.${section === 'dashboard' ? 'dashboard' : section}`);
+  const headerPath = newLessonRoute || lessonRoute ? reviewNames.path + ' / ' + t('workspace.content')
+    : taskReviewRoute ? `${reviewNames.path} / ${reviewNames.list}`
+    : taskSubmissionsRoute || myTaskSubmissionsRoute || courseTaskRoute ? reviewNames.path : null;
   // La categoría superior procede de la misma definición del menú: al cambiar
   // de módulo o idioma, la cabecera refleja su contexto sin texto fijo.
   const currentCategoryKey = section === 'profile'
@@ -373,11 +436,12 @@ export default function App() {
   useEffect(() => {
     if (!accessGranted) return;
     if (!sectionForPath(location.pathname)
+      || (section === 'organizations' && !canOpenInstitutions)
       || (section === 'users' && !canManageUserAdministration)
       || (section === 'activity' && !canViewAcademicActivity)) {
       if (!legacyRedirect(location.pathname)) navigate(sectionPaths.dashboard, { replace: true });
     }
-  }, [location.pathname, section, accessGranted, navigate, canManageUserAdministration, canViewAcademicActivity]);
+  }, [location.pathname, section, accessGranted, navigate, canOpenInstitutions, canManageUserAdministration, canViewAcademicActivity]);
   useEffect(() => {
     if (!courseRoute || !accessGranted) return;
     if (orgs.some(org=>org.id===courseRoute.organizationId) && academicOrgId!==courseRoute.organizationId)
@@ -467,7 +531,7 @@ export default function App() {
           <nav aria-label={t('nav.platform')} className="app-sidebar-scroll min-h-0 flex-1 space-y-5 overflow-x-hidden overflow-y-auto pb-3">
             {navGroups.map(group => {
               const visible = group.sections.map(id => nav.find(link => link.id === id)).filter((link): link is typeof nav[number] =>
-                Boolean(link && (link.id !== 'users' || canManageUserAdministration) && (link.id !== 'activity' || canViewAcademicActivity)));
+                Boolean(link && (link.id !== 'organizations' || canOpenInstitutions) && (link.id !== 'users' || canManageUserAdministration) && (link.id !== 'activity' || canViewAcademicActivity)));
               if (!visible.length) return null;
               return <div key={group.label} className="space-y-1">
                 <p aria-label={t(group.label)} className={`app-sidebar-group-heading h-5 px-3 pb-1 text-xs font-semibold uppercase tracking-widest app-meta-text text-slate-400 ${!sidebarWide ? 'md:flex md:min-h-4 md:items-center md:px-0' : ''}`}>
@@ -527,7 +591,11 @@ export default function App() {
         <header className="app-header sticky top-0 z-20 flex min-h-[64px] flex-wrap items-center justify-between gap-2 border-b border-slate-200 bg-white/95 px-3 py-2 backdrop-blur sm:min-h-20 sm:gap-3 sm:px-5 sm:py-0 md:px-8 dark:border-[#163B63] dark:bg-[#081B35]/95">
           <div className="flex min-w-0 items-center gap-2 sm:gap-3">
             <button type="button" className="shrink-0 rounded-lg p-1.5 sm:p-2 md:hidden" aria-expanded={mobileMenu} aria-controls="edumaster-sidebar" aria-label={t('labels.k7af767cd6a')} onClick={() => setMobileMenu(true)}><Menu size={22}/></button>
-            <div className="min-w-0"><div className="app-meta-text text-[10px] leading-tight text-slate-400 sm:text-xs"><strong className="font-bold uppercase">{t(currentCategoryKey)}</strong></div><h1 className="truncate text-base font-bold leading-tight sm:text-xl">{title}</h1></div>
+            <div className="min-w-0"><div className="app-meta-text text-[10px] leading-tight text-slate-400 sm:text-xs"><strong className="font-bold uppercase">{headerPath ?? t(currentCategoryKey)}</strong></div><h1 className="truncate text-base font-bold leading-tight sm:text-xl">{title}</h1>
+              {['courses','students','enrollments','activity'].includes(section) && academicOrgId &&
+                <p className="app-muted mt-0.5 max-w-56 truncate text-xs sm:max-w-96" title={orgs.find(org=>org.id===academicOrgId)?.name}>
+                  {orgs.find(org=>org.id===academicOrgId)?.name}
+                </p>}</div>
           </div>
           <div className="flex items-center gap-2">
             <AccountMenu key={session.user.id} identity={accountIdentity} roleLabel={accountRoleLabel} userId={session.user.id} photo={avatar.photo} photoLoading={avatar.loading}
@@ -566,32 +634,47 @@ export default function App() {
             {orgError && <div role="alert" className="app-warning rounded-xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900">{orgError}{t('legacy.k7644712905')}</div>}
             <DataTable<Organization> rows={rows} columns={columns} label={t('dashboard.organizations')} />
           </>}
-          {section === 'organizations' && <OrganizationsPage
+          {section === 'organizations' && canOpenInstitutions && <OrganizationsPage
             organizations={orgs} loading={loadingOrgs} error={orgError}
+            activeOrganizationId={academicOrgId} onChooseOrganization={selectAcademicInstitution}
             canManage={globalRoles.includes('superadmin')}
-            onRefresh={() => setOrgRefreshKey(key => key + 1)}
             onSave={saveOrganization}
           />}
           {section === 'users' && accessToken && (globalRoles.includes('superadmin')
             ? <UsersPage token={accessToken} organizations={orgs} canManage/>
-            : <InstitutionalUsersPage token={accessToken} organizations={institutionalAdminOrganizations}/>)}
+            : <InstitutionalUsersPage token={accessToken} organizations={institutionalAdminOrganizations} organizationId={academicOrgId}/>)}
           {section === 'settings' && <SettingsPage token={accessToken ?? ''} apiStatus={apiStatus} onCheckApi={checkApi}/>}
           {section === 'profile' && accessToken && <ProfilePage key={session.user.id} identity={accountIdentity} token={accessToken}
             userId={session.user.id} photo={avatar.photo} photoLoading={avatar.loading} onIdentity={value => setIdentity({ id: session.user.id, value })}
             onSavePhoto={avatar.save} onRemovePhoto={avatar.remove}/>}
+          {section === 'courses' && newLessonRoute && accessToken && <Suspense fallback={<Spinner label={t('common.loading')}/>}>
+            <LessonCreatePage key={`${newLessonRoute.unitId}:${newLessonRoute.source}`} {...newLessonRoute} token={accessToken} onConfirmSignOut={completeSignOut}/>
+          </Suspense>}
           {section === 'courses' && lessonRoute && accessToken && <Suspense fallback={<Spinner label={t('lessonEditor.loading')}/>}>
             <LessonEditorPage key={`${lessonRoute.lessonId}:${lessonRoute.source}`} {...lessonRoute} token={accessToken} onConfirmSignOut={completeSignOut}/>
           </Suspense>}
+          {section === 'courses' && taskSubmissionsRoute && accessToken && <Suspense fallback={<Spinner label={reviewNames.list}/>}>
+            <TaskSubmissionsPage {...taskSubmissionsRoute} token={accessToken}/>
+          </Suspense>}
+          {/* Los favoritos antiguos /mis-entregas siguen abriendo la tarea autorizada. */}
+          {section === 'courses' && myTaskSubmissionsRoute && accessToken && <Suspense fallback={<Spinner label={reviewNames.taskDetail}/>}>
+            <CourseTaskPage key={`${myTaskSubmissionsRoute.offeringId}:${myTaskSubmissionsRoute.taskId}`} {...myTaskSubmissionsRoute} token={accessToken}/>
+          </Suspense>}
+          {section === 'courses' && courseTaskRoute && accessToken && <Suspense fallback={<Spinner label={reviewNames.taskDetail}/>}>
+            <CourseTaskPage key={`${courseTaskRoute.offeringId}:${courseTaskRoute.taskId}`} {...courseTaskRoute} token={accessToken}/>
+          </Suspense>}
+          {section === 'courses' && taskReviewRoute && accessToken && <Suspense fallback={<Spinner label="Cargando entrega..."/>}>
+            <TaskSubmissionReviewPage {...taskReviewRoute} token={accessToken}/>
+          </Suspense>}
           {section === 'courses' && courseRoute && accessToken && <CourseWorkspacePage
             organizationId={courseRoute.organizationId} courseId={courseRoute.courseId} offeringId={courseRoute.offeringId} token={accessToken}/>}
-          {((section === 'courses' && !courseRoute && !lessonRoute) || section === 'students' || section === 'enrollments') && accessToken && <AcademicPage
+          {((section === 'courses' && !courseRoute && !lessonRoute && !newLessonRoute && !taskReviewRoute && !taskSubmissionsRoute && !myTaskSubmissionsRoute && !courseTaskRoute) || section === 'students' || section === 'enrollments') && accessToken && <AcademicPage
             mode={section} organizations={orgs} organizationId={academicOrgId}
-            onOrganizationChange={setAcademicOrgId} token={accessToken}
+            token={accessToken}
             courseRole={academicRole(academicOrgId)}
             canManageOrganization={canManageAcademicOrganization}/>}
           {section === 'activity' && accessToken && <AcademicActivityPage
-            organizations={orgs} organizationId={academicOrgId}
-            onOrganizationChange={setAcademicOrgId} token={accessToken}
+            organizationId={academicOrgId} token={accessToken}
             selectedEnrollmentId={detailRoute?.enrollmentId ?? ''}
             selectedOfferingId={detailRoute?.offeringId ?? ''}
             onSelectEnrollment={(offeringId, enrollmentId) => navigate(enrollmentHistoryPath(academicOrgId, offeringId, enrollmentId))}

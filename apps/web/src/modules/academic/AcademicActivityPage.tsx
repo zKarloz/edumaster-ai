@@ -3,13 +3,12 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { useTranslation } from 'react-i18next';
 import i18n, { localeTag, normalizeLocale } from '../../i18n';
-import { ArrowLeft, BookOpen, ChevronLeft, ChevronRight, ClipboardCheck, GraduationCap, Plus, RefreshCcw, Save, Trash2, UserRound } from 'lucide-react';
+import { ArrowLeft, BookOpen, ChevronLeft, ChevronRight, ClipboardCheck, Plus, Save, Trash2, UserRound } from 'lucide-react';
 import { DataTable, type Column } from '../../components/shared/DataTable';
 import { Modal } from '../../components/shared/Modal';
 import { OptionSelect } from '../../components/shared/OptionSelect';
 import { Spinner } from '../../components/shared/Spinner';
 import { useToast } from '../../components/shared/Toast';
-import type { Organization } from '../organizations/types';
 
 type Kind = 'grade' | 'attendance' | 'participation' | 'progress';
 type RecordKind = Exclude<Kind, 'progress'>;
@@ -33,9 +32,7 @@ interface AcademicRecord {
 }
 interface Instructor { id: string; name: string }
 interface Props {
-  organizations: Organization[];
   organizationId: string;
-  onOrganizationChange: (value: string) => void;
   token: string;
   selectedOfferingId: string;
   selectedEnrollmentId: string;
@@ -76,7 +73,7 @@ async function api<T>(path: string, token: string, method = 'GET', body?: unknow
   return res.json() as Promise<T>;
 }
 
-export function AcademicActivityPage({ organizations, organizationId, onOrganizationChange, token,
+export function AcademicActivityPage({ organizationId, token,
   selectedOfferingId, selectedEnrollmentId, onSelectEnrollment, onBackToOverview }: Props) {
   const { notify } = useToast();
   const { t } = useTranslation();
@@ -117,13 +114,6 @@ export function AcademicActivityPage({ organizations, organizationId, onOrganiza
   const selectedOffering = offerings.find(row => row.id === offeringId);
   const activeEnrollments = overview.filter(row => row.status === 'active');
   const selectedSummary = overview.find(row => row.enrollment_id === selectedEnrollmentId);
-
-  // La institución es compartida con Cursos, Estudiantes y Matrículas.
-  useEffect(() => {
-    const first = organizations[0];
-    if (!first) return;
-    if (!organizations.some(row => row.id === organizationId)) onOrganizationChange(first.id);
-  }, [organizations, organizationId, onOrganizationChange]);
 
   useEffect(() => {
     setOfferings([]); setOverview([]); setRecords([]); setInstructors([]);
@@ -264,16 +254,6 @@ export function AcademicActivityPage({ organizations, organizationId, onOrganiza
   ];
 
   return <div className="space-y-5">
-    <div className="app-panel rounded-2xl border p-5">
-      <div className="flex flex-wrap items-end gap-4">
-        <div className="min-w-56 flex-1 space-y-2 sm:max-w-md">
-          <label className="flex items-center gap-2 text-sm font-semibold"><GraduationCap size={18}/> {t('activity.academicInstitution')}</label>
-          <OptionSelect ariaLabel={t('labels.kb395478b08')} value={organizationId} onChange={onOrganizationChange}
-            options={organizations.map(org => ({ value: org.id, label: org.name, suffix: org.code }))} placeholder={t('activity.selectInstitution')}/>
-        </div>
-        <button type="button" className={secondary} disabled={!organizationId || loading} onClick={() => setRefresh(x => x + 1)}><RefreshCcw size={16}/> {t('activity.refresh')}</button>
-      </div>
-    </div>
     <p className="app-muted text-sm">{t('activity.hint')}</p>
     {loading && <Spinner label={t('activity.loadingOffers')}/>}
     {!loading && offerings.length === 0 && !error && <p className="app-info rounded-xl border p-4 text-sm">{t('activity.noOffers')}</p>}

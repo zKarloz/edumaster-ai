@@ -50,7 +50,7 @@ export function PublishedLessonView({organizationId,offeringId,courseId,lessonId
     }catch{popup?.close();notify(t('lessonVersions.readError'),'info');}
   }
 
-  return <div className="mt-3 space-y-3 rounded-xl border p-3 sm:p-4" aria-label={t('lessonVersions.published')}>
+  return <div className="app-published-lesson-outline app-panel mt-3 space-y-3 rounded-xl border-2 p-3 sm:p-4" aria-label={t('lessonVersions.published')}>
     {loading&&<Spinner label={t('common.loading')}/>}
     {error&&<button type="button" className="app-secondary-button inline-flex items-center gap-2 rounded-lg border px-3 py-2 text-sm" onClick={()=>void load()}>
       <RefreshCcw size={16}/>{t('workspace.retry')}
@@ -61,7 +61,7 @@ export function PublishedLessonView({organizationId,offeringId,courseId,lessonId
         <span className="app-muted text-xs">{t('lessonVersions.version',{number:published.revision_number})}</span>
       </div>
       <RichTextEditor value={published.document} readOnly/>
-      {published.resources.length>0&&<div className="space-y-2 border-t pt-3">
+      {published.resources.length>0&&<div className="app-divider space-y-2 border-t pt-3">
         <p className="text-sm font-semibold">{t('lessonResources.heading')}</p>
         {published.resources.map(item=><div key={item.id} className="app-editor-resource-item flex items-center gap-2 rounded-xl border p-2.5 text-sm">
           {item.kind==='link'?<Link2 size={16}/>:item.media_type?.startsWith('image/')?<ImageIcon size={16}/>:<FileText size={16}/>}

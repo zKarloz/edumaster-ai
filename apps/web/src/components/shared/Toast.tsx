@@ -1,5 +1,6 @@
 // Sistema de notificaciones compartido: posiciones configurables y animaciones accesibles.
 import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from 'react';
+import { createPortal } from 'react-dom';
 import { CheckCircle2, Info, X } from 'lucide-react';
 import { useSettings } from '../../providers/SettingsProvider';
 
@@ -38,9 +39,9 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   const isCenter = toastPosition.endsWith('center');
   return <ToastContext.Provider value={{ notify }}>
     {children}
-    <div role="status" aria-live="polite" aria-atomic="false" className={`pointer-events-none fixed z-[70] flex w-[min(380px,calc(100vw-2rem))] flex-col gap-2 ${isTop ? 'top-5' : 'bottom-5'} ${isCenter ? 'left-1/2 -translate-x-1/2' : 'right-4'} ${isTop ? '' : 'justify-end'}`}>
+    {createPortal(<div role="status" aria-live="polite" aria-atomic="false" className={`pointer-events-none fixed z-[11000] flex w-[min(380px,calc(100vw-2rem))] flex-col gap-2 ${isTop ? 'top-5' : 'bottom-5'} ${isCenter ? 'left-1/2 -translate-x-1/2' : 'right-4'} ${isTop ? '' : 'justify-end'}`}>
       {messages.map(message => <div className="pointer-events-auto" key={message.id}><ToastItem message={message} dismiss={dismiss}/></div>)}
-    </div>
+    </div>, document.body)}
   </ToastContext.Provider>;
 }
 

@@ -96,11 +96,11 @@ export function TaskStagedFiles({root,taskId,token,locale,onCountChange,onBusyCh
     }catch(e){notify(e instanceof Error?e.message:t.error);}
     finally{setBusy(false);}
   }
-  return <div className="space-y-2 rounded-xl border p-3">
+  return <div className="app-task-file-panel space-y-2 rounded-xl border p-3">
     <p className="text-sm font-semibold"><Paperclip size={15} className="mr-1 inline"/>{t.files} ({items.length}/3)</p>
     <p className="app-muted text-xs">{t.hint}</p>
     {loading&&<p className="app-muted text-xs"><LoaderCircle size={14} className="mr-1 inline animate-spin"/>{t.loading}</p>}
-    {items.map(item=><div key={item.id} className="flex min-w-0 items-center gap-2 rounded-lg border p-2">
+    {items.map(item=><div key={item.id} className="app-task-file-item flex min-w-0 items-center gap-2 rounded-lg border p-2">
       <FileDescription item={item}/>
       <button type="button" className={secondary} onClick={()=>void remove(item.id)} disabled={busy} aria-label={`${t.remove}: ${item.filename}`}><Trash2 size={15}/>{t.remove}</button>
     </div>)}
@@ -118,34 +118,46 @@ export function TaskSubmissionFileList({root,taskId,submissionId,token,locale}:H
   const [expanded,setExpanded]=useState(false);
   const [items,setItems]=useState<TaskFile[]>([]);
   const [busyId,setBusyId]=useState<string|null>(null);
-  const [links,setLinks]=useState<Record<string,string>>({});
   const endpoint=`${root}/${taskId}/submissions/${submissionId}/attachments`;
   async function toggle(){
-    if(expanded){setExpanded(false);setLinks({});return;}
+    if(expanded){setExpanded(false);return;}
     try{
       const data=await api<{items:TaskFile[]}>(endpoint,token);
       setItems(data.items);setExpanded(true);
     }catch(e){notify(e instanceof Error?e.message:t.error);}
   }
   async function sign(id:string){
+    if(busyId)return;
+    // Abrimos una pestaña vacía durante el gesto para evitar bloqueadores;
+    // jamás almacenamos enlaces firmados caducables en React.
+    const popup=window.open('about:blank','_blank');
+    if(popup)popup.opener=null;
     setBusyId(id);
     try{
       const response=await api<{url:string;expires_in:number}>(`${endpoint}/${id}/download`,token);
-      setLinks(old=>({...old,[id]:response.url}));
-    }catch(e){notify(e instanceof Error?e.message:t.error);}
-    finally{setBusyId(null);}
+      const project=import.meta.env.VITE_SUPABASE_URL;
+      if(!project)throw new Error('El servidor de archivos no está configurado.');
+      const target=new URL(response.url);
+      if(target.protocol!=='https:' || target.origin!==new URL(project).origin
+        || !target.pathname.startsWith('/storage/v1/object/sign/course-resources/'))
+        throw new Error('El enlace de archivo no pertenece al almacenamiento autorizado.');
+      if(popup)popup.location.replace(target.toString());
+      else notify(locale==='es'?'Permite ventanas emergentes para abrir el archivo.':locale==='en'?'Allow pop-ups to open the file.':'Permita pop-ups para abrir o arquivo.');
+    }catch{
+      popup?.close();
+      notify(locale==='es'?'No se pudo abrir el archivo. Vuelve a pulsar «Abrir archivo» para obtener un enlace nuevo.':locale==='en'?'Could not open the file. Press “Open file” again for a fresh link.':'Não foi possível abrir o arquivo. Toque em “Abrir arquivo” novamente para renovar o acesso.');
+    }finally{setBusyId(null);}
   }
   return <div className="space-y-2">
     <button type="button" className={secondary} onClick={()=>void toggle()}>
       <Paperclip size={15}/>{expanded?'−': '+'} {t.files}
     </button>
-    {expanded&&<div className="space-y-2 rounded-lg border p-2">
+    {expanded&&<div className="app-task-file-panel space-y-2 rounded-lg border p-2">
       {items.length===0&&<p className="app-muted text-xs">{t.empty}</p>}
       {items.map(item=><div className="flex flex-wrap items-center gap-2" key={item.id}>
         <FileDescription item={item}/>
-        {links[item.id]?<a className={secondary} href={links[item.id]} target="_blank" rel="noopener noreferrer" referrerPolicy="no-referrer">
-          <Download size={14}/>{t.open} · {t.signed}
-        </a>:<button type="button" className={secondary} disabled={busyId!==null} onClick={()=>void sign(item.id)}><Download size={14}/>{t.prepare}</button>}
+        <button type="button" className={secondary} disabled={busyId!==null}
+          title={t.signed} onClick={()=>void sign(item.id)}><Download size={14}/>{busyId===item.id?t.prepare:t.open}</button>
       </div>)}
     </div>}
   </div>;

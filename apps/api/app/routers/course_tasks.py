@@ -392,6 +392,46 @@ async def task_submissions(organization_id: UUID, offering_id: UUID, task_id: UU
         raise _sql_error(exc) from exc
 
 
+@router.get("/{organization_id}/course-offerings/{offering_id}/tasks/{task_id}/submissions/{submission_id}")
+async def get_submission_for_review(
+    organization_id: UUID, offering_id: UUID, task_id: UUID, submission_id: UUID,
+    auth_id: UUID = Depends(authenticated_user_id),
+    engine: AsyncEngine = Depends(require_engine),
+) -> dict:
+    """Consulta individual para una página enlazable. No permite lectura de otros alumnos.
+
+    La pertenencia a institución/oferta y el rol docente se validan ANTES
+    de recuperar el texto o datos personales de la entrega.
+    """
+    try:
+        async with engine.connect() as conn:
+            ctx = await _context(conn, auth_id, organization_id, offering_id)
+            _editor(ctx)
+            task = await _task(conn, organization_id, offering_id, task_id)
+            row = (await conn.execute(text("""
+                SELECT s.id, s.attempt_number, s.answer_text, s.status,
+                       s.submitted_at, s.review_notes, s.reviewed_at,
+                       u.full_name AS student_name
+                FROM app.task_submissions s
+                JOIN app.enrollments e ON e.organization_id=s.organization_id
+                  AND e.id=s.enrollment_id AND e.offering_id=s.offering_id
+                JOIN app.students st ON st.organization_id=e.organization_id
+                  AND st.id=e.student_id
+                JOIN app.organization_memberships m ON m.organization_id=st.organization_id
+                  AND m.id=st.membership_id
+                JOIN app.users u ON u.id=m.user_id
+                WHERE s.organization_id=:org AND s.offering_id=:offering_id
+                  AND s.task_id=:task_id AND s.id=:submission_id
+            """), {"org": organization_id, "offering_id": offering_id,
+                   "task_id": task_id, "submission_id": submission_id})).mappings().first()
+            if row is None:
+                raise HTTPException(status_code=404, detail="Entrega no disponible")
+        return {"task": _public_task(task),
+                "submission": {**dict(row), "id": str(row["id"])}}
+    except SQLAlchemyError as exc:
+        raise _sql_error(exc) from exc
+
+
 @router.post("/{organization_id}/course-offerings/{offering_id}/tasks/{task_id}/submissions/{submission_id}/review")
 async def review_submission(organization_id: UUID, offering_id: UUID, task_id: UUID,
                             submission_id: UUID, payload: ReviewInput,

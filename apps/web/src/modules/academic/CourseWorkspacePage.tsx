@@ -8,14 +8,14 @@ import { useTranslation } from 'react-i18next';
 import {
   ArrowDown, ArrowLeft, ArrowUp, BookOpen,
   ClipboardList, FileCheck2, FileText, FolderOpen, LayoutDashboard,
-  Eye, Pencil, Plus, RefreshCcw,
+  Eye, Pencil, Plus,
 } from 'lucide-react';
 import { Modal } from '../../components/shared/Modal';
 import { Accordion } from '../../components/shared/Accordion';
 import { OptionSelect } from '../../components/shared/OptionSelect';
 import { Spinner } from '../../components/shared/Spinner';
 import { useToast } from '../../components/shared/Toast';
-import { lessonEditorPath, sectionPaths } from '../../routes';
+import { lessonEditorPath, newLessonPath, sectionPaths } from '../../routes';
 import { courseCardStyle, courseIcon } from './courseAppearance';
 
 const PublishedLessonView = lazy(() => import('./PublishedLessonView').then(module=>({default:module.PublishedLessonView})));
@@ -193,9 +193,6 @@ export function CourseWorkspacePage({organizationId, offeringId, courseId, token
       <button className={secondary} type="button" onClick={()=>navigate(sectionPaths.courses)}>
         <ArrowLeft size={17}/>{t('workspace.back')}
       </button>
-      <button className={secondary} type="button" onClick={()=>setRevision(value=>value+1)} disabled={loading}>
-        <RefreshCcw size={16}/>{t('common.refresh')}
-      </button>
     </div>
 
     {loading && <Spinner label={t('workspace.loading')}/>}
@@ -203,7 +200,7 @@ export function CourseWorkspacePage({organizationId, offeringId, courseId, token
       <button className={`${secondary} mt-3`} type="button" onClick={()=>setRevision(v=>v+1)}>{t('workspace.retry')}</button>
     </div>}
     {!loading && !error && workspace && <>
-      <section className="app-panel overflow-hidden rounded-2xl border">
+      <section className="app-panel overflow-hidden rounded-2xl border" style={courseCardStyle(workspace.course.appearance_color)}>
         <div className="app-workspace-banner flex flex-wrap items-center gap-4 px-5 py-5 sm:px-6" style={courseCardStyle(workspace.course.appearance_color)}>
           <span className="flex size-14 shrink-0 items-center justify-center rounded-xl bg-white/20 text-white"><Icon size={30}/></span>
           <div className="min-w-0 flex-1 text-white">
@@ -211,12 +208,12 @@ export function CourseWorkspacePage({organizationId, offeringId, courseId, token
             <p className="mt-1 text-sm text-white/90">{workspace.course.code}{workspace.course.period ? ` · ${workspace.course.period}`:''}</p>
           </div>
         </div>
-        <div className={`grid ${offeringId?'grid-cols-3':'grid-cols-2'} gap-2 p-3 sm:p-4`} role="tablist" aria-label={t('workspace.sections')}>
-          <button role="tab" aria-selected={tab==='overview'} className={`${secondary} ${tab==='overview'?'app-workspace-active':''}`}
+        <div className={`app-course-tabs-scroll flex min-w-0 gap-2 overflow-x-auto p-3 sm:grid sm:overflow-visible sm:p-4 ${offeringId?'sm:grid-cols-3':'sm:grid-cols-2'}`} role="tablist" aria-label={t('workspace.sections')}>
+          <button role="tab" aria-selected={tab==='overview'} className={`${secondary} app-course-tab shrink-0 whitespace-nowrap sm:min-w-0 ${tab==='overview'?'app-workspace-active':''}`}
             onClick={()=>setTab('overview')} type="button"><LayoutDashboard size={17}/>{t('workspace.overview')}</button>
-          <button role="tab" aria-selected={tab==='content'} className={`${secondary} ${tab==='content'?'app-workspace-active':''}`}
+          <button role="tab" aria-selected={tab==='content'} className={`${secondary} app-course-tab shrink-0 whitespace-nowrap sm:min-w-0 ${tab==='content'?'app-workspace-active':''}`}
             onClick={()=>setTab('content')} type="button"><BookOpen size={17}/>{t('workspace.content')}</button>
-          {offeringId&&<button role="tab" aria-selected={tab==='tasks'} className={`${secondary} ${tab==='tasks'?'app-workspace-active':''}`}
+          {offeringId&&<button role="tab" aria-selected={tab==='tasks'} className={`${secondary} app-course-tab shrink-0 whitespace-nowrap sm:min-w-0 ${tab==='tasks'?'app-workspace-active':''}`}
             onClick={()=>setTab('tasks')} type="button"><ClipboardList size={17}/>{t('workspace.tasks')}</button>}
         </div>
       </section>
@@ -290,7 +287,7 @@ export function CourseWorkspacePage({organizationId, offeringId, courseId, token
               aria-label={`${t('workspace.editUnit')}: ${unit.title}`} disabled={saving}
               onClick={()=>showEditor({kind:'unit',source:unit.source,current:unit})}><Pencil size={16}/></button>
           </> : undefined;
-          return <Accordion key={unit.id} open={open} onToggle={()=>toggleUnit(unit.id)}
+          return <Accordion key={unit.id} className="app-course-unit" open={open} onToggle={()=>toggleUnit(unit.id)}
             title={`${unit.position}. ${unit.title}`} subtitle={t('workspace.lessonCount',{count:unit.lessons.length})}
             icon={<FolderOpen size={21}/>} actions={actions} actionsLabel={t('workspace.unitActions')}
             badge={workspace.role!=='student'?<StateBadge status={unit.status}/>:undefined}>
@@ -326,7 +323,7 @@ export function CourseWorkspacePage({organizationId, offeringId, courseId, token
               {lesson.content&&((!offeringId&&!courseId)||lesson.status!=='published'||unit.status!=='published')&&
                 <p className="app-muted mt-3 whitespace-pre-wrap text-sm leading-relaxed">{lesson.content}</p>}
             </div>)}
-            {editable && <button className={secondary} type="button" onClick={()=>showEditor({kind:'lesson',source:unit.source,unitId:unit.id})}>
+            {editable && <button className={secondary} type="button" onClick={()=>navigate(newLessonPath(organizationId,unit.id,unit.source,offeringId,courseId))}>
               <Plus size={16}/>{t('workspace.addLesson')}
             </button>}
           </Accordion>;

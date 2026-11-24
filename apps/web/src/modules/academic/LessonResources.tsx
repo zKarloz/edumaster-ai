@@ -118,7 +118,7 @@ export function LessonResources({draftPath,token,preview}:Props) {
         {!preview&&<button className="app-secondary-button rounded-lg border p-2" type="button" aria-label={t('lessonResources.remove')} onClick={()=>setRemoveItem(item)} disabled={busy}><Trash2 size={16}/></button>}
       </div>)}
     </div>}
-    {!preview&&<div className="grid gap-3 border-t pt-4 md:grid-cols-2">
+    {!preview&&<div className="app-divider grid gap-3 border-t pt-4 md:grid-cols-2">
       <div className="space-y-2">
         <p className="text-sm font-medium">{t('lessonResources.addLink')}</p>
         <input className="app-input w-full rounded-xl border px-3 py-2 text-sm" placeholder={t('lessonResources.linkTitle')} maxLength={180} value={newTitle} onChange={event=>setNewTitle(event.target.value)}/>

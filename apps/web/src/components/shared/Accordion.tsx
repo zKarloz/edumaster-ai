@@ -15,11 +15,12 @@ interface AccordionProps {
   actions?: ReactNode;
   actionsLabel?: string;
   children: ReactNode;
+  className?: string;
 }
 
 export function Accordion({
   open, onToggle, title, subtitle, icon, badge, actions,
-  actionsLabel = 'Acciones', children,
+  actionsLabel = 'Acciones', children, className = '',
 }: AccordionProps) {
   const contentId = useId();
   const [menuOpen, setMenuOpen] = useState(false);
@@ -40,7 +41,7 @@ export function Accordion({
     };
   }, [menuOpen]);
 
-  return <article className="app-panel overflow-visible rounded-2xl border">
+  return <article className={`app-panel overflow-visible rounded-2xl border ${className}`}>
     <div className="flex min-w-0 items-center gap-1.5 p-3 sm:gap-2 sm:p-4">
       <button type="button" onClick={() => { setMenuOpen(false); onToggle(); }} aria-expanded={open} aria-controls={contentId}
         className="flex min-h-11 min-w-0 flex-1 items-center gap-2 rounded-xl px-1 text-left focus-visible:outline-2 focus-visible:outline-offset-2 sm:gap-3 sm:px-2">

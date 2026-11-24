@@ -2,7 +2,7 @@
 // Se reutilizan el modal, el selector con scroll y la tabla paginada del proyecto.
 import { useEffect, useState, type FormEvent, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Plus, RefreshCcw, School, Info, MoreHorizontal } from 'lucide-react';
+import { Plus, Info, MoreHorizontal } from 'lucide-react';
 import { DataTable, type Column } from '../../components/shared/DataTable';
 import { Modal } from '../../components/shared/Modal';
 import { OptionSelect } from '../../components/shared/OptionSelect';
@@ -32,7 +32,6 @@ interface Props {
   courseRole: CourseRole;
   organizations: Organization[];
   organizationId: string;
-  onOrganizationChange: (value: string) => void;
   canManageOrganization: (organizationId: string) => boolean;
   token: string;
 }
@@ -80,7 +79,7 @@ function Field({ label, children }: { label: string; children: ReactNode }) {
   </label>;
 }
 
-export function AcademicPage({ mode, courseRole, organizations, organizationId, onOrganizationChange, canManageOrganization, token }: Props) {
+export function AcademicPage({ mode, courseRole, organizations, organizationId, canManageOrganization, token }: Props) {
   const { t } = useTranslation();
   const { notify } = useToast();
   const [courses, setCourses] = useState<Course[]>([]);
@@ -108,20 +107,6 @@ export function AcademicPage({ mode, courseRole, organizations, organizationId, 
   const [offering, setOffering] = useState('');
   const [studentId, setStudentId] = useState('');
   const manager = Boolean(organizationId && canManageOrganization(organizationId));
-
-  // `noUncheckedIndexedAccess` considera que organizations[0] puede ser undefined.
-  // Comprobamos explícitamente la primera institución antes de acceder a su id.
-  useEffect(() => {
-    const firstOrganization = organizations[0];
-    if (!firstOrganization) {
-      if (organizationId) onOrganizationChange('');
-      return;
-    }
-    // No seleccionamos una institución fuera del conjunto autorizado por FastAPI.
-    if (!organizations.some(item => item.id === organizationId)) {
-      onOrganizationChange(firstOrganization.id);
-    }
-  }, [organizations, organizationId, onOrganizationChange]);
 
   useEffect(() => {
     setCourses([]); setStudents([]); setEnrollments([]); setError('');
@@ -203,17 +188,6 @@ export function AcademicPage({ mode, courseRole, organizations, organizationId, 
   // Solo un estudiante activo puede matricularse: contar inactivos habilitaba por error el botón.
   const activeStudents = students.filter(item => item.status === 'active');
   return <div className="space-y-5">
-    <div className="app-panel flex flex-wrap items-end justify-between gap-4 rounded-2xl border border-slate-200 bg-white p-5 dark:border-[#23456A] dark:bg-[#0A1F3D]">
-      <div className="min-w-[220px] flex-1 space-y-2 sm:max-w-md">
-        <p className="flex items-center gap-2 font-semibold"> <School size={18}/> {t('legacy.k3b064c55e4')}</p>
-        <OptionSelect ariaLabel={t('labels.k98a6e3f58a')} value={organizationId}
-          onChange={onOrganizationChange} options={organizations.map(org => ({ value: org.id, label: org.name, suffix: org.code }))}
-          placeholder={t('labels.k771af51b29')}/>
-      </div>
-      <button type="button" onClick={() => setRefresh(count => count + 1)} className={secondaryButton} disabled={!organizationId}>
-        <RefreshCcw size={16}/> {t('legacy.kc725f8bffa')}
-      </button>
-    </div>
     {organizations.length === 0 && <p className="app-warning rounded-xl border p-4 text-sm">{t('legacy.k584af66e42')}</p>}
     {organizationId && <>
       <div className="flex flex-wrap items-start justify-between gap-3">
