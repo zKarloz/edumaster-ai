@@ -89,3 +89,7 @@ La migración `009_lesson_revisions.sql` forma parte de la entrega v29.1. No eje
 ## CAMBIOS 20 · v29.2 — recursos privados
 
 - [Recursos de lección, seguridad y límites de v29.2](historial/incrementos/CAMBIOS20_V29_2.md)
+
+## CAMBIOS 20 · v29.3 — publicación e historial
+
+- [Publicación versionada, historial, restauración y verificación de acceso](historial/incrementos/CAMBIOS20_V29_3.md)

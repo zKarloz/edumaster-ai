@@ -2,13 +2,13 @@
  * No confunde unidades/lecturas con tareas y notas (se implementarán después).
  * Todos los datos son reales y llegan desde FastAPI con JWT y alcance institucional.
  */
-import { useEffect, useMemo, useState, type FormEvent } from 'react';
+import { lazy, Suspense, useEffect, useMemo, useState, type FormEvent } from 'react';
 import { useLocation, useNavigate } from 'react-router';
 import { useTranslation } from 'react-i18next';
 import {
   ArrowDown, ArrowLeft, ArrowUp, BookOpen,
   ClipboardList, FileCheck2, FileText, FolderOpen, LayoutDashboard,
-  Pencil, Plus, RefreshCcw,
+  Eye, Pencil, Plus, RefreshCcw,
 } from 'lucide-react';
 import { Modal } from '../../components/shared/Modal';
 import { Accordion } from '../../components/shared/Accordion';
@@ -17,6 +17,8 @@ import { Spinner } from '../../components/shared/Spinner';
 import { useToast } from '../../components/shared/Toast';
 import { lessonEditorPath, sectionPaths } from '../../routes';
 import { courseCardStyle, courseIcon } from './courseAppearance';
+
+const PublishedLessonView = lazy(() => import('./PublishedLessonView').then(module=>({default:module.PublishedLessonView})));
 
 type State = 'draft' | 'published' | 'archived';
 type Direction = 'up' | 'down';
@@ -76,6 +78,7 @@ export function CourseWorkspacePage({organizationId, offeringId, courseId, token
   const [expanded,setExpanded] = useState<string[]>(()=>{const unit=new URLSearchParams(location.search).get('unit');return unit?[unit]:[];});
   // Por defecto, ocultar unidades archivadas sin perder acceso desde el filtro.
   const [unitFilter,setUnitFilter] = useState<'current'|'all'|State>('current');
+  const [viewingLessons,setViewingLessons] = useState<string[]>([]);
   const [dialog,setDialog] = useState<ContentDialog>(null);
   const [title,setTitle] = useState('');
   const [body,setBody] = useState('');
@@ -301,7 +304,17 @@ export function CourseWorkspacePage({organizationId, offeringId, courseId, token
                     aria-label={`${t('workspace.editLesson')}: ${lesson.title}`} onClick={()=>lesson.status==='archived' ? showEditor({kind:'lesson',source:unit.source,unitId:unit.id,current:lesson}) : navigate(`${lessonEditorPath(organizationId,lesson.id,unit.source,offeringId,courseId)}?unit=${unit.id}`)}><Pencil size={16}/></button>
                 </div>}
               </div>
-              {lesson.content && <p className="app-muted mt-3 whitespace-pre-wrap text-sm leading-relaxed">{lesson.content}</p>}
+              {lesson.status==='published'&&unit.status==='published'&&(offeringId||courseId)&&<div className="mt-2">
+                <button type="button" className="app-secondary-button inline-flex items-center gap-2 rounded-lg border px-3 py-2 text-sm"
+                  onClick={()=>setViewingLessons(current=>current.includes(lesson.id)?current.filter(id=>id!==lesson.id):[...current,lesson.id])}>
+                  <Eye size={16}/>{t('lessonVersions.viewPublished')}
+                </button>
+                {viewingLessons.includes(lesson.id)&&<Suspense fallback={<Spinner label={t('common.loading')}/>}>
+                  <PublishedLessonView organizationId={organizationId} offeringId={offeringId} courseId={courseId} lessonId={lesson.id} source={unit.source} token={token}/>
+                </Suspense>}
+              </div>}
+              {lesson.content&&((!offeringId&&!courseId)||lesson.status!=='published'||unit.status!=='published')&&
+                <p className="app-muted mt-3 whitespace-pre-wrap text-sm leading-relaxed">{lesson.content}</p>}
             </div>)}
             {editable && <button className={secondary} type="button" onClick={()=>showEditor({kind:'lesson',source:unit.source,unitId:unit.id})}>
               <Plus size={16}/>{t('workspace.addLesson')}

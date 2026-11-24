@@ -6,11 +6,13 @@ import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent }
 import type { JSONContent } from '@tiptap/core';
 import { useBlocker, useLocation, useNavigate } from 'react-router';
 import { useTranslation } from 'react-i18next';
-import { ArrowLeft, Eye, Pencil, RefreshCcw, Save, ShieldCheck } from 'lucide-react';
+import { ArrowLeft, Eye, Pencil, RefreshCcw, Save, Send, ShieldCheck } from 'lucide-react';
 import { RichTextEditor } from '../../components/shared/RichTextEditor';
 import { LessonResources } from './LessonResources';
+import { LessonRevisionHistory } from './LessonRevisionHistory';
 import { canonicalLessonDocument } from './lessonDocument';
 import { shouldBlockLessonNavigation } from './lessonNavigation';
+import { canPublishRevision } from './lessonVersioning';
 import { Spinner } from '../../components/shared/Spinner';
 import { Modal } from '../../components/shared/Modal';
 import { useToast } from '../../components/shared/Toast';
@@ -65,6 +67,8 @@ export function LessonEditorPage({organizationId,offeringId,courseId,lessonId,so
   const [logoutDialog,setLogoutDialog]=useState(false);
   const [confirmedLogout,setConfirmedLogout]=useState(false);
   const [reloadDialog,setReloadDialog]=useState(false);
+  const [publishConfirm,setPublishConfirm]=useState<number|null>(null);
+  const [publishing,setPublishing]=useState(false);
   const [epoch,setEpoch]=useState(0);
   const sourcePath=source==='base'?'lessons':'offering-lessons';
   const path=`/api/v1/academic/organizations/${organizationId}/${sourcePath}/${lessonId}/draft`;
@@ -147,6 +151,38 @@ export function LessonEditorPage({organizationId,offeringId,courseId,lessonId,so
       } else setError(t('lessonEditor.saveError'));
     } finally {setSaving(false);}
   }
+  /** Una publicación siempre requiere borrador guardado y confirmación visible.
+   * El servidor vuelve a validar el número de ofertas y la versión del borrador.
+   */
+  async function openPublishConfirm(){
+    if(!canPublishRevision(Boolean(draft),dirty,saving,publishing))return;
+    try{
+      const response=await fetch(`${API}${path.replace(/\/draft$/,'/impact')}`,{
+        headers:{Authorization:`Bearer ${tokenRef.current}`},
+      });
+      if(!response.ok)throw new Error('Could not check impact');
+      const result=await response.json() as {affected_offerings:number};
+      setPublishConfirm(result.affected_offerings);
+    }catch{notify(t('lessonVersions.publishError'),'info');}
+  }
+  async function publishRevision(){
+    // No se puede publicar sin un borrador cargado: ademas ayuda a TypeScript
+    // a validar la existencia de draft antes de leer lock_version.
+    if (!draft || !canPublishRevision(true,dirty,saving,publishing) || publishConfirm===null) return;
+    setPublishing(true);
+    try{
+      const response=await fetch(`${API}${path.replace(/\/draft$/,'/publish')}`,{
+        method:'POST',headers:{Authorization:`Bearer ${tokenRef.current}`,'Content-Type':'application/json'},
+        body:JSON.stringify({expected_lock_version:draft.lock_version,
+          ...(source==='base'?{expected_affected_offerings:publishConfirm}:{})}),
+      });
+      if(!response.ok)throw new Error('Publication conflict');
+      setPublishConfirm(null);
+      notify(t('lessonVersions.published'),'success');
+      navigate(backPath);
+    }catch{setPublishConfirm(null);setConflict(true);notify(t('lessonVersions.conflict'),'info');}
+    finally{setPublishing(false);}
+  }
   function back() { navigate(backPath); }
   function keyboard(event:KeyboardEvent<HTMLElement>) {
     if ((event.ctrlKey||event.metaKey) && event.key.toLowerCase()==='s') {
@@ -188,17 +224,35 @@ export function LessonEditorPage({organizationId,offeringId,courseId,lessonId,so
             <button type="button" aria-pressed={preview} className={`flex items-center gap-2 rounded-lg px-3 py-2 text-sm ${preview?'app-editor-tab-active':''}`}
               onClick={()=>setPreview(true)}><Eye size={15}/>{t('lessonEditor.preview')}</button>
           </div>
-          <span className="app-muted text-xs">{t('lessonEditor.noPublish')}</span>
+          <span className="app-muted text-xs">{t('lessonVersions.keepPublished')}</span>
         </div>
         {preview ? <RichTextEditor key={`preview-${draft.id}-${epoch}`} value={document} readOnly/>
           : <RichTextEditor key={`edit-${draft.id}-${epoch}`} value={document} onChange={setDocument}/>}
         <div className="flex flex-wrap items-center justify-end gap-2">
           <button type="button" className="app-primary-button inline-flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold disabled:opacity-50"
             disabled={saving||!dirty||preview} onClick={()=>void save()}><Save size={17}/>{saving?t('lessonEditor.saving'):t('lessonEditor.save')}</button>
+          <button type="button" className="app-secondary-button inline-flex items-center gap-2 rounded-xl border px-4 py-2.5 text-sm font-semibold disabled:opacity-50"
+            disabled={!canPublishRevision(Boolean(draft),dirty,saving,publishing)} onClick={()=>void openPublishConfirm()}><Send size={17}/>{t('lessonVersions.publish')}</button>
         </div>
       </div>
-      <LessonResources draftPath={path} token={token} preview={preview}/>
+      <LessonResources key={draft.id} draftPath={path} token={token} preview={preview}/>
+      <div className="app-panel rounded-2xl border p-4 sm:p-5">
+        <LessonRevisionHistory path={path} token={token} draftId={draft.id}
+          lockVersion={draft.lock_version} disabled={dirty||saving||publishing}
+          onRestored={()=>void load()}/>
+      </div>
     </>}
+    <Modal open={publishConfirm!==null} title={t('lessonVersions.confirmPublish')}
+      onClose={()=>{if(!publishing)setPublishConfirm(null);}}>
+      <p className="text-sm">{source==='base'
+        ? t('lessonVersions.institutionalImpact',{count:publishConfirm??0})
+        : t('lessonVersions.offeringImpact')}</p>
+      <p className="app-muted mt-2 text-sm">{t('lessonVersions.publishWarning')}</p>
+      <div className="mt-4 flex justify-end gap-2">
+        <button type="button" className="app-secondary-button rounded-lg border px-3 py-2" disabled={publishing} onClick={()=>setPublishConfirm(null)}>{t('common.cancel')}</button>
+        <button type="button" className="app-primary-button rounded-lg px-3 py-2 disabled:opacity-50" disabled={publishing} onClick={()=>void publishRevision()}>{t('lessonVersions.publish')}</button>
+      </div>
+    </Modal>
     <Modal open={blocker.state==='blocked'} title={t('lessonEditor.dirty')}
       onClose={()=>{if(blocker.state==='blocked') blocker.reset();}}>
       <p className="text-sm">{t('lessonEditor.confirmLeave')}</p>

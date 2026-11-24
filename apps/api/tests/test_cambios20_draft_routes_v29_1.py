@@ -69,6 +69,8 @@ class Conn:
                 "base_revision_id": PUB, "updated_at": "2026-11-23T20:00:01Z",
             }
             return Result(dict(self.draft))
+        if "INSERT INTO app.lesson_revision_resources" in sql:
+            return Result()
         if "UPDATE app.lesson_revisions" in sql:
             self.version += 1
             self.draft.update({"title": params["title"], "document_body": params["body"],

@@ -158,6 +158,19 @@ async def _create(conn: AsyncConnection, auth_id: UUID, org: UUID,
         "body": json.dumps(document, ensure_ascii=False, separators=(",", ":")),
         "title": published["title"], "actor": actor,
     })).mappings().one()
+    # Un nuevo borrador hereda las asociaciones PUBLICADAS, sin duplicar
+    # los objetos privados. Quitarlas del borrador no borra el historial.
+    await conn.execute(text('''
+        INSERT INTO app.lesson_revision_resources (
+          organization_id, lesson_revision_id, resource_kind, file_id,
+          external_url, title, position, added_by
+        )
+        SELECT organization_id, :draft_id, resource_kind, file_id,
+               external_url, title, position, :actor
+        FROM app.lesson_revision_resources
+        WHERE organization_id=:org AND lesson_revision_id=:published_id
+    '''), {"org": org, "draft_id": row["id"],
+           "published_id": published["id"], "actor": actor})
     await _audit(conn, org, actor, "create_draft", "lesson_revisions", row["id"])
     return _response(dict(row), source, lesson_id)
 
