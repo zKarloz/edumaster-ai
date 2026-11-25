@@ -1055,3 +1055,108 @@ html.black-theme .app-editor-section-tab[aria-selected='true'] {
 @media (min-width: 768px) {
   .app-sidebar { align-self: flex-start; }
 }
+
+/* v31.2 · Visualizador neuronal didáctico: tokens para Claro, Oscuro y Negro.
+ * El diagrama está aislado de módulos académicos y no muestra datos reales. */
+:root {
+  --neural-scene: #f3f8ff;
+  --neural-grid: #c6d8ec;
+  --neural-line: #91aecb;
+  --neural-active: #0579c6;
+  --neural-middle: #7352bd;
+  --neural-output: #087a9f;
+  --neural-label: #345474;
+  --neural-pill: #e5f3ff;
+  --neural-pill-text: #07548e;
+  --neural-focus: #dcefff;
+}
+html.dark:not(.black-theme) {
+  --neural-scene: #07172e;
+  --neural-grid: #21446a;
+  --neural-line: #284a70;
+  --neural-active: #3ccfff;
+  --neural-middle: #b083ff;
+  --neural-output: #3cbbf0;
+  --neural-label: #b6cee8;
+  --neural-pill: #163c5b;
+  --neural-pill-text: #b5eaff;
+  --neural-focus: #163d5f;
+}
+html.black-theme {
+  --neural-scene: #111111;
+  --neural-grid: #282828;
+  --neural-line: #505050;
+  --neural-active: #eeeeee;
+  --neural-middle: #bebebe;
+  --neural-output: #dedede;
+  --neural-label: #d5d5d5;
+  --neural-pill: #303030;
+  --neural-pill-text: #f0f0f0;
+  --neural-focus: #363636;
+}
+.neural-intro-icon { background: var(--neural-focus); color: var(--neural-active); }
+.neural-demo-pill { background: var(--neural-pill); color: var(--neural-pill-text); border: 1px solid var(--app-panel-border); }
+.neural-input-button[data-selected='true'] {
+  background: var(--neural-focus);
+  color: var(--app-text);
+  border-color: var(--neural-active);
+  box-shadow: inset 0 0 0 1px var(--neural-active);
+}
+.neural-input-button[data-dimmed='true'] { opacity: .58; }
+.neural-input-number { background: var(--neural-pill); color: var(--neural-pill-text); }
+.neural-output-pill { background: var(--neural-pill); color: var(--neural-pill-text); border: 1px solid var(--app-panel-border); }
+.neural-live-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--neural-active); box-shadow: 0 0 9px var(--neural-active); }
+.neural-visual-topbar { background: var(--app-panel-bg); }
+.neural-graph-scroll {
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  background: var(--neural-scene);
+  scroll-padding-inline: 16px;
+}
+.neural-graph { display: block; width: 100%; min-width: 790px; height: auto; }
+.neural-grid-path { stroke: var(--neural-grid); }
+.neural-col-headings { fill: var(--neural-label); font-size: 12px; font-weight: 750; letter-spacing: 1.35px; }
+/* v31.2.1: los enlaces son líneas rectas continuas; la electricidad se
+   representa mediante partículas SVG que viajan sobre ellas. */
+.neural-edge { stroke: var(--neural-line); stroke-width: .9; stroke-dasharray: none; opacity: .29; transition: stroke .24s ease, opacity .24s ease; }
+.neural-edge[data-active='true'] { stroke: var(--neural-active); stroke-width: 2; opacity: .86; }
+.neural-edge--middle[data-active='true'] { stroke: var(--neural-middle); }
+.neural-edge--output[data-active='true'] { stroke: var(--neural-output); }
+.neural-signals { pointer-events: none; }
+.neural-signal-pulse { color: var(--neural-active); pointer-events: none; }
+.neural-signal-pulse--middle { color: var(--neural-middle); }
+.neural-signal-pulse--output { color: var(--neural-output); }
+.neural-signal-tail { stroke: currentColor; stroke-linecap: round; stroke-width: 3; opacity: .85; }
+.neural-signal-glow { fill: currentColor; opacity: .92; }
+.neural-signal-core { fill: var(--neural-scene); stroke: currentColor; stroke-width: 2; }
+.neural-node { fill: var(--neural-scene); stroke-width: 2; stroke: var(--neural-line); transition: fill .2s ease, stroke .2s ease; }
+.neural-node--input { stroke: var(--neural-active); }
+.neural-node--hidden-1 { stroke: var(--neural-active); }
+.neural-node--hidden-2 { stroke: var(--neural-middle); }
+.neural-node--output { stroke: var(--neural-output); }
+.neural-node[data-active='true'] { fill: var(--neural-focus); stroke-width: 3; filter: url(#neural-glow-filter); }
+.neural-node-core { fill: var(--neural-label); pointer-events: none; }
+.neural-node-label { font-size: 12.5px; font-weight: 580; fill: var(--neural-label); pointer-events: none; }
+.neural-input-node { cursor: pointer; }
+/* El clic no añade un aro expansivo ni modifica el tamaño del nodo.
+   El teclado conserva una indicación de foco mediante el texto subrayado. */
+.neural-input-node:focus-visible { outline: none; }
+.neural-input-node:focus-visible .neural-node-label { fill: var(--neural-active); text-decoration: underline; }
+.neural-hit-area { fill: transparent; stroke: transparent; }
+.neural-input-node[data-dimmed='true'], .neural-output-node[data-dimmed='true'] { opacity: .38; }
+.neural-phase { color: var(--app-muted-text); border: 1px solid transparent; }
+.neural-phase-number { color: var(--app-muted-text); background: var(--app-control-hover); }
+.neural-phase[data-active='true'] { border-color: var(--app-control-border); color: var(--app-text); background: var(--neural-focus); }
+.neural-phase[data-active='true'] .neural-phase-number { color: var(--neural-pill-text); background: var(--neural-pill); }
+@media (prefers-reduced-motion: reduce) {
+  .neural-edge, .neural-node, .neural-input-button { transition: none !important; }
+  .neural-signals { display: none !important; }
+}
+html[data-motion='off'] .neural-edge, html[data-motion='off'] .neural-node, html[data-motion='off'] .neural-input-button { transition: none !important; }
+html[data-motion='off'] .neural-signals { display: none !important; }
+/* Las reglas globales del tema Negro no deben ocultar el botón seleccionado. */
+html.black-theme .neural-input-button[data-selected='true'] {
+  background: var(--neural-focus);
+  border-color: var(--neural-active);
+  color: var(--app-text);
+}

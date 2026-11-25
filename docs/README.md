@@ -6,6 +6,8 @@ migraciones, sobrescribir código o aplicar parches.
 
 ## Acceso rápido
 
+- [Visualizador neuronal interactivo DEMO v31.2](historial/incrementos/CAMBIOS23_V31_2_VISUALIZADOR_NEURONAL.md)
+
 - [Inicio e instalación del proyecto](../README.md)
 - [Cierre y comprobaciones de v27.1](historial/cambios/CAMBIOS18_CIERRE_V27_1.md)
 - [CAMBIOS 19 · v28: estados de contenido y creación por rol](historial/cambios/CAMBIOS19_V28.md)

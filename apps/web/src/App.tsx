@@ -2,7 +2,7 @@
 // Los ejemplos académicos están rotulados DEMO; nunca simulan datos reales.
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, type FormEvent, type PointerEvent as ReactPointerEvent } from 'react';
 import { Activity, ArrowRight, BookOpen, Building2, CheckCircle2, ChevronDown, Database,
-  GraduationCap, LayoutDashboard, LockKeyhole, Menu, Users, ClipboardList,
+  GraduationCap, LayoutDashboard, LockKeyhole, Menu, Users, ClipboardList, BrainCircuit,
   Server, ShieldCheck, XCircle, Settings, PanelLeftClose, PanelLeftOpen, X } from 'lucide-react';
 import type { Session } from '@supabase/supabase-js';
 import { useLocation, useNavigate } from 'react-router';
@@ -21,6 +21,7 @@ import { OrganizationsPage } from './modules/organizations/OrganizationsPage';
 import { AcademicPage } from './modules/academic/AcademicPage';
 import { CourseWorkspacePage } from './modules/academic/CourseWorkspacePage';
 // Carga diferida: Tiptap no incrementa el bundle inicial de la plataforma.
+const NeuralNetworkPage = lazy(() => import('./modules/intelligence/NeuralNetworkPage').then(mod => ({default:mod.NeuralNetworkPage})));
 const LessonEditorPage = lazy(() => import('./modules/academic/LessonEditorPage').then(mod => ({default:mod.LessonEditorPage})));
 const LessonCreatePage = lazy(() => import('./modules/academic/LessonCreatePage').then(mod => ({default:mod.LessonCreatePage})));
 const TaskSubmissionsPage = lazy(() => import('./modules/academic/TaskSubmissionsPage').then(mod => ({default:mod.TaskSubmissionsPage})));
@@ -48,6 +49,7 @@ const columns: Column<Organization>[] = [
 ];
 const nav = [
   { id: 'dashboard' as const, title: 'Resumen', icon: LayoutDashboard },
+  { id: 'intelligence' as const, title: 'Inteligencia artificial', icon: BrainCircuit },
   { id: 'organizations' as const, title: 'Instituciones', icon: Building2 },
   { id: 'users' as const, title: 'Usuarios', icon: Users },
   { id: 'courses' as const, title: 'Cursos', icon: BookOpen },
@@ -62,6 +64,7 @@ const navGroups = [
   { label: 'nav.platform', sections: ['dashboard'] },
   { label: 'nav.management', sections: ['organizations', 'users'] },
   { label: 'nav.academic', sections: ['courses', 'students', 'enrollments', 'activity'] },
+  { label: 'nav.ai', sections: ['intelligence'] },
   { label: 'nav.system', sections: ['security', 'settings'] },
 ] as const;
 
@@ -671,6 +674,9 @@ export default function App() {
           {section === 'users' && !sectionPermissionDenied && accessToken && !usersCsvImportRoute && (globalRoles.includes('superadmin')
             ? <UsersPage token={accessToken} organizations={orgs} canManage/>
             : <InstitutionalUsersPage token={accessToken} organizations={institutionalAdminOrganizations} organizationId={academicOrgId}/>)}
+          {section === 'intelligence' && <Suspense fallback={<Spinner label={t('common.loading')}/>}>
+            <NeuralNetworkPage/>
+          </Suspense>}
           {section === 'settings' && <SettingsPage token={accessToken ?? ''} apiStatus={apiStatus} onCheckApi={checkApi}/>}
           {section === 'profile' && accessToken && <ProfilePage key={session.user.id} identity={accountIdentity} token={accessToken}
             userId={session.user.id} photo={avatar.photo} photoLoading={avatar.loading} onIdentity={value => setIdentity({ id: session.user.id, value })}

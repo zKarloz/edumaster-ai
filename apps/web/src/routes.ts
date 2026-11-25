@@ -1,6 +1,6 @@
 /** URLs estables: los nombres visibles cambian de idioma, las rutas no. */
 export const sectionPaths = {
-  dashboard: '/inicio', organizations: '/gestion/instituciones', users: '/gestion/usuarios',
+  dashboard: '/inicio', intelligence: '/inteligencia-artificial/red-neuronal', organizations: '/gestion/instituciones', users: '/gestion/usuarios',
   courses: '/academico/cursos', students: '/academico/estudiantes',
   enrollments: '/academico/matriculas', activity: '/academico/actividad',
   security: '/sistema/seguridad', settings: '/sistema/configuracion',
@@ -121,7 +121,7 @@ export function legacyRedirect(pathname: string): string | null {
   if (detail) return enrollmentHistoryPath(detail[1]!, detail[2]!, detail[3]!);
   const alias = Object.entries(sectionPaths).find(([key]) => {
     const old: Record<Section, string> = {
-      dashboard: '/app/inicio', organizations: '/app/instituciones', users: '/app/usuarios',
+      dashboard: '/app/inicio', intelligence: '/app/inteligencia-artificial', organizations: '/app/instituciones', users: '/app/usuarios',
       courses: '/app/cursos', students: '/app/estudiantes', enrollments: '/app/matriculas',
       activity: '/app/actividad', security: '/app/seguridad', settings: '/app/configuracion', profile: '/app/perfil',
     };

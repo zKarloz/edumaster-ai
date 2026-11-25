@@ -107,3 +107,16 @@ seguridad deben validarse contra Supabase de pruebas antes de desplegar a produc
 Para generar datos académicos ficticios, validar su integridad y entrenar el primer
 modelo de referencia, consulta [tools/ml_demo/README.md](tools/ml_demo/README.md).
 **No accede a datos reales, no crea usuarios y no ejecuta migraciones SQL.**
+
+## Visualizador neuronal didáctico (v31.2)
+
+Una vez autenticado, abre **Inteligencia artificial → Red neuronal**. La vista
+permite seleccionar entradas, pausar y repetir el flujo de propagación ilustrativo.
+**No representa inferencia, pesos o activaciones reales**; consulta el
+[alcance de v31.2](docs/historial/incrementos/CAMBIOS23_V31_2_VISUALIZADOR_NEURONAL.md).
+
+```bash
+cd apps/web
+npm run test:neural
+npm run build
+```

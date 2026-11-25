@@ -20,3 +20,114 @@ __pycache__/
 edumaster_datos_demo/
 *_datos_demo/
 tools/ml_demo/salidas/
+
+# ==========================================
+# EDUMASTER.AI - Exclusiones adicionales
+# ==========================================
+
+# Dependencias de JavaScript
+node_modules/
+
+# Compilaciones y caches del frontend
+dist/
+build/
+.vite/
+.vercel/
+coverage/
+*.tsbuildinfo
+.eslintcache
+
+# Entornos virtuales de Python
+.venv/
+venv/
+virtualenv/
+
+# Caches de Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+*.egg-info/
+
+# Variables de entorno y credenciales
+.env
+.env.*
+!.env.example
+!.env.template
+!.env.sample
+*.pem
+*.key
+*.p12
+*.pfx
+credentials.json
+service-account*.json
+
+# Logs y archivos temporales
+*.log
+*.tmp
+*.temp
+*.bak
+*.swp
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Archivos del sistema operativo
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Configuracion local del IDE
+.vscode/
+.idea/
+
+# Paquetes y respaldos comprimidos
+*.zip
+*.tar
+*.tar.gz
+*.7z
+*.rar
+
+# Herramienta local de empaquetado
+/empaquetar_revision_edumaster.py
+
+# Artefactos generados de Machine Learning
+mlruns/
+mlartifacts/
+checkpoints/
+__generated__/
+*.pt
+*.pth
+*.onnx
+*.h5
+*.keras
+*.pkl
+*.joblib
+*.safetensors
+weights.bin
+
+# Datos locales del laboratorio ML
+/tools/ml_demo/data/
+/tools/ml_demo/output/
+/tools/ml_demo/outputs/
+/tools/ml_demo/artifacts/
+/tools/ml_demo/datasets/
+/tools/ml_demo/reports/
+
+# Respaldos y exportaciones de base de datos
+*.dump
+*.backup
+/backups/
+/exports/
+
+# Archivos locales de revision
+/Terminal-*.txt
+/Resultados-laboratorio-neuronal-local.txt
+/git_status.txt
+/edumasterai-structure-vscode.txt
+/defintion-tables-supabase-*.txt
+/plan-pendiente.md
+
