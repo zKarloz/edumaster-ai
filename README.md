@@ -101,3 +101,9 @@ Frontend en Vercel (raíz `apps/web`) y API en Render (raíz `apps/api`), con va
 configuradas en cada proveedor. Revisar límites, políticas y costes de los planes
 antes de usar el sistema con usuarios reales. Las comprobaciones de permisos y
 seguridad deben validarse contra Supabase de pruebas antes de desplegar a producción.
+
+## Laboratorio ML DEMO (v31.1)
+
+Para generar datos académicos ficticios, validar su integridad y entrenar el primer
+modelo de referencia, consulta [tools/ml_demo/README.md](tools/ml_demo/README.md).
+**No accede a datos reales, no crea usuarios y no ejecuta migraciones SQL.**

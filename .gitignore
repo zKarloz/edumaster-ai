@@ -15,3 +15,8 @@ __pycache__/
 
 # Archivos incrementales generados por TypeScript (eliminar del índice si ya estaban registrados).
 *.tsbuildinfo
+
+# Experimentos sintéticos locales: nunca versionar datasets ni checkpoints.
+edumaster_datos_demo/
+*_datos_demo/
+tools/ml_demo/salidas/

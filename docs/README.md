@@ -150,3 +150,8 @@ Las revisiones textuales de v30.1 **no son calificaciones oficiales**. Los archi
 
 - [Confirmación de entregas, calificación directa desde la tabla y revisión individual](historial/hotfixes/CAMBIOS22_V30_3_1_CONFIRMACION_Y_RUBRICA.md).
 - **Sin migración SQL nueva**: requiere la 013 aplicada previamente.
+
+## CAMBIOS 23 · Laboratorio de machine learning
+
+- [v31.1 · Dataset sintético y baseline sin información personal](historial/incrementos/CAMBIOS23_V31_1_LABORATORIO_DEMO.md)
+- [Instrucciones de ejecución del laboratorio DEMO](../tools/ml_demo/README.md)

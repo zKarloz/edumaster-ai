@@ -1,0 +1,27 @@
+# Laboratorio sintético aislado; no requiere variables de Supabase ni datos reales.
+name: EduMaster ML DEMO
+
+on:
+  push:
+    paths:
+      - 'tools/ml_demo/**'
+      - '.github/workflows/ml-demo.yml'
+  pull_request:
+    paths:
+      - 'tools/ml_demo/**'
+      - '.github/workflows/ml-demo.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  ml-demo:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Probar el laboratorio de datos sintéticos
+        run: python -m unittest discover -s tools/ml_demo/tests -v
