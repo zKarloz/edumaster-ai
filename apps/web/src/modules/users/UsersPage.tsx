@@ -10,6 +10,7 @@ import { Spinner } from '../../components/shared/Spinner';
 import { useToast } from '../../components/shared/Toast';
 import type { Organization } from '../organizations/types';
 import { UserDetailModal } from './UserDetailModal';
+import { UserProvisioningPanel } from './UserProvisioningPanel';
 
 const API = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 const ENDPOINT = `${API}/api/v1/admin/institution-admins`;
@@ -154,6 +155,7 @@ export function UsersPage({ token, organizations, canManage }: UsersPageProps) {
     </section>
 
     <section className="app-panel space-y-4 rounded-2xl border p-5 sm:p-6">
+      <UserProvisioningPanel token={token} organizations={organizations} globalAdmin onChange={() => setRefresh(value => value + 1)}/>
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div><h3 className="text-lg font-semibold">{t('legacy.k42ded52e50')}</h3><p className="app-muted mt-1 text-sm">{t('legacy.k4e2a063b43')}</p></div>
         <div className="flex gap-2">
@@ -163,7 +165,7 @@ export function UsersPage({ token, organizations, canManage }: UsersPageProps) {
       <div className="max-w-sm space-y-1.5"><label className="text-sm font-medium">{t('legacy.k738108a582')}</label><OptionSelect value={filterOrg} onChange={setFilterOrg} ariaLabel={t('labels.kb07bad2d8d')} options={[{ value: 'all', label: 'Todas las instituciones' }, ...organizations.map(item => ({ value: item.id, label: item.name, suffix: item.code }))]}/></div>
       {loading && <Spinner label="Cargando administradores institucionales..."/>}
       {error && <div role="alert" className="app-warning rounded-xl border p-4 text-sm">{error}</div>}
-      {!loading && !error && <DataTable key={filterOrg} label="Asignaciones institucionales" rows={filtered} columns={columns} pageSize={8}/>}
+      {!loading && !error && <DataTable key={filterOrg} label="Asignaciones institucionales" rows={filtered} columns={columns}/>}
       {!loading && !error && items.length === 0 && <div className="app-info flex items-start gap-2 rounded-xl border p-4 text-sm"><Info size={18} className="shrink-0"/>{t('legacy.k6adf4f3662')}</div>}
     </section>
 

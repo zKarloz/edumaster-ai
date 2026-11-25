@@ -19,7 +19,9 @@ from app.routers.organizations import router as organizations_router
 from app.routers.profile import router as profile_router
 from app.routers.profile_details import router as profile_details_router
 from app.routers.task_attachments import router as task_attachments_router
+from app.routers.task_grading import router as task_grading_router
 from app.routers.user_administration import router as user_administration_router
+from app.routers.user_invites import router as user_invites_router
 
 settings = get_settings()
 app = FastAPI(title="EduMaster.ai API", version="0.1.0", docs_url="/docs")
@@ -37,12 +39,14 @@ app.include_router(course_appearance_router)
 app.include_router(course_content_router)
 app.include_router(course_tasks_router)
 app.include_router(task_attachments_router)
+app.include_router(task_grading_router)
 app.include_router(offering_content_router)
 app.include_router(lesson_revisions_router)
 app.include_router(lesson_resources_router)
 app.include_router(lesson_publication_router)
 app.include_router(lesson_published_router)
 app.include_router(user_administration_router)
+app.include_router(user_invites_router)
 app.include_router(institutional_users_router)
 app.include_router(profile_router)
 app.include_router(profile_details_router)

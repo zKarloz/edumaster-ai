@@ -8,6 +8,13 @@ export const sectionPaths = {
 } as const;
 export type Section = keyof typeof sectionPaths;
 
+/** Importación CSV en página propia, bajo los permisos del módulo Usuarios. */
+export const usersCsvImportPath = (organizationId?: string): string =>
+  `${sectionPaths.users}/importar-csv${organizationId ? `?institucion=${encodeURIComponent(organizationId)}` : ''}`;
+export const isUsersCsvImportPath = (path: string): boolean =>
+  path.replace(/\/$/, '') === `${sectionPaths.users}/importar-csv`;
+
+
 // Nunca usaremos un identificador de estudiante sin matrícula y oferta.
 const newDetail = /^\/academico\/actividad\/organizaciones\/([0-9a-f-]{36})\/ofertas\/([0-9a-f-]{36})\/matriculas\/([0-9a-f-]{36})\/?$/i;
 const oldDetail = /^\/app\/actividad\/organizaciones\/([0-9a-f-]{36})\/ofertas\/([0-9a-f-]{36})\/matriculas\/([0-9a-f-]{36})\/?$/i;
@@ -124,6 +131,7 @@ export function legacyRedirect(pathname: string): string | null {
 }
 export function sectionForPath(path: string): Section | null {
   if (newDetail.test(path)) return 'activity';
+  if (isUsersCsvImportPath(path)) return 'users';
   if (newOfferingLesson.test(path) || newBaseLesson.test(path) || taskPage.test(path) || offeringWorkspace.test(path) || baseWorkspace.test(path) || submissionReview.test(path) || taskSubmissions.test(path) || myTaskSubmissions.test(path) || offeringLessonEditor.test(path) || baseLessonEditor.test(path)) return 'courses';
   const clean = path.replace(/\/$/, '') || '/';
   return (Object.entries(sectionPaths).find(([, value]) => value === clean)?.[0] as Section | undefined) ?? null;

@@ -126,3 +126,27 @@ Las revisiones textuales de v30.1 **no son calificaciones oficiales**. Los archi
 - Editor y recursos agrupados en una pestaña; historial de revisiones separado.
 - Confirmación modal para publicar o cerrar tareas y estabilidad del sidebar con desenfoque.
 - Sin nuevas migraciones SQL.
+
+
+## CAMBIOS 21 · v30.2.10 — usuarios sin Supabase Dashboard
+
+- [Invitaciones institucionales, creación de usuarios y CSV con vista previa](historial/incrementos/CAMBIOS21_V30_2_10.md)
+- Se reutilizan Auth y las tablas de identidad de las migraciones existentes: **sin SQL nuevo**.
+- Supabase Auth impone límites a los correos de invitación: probar individualmente y configurar SMTP antes de un envío masivo real.
+
+## CAMBIOS 21 · v30.2.11 — Directorio y CSV en página
+
+- [Directorio del superadministrador estable tras recargar, importación CSV en página y paginación 5/10/20](historial/hotfixes/CAMBIOS21_V30_2_11_USUARIOS_CSV.md)
+- El selector compartido `DataTable` inicia en 5 filas por página; las listas paginadas directamente por la API mantienen su paginación remota.
+- No hay migración SQL, nuevas dependencias npm ni modificación de credenciales.
+
+## CAMBIOS 22 · v30.3 — rúbricas y calificación oficial
+
+- [Rúbricas, notas por entrega, rectificaciones y verificación](historial/incrementos/CAMBIOS22_V30_3_RUBRICAS_Y_NOTAS.md)
+- **Migración 013 obligatoria** antes de utilizar la nueva funcionalidad: `database/migrations/013_task_rubrics_and_official_grades.sql`.
+- Postflight solo lectura: `tools/verificacion/verificar_rubricas_v30_3.py`.
+
+## CAMBIOS 22 · v30.3.1 — Confirmación de entregas y rúbricas accesibles
+
+- [Confirmación de entregas, calificación directa desde la tabla y revisión individual](historial/hotfixes/CAMBIOS22_V30_3_1_CONFIRMACION_Y_RUBRICA.md).
+- **Sin migración SQL nueva**: requiere la 013 aplicada previamente.

@@ -205,8 +205,8 @@ export function AcademicPage({ mode, courseRole, organizations, organizationId, 
       {loading && <Spinner label={t('labels.k5b1819571f')}/>}
       {error && !dialog && <p role="alert" className="app-warning rounded-xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900">{error}</p>}
       {mode === 'courses' && <CourseCatalog organizationId={organizationId} token={token} role={courseRole} refreshKey={refresh}/>}
-      {mode === 'students' && manager && <DataTable<Student> key={organizationId} rows={students} columns={studentColumns} label={t('labels.kccfcb84afc')} pageSize={8}/>}
-      {mode === 'enrollments' && manager && <DataTable<Enrollment> key={organizationId} rows={enrollments} columns={enrollmentColumns} label={t('labels.k9a41bf917f')} pageSize={8}/>}
+      {mode === 'students' && manager && <DataTable<Student> key={organizationId} rows={students} columns={studentColumns} label={t('labels.kccfcb84afc')}/>}
+      {mode === 'enrollments' && manager && <DataTable<Enrollment> key={organizationId} rows={enrollments} columns={enrollmentColumns} label={t('labels.k9a41bf917f')}/>}
       {mode !== 'courses' && !manager && <p role="status" className="app-panel rounded-xl border p-5 text-sm">{t('legacy.ka070051a68')}</p>}
       {/* Guía informativa (azul suave en Claro/Oscuro, gris en Negro):
           aparece mientras la institución no tenga estudiantes. No es una alerta de error. */}

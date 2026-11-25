@@ -349,6 +349,15 @@ async def void_activity_record(
                     "record_id": record_id})).mappings().first()
             if not row:
                 raise HTTPException(status_code=404, detail="Evidencia no disponible")
+            # Las notas vinculadas a rúbricas tienen una fuente única y trazable.
+            # Deben rectificarse desde la revisión de la tarea, no anularse aquí.
+            linked = (await conn.execute(text("""
+                SELECT 1 FROM app.task_official_grades
+                WHERE organization_id=:organization_id AND academic_record_id=:record_id
+                LIMIT 1
+            """), {"organization_id": organization_id, "record_id": record_id})).first()
+            if linked:
+                raise HTTPException(status_code=409, detail="Rectifica esta nota desde la tarea evaluada")
             await _active_enrollment(conn, organization_id, offering_id, row["enrollment_id"])
             await conn.execute(text("""
                 UPDATE app.academic_activity_records

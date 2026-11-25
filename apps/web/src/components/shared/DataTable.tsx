@@ -2,6 +2,7 @@
 import { useMemo, useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ChevronLeft, ChevronRight, Search } from 'lucide-react';
+import { OptionSelect } from './OptionSelect';
 
 /** Vocabulario de columnas compartidas. Mantiene las claves de API independientes del idioma. */
 const TABLE_HEADERS: Record<string, string> = {
@@ -40,20 +41,22 @@ interface DataTableProps<T extends object> {
   rows: T[];
   columns: Column<T>[];
   label: string;
-  pageSize?: number;
   // Cuando la API realiza búsqueda/paginación, no dupliquemos controles locales.
   manualMode?: boolean;
 }
-export function DataTable<T extends object>({ rows, columns, label, pageSize = 5, manualMode = false }: DataTableProps<T>) {
+export function DataTable<T extends object>({ rows, columns, label, manualMode = false }: DataTableProps<T>) {
   const { t } = useTranslation();
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(0);
+  // Tamaño compartido y seleccionable. Los listados de paginación remota
+  // conservan su propio control del servidor (manualMode).
+  const [rowsPerPage, setRowsPerPage] = useState<5 | 10 | 20>(5);
   const filtered = useMemo(() => manualMode ? rows : rows.filter(item =>
     Object.values(item).some(value => String(value ?? '').toLowerCase().includes(search.toLowerCase()))
   ), [rows, search, manualMode]);
-  const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
+  const totalPages = Math.max(1, Math.ceil(filtered.length / rowsPerPage));
   const currentPage = Math.min(page, totalPages - 1);
-  const visible = manualMode ? filtered : filtered.slice(currentPage * pageSize, (currentPage + 1) * pageSize);
+  const visible = manualMode ? filtered : filtered.slice(currentPage * rowsPerPage, (currentPage + 1) * rowsPerPage);
   return (
     <section className="app-table overflow-hidden rounded-2xl border border-slate-200 bg-white dark:border-[#23456A] dark:bg-[#0A1F3D]">
       <header className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 px-5 py-4 dark:border-[#23456A]">
@@ -81,7 +84,11 @@ export function DataTable<T extends object>({ rows, columns, label, pageSize = 5
       </div>
       {!manualMode && <footer className="app-table-footer flex items-center justify-between border-t border-slate-200 px-5 py-3 text-xs text-slate-500 dark:border-[#23456A] dark:text-slate-300">
         <span>{t('common.records', {count: filtered.length, page: currentPage+1, total: totalPages})}</span>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <span>{t('common.pageSize')}</span>
+          <div className="w-28"><OptionSelect ariaLabel={t('common.pageSize')} value={String(rowsPerPage)}
+            onChange={value => { setRowsPerPage(Number(value) as 5 | 10 | 20); setPage(0); }}
+            options={[5, 10, 20].map(value => ({value: String(value), label: String(value)}))}/></div>
           <button type="button" aria-label={t('common.previous')} disabled={currentPage === 0} onClick={() => setPage(p => Math.max(0, p - 1))} className="app-pagination-button rounded-lg border border-slate-200 p-2 disabled:opacity-30 dark:border-slate-600"><ChevronLeft size={16}/></button>
           <button type="button" aria-label={t('common.next')} disabled={currentPage >= totalPages - 1} onClick={() => setPage(p => p + 1)} className="app-pagination-button rounded-lg border border-slate-200 p-2 disabled:opacity-30 dark:border-slate-600"><ChevronRight size={16}/></button>
         </div>

@@ -376,8 +376,17 @@ async def task_submissions(organization_id: UUID, offering_id: UUID, task_id: UU
             rows = (await conn.execute(text("""
                 SELECT s.id, s.attempt_number, s.answer_text, s.status,
                        s.submitted_at, s.review_notes, s.reviewed_at,
+                       g.score AS official_score, g.max_score AS official_max_score,
+                       NOT EXISTS (
+                         SELECT 1 FROM app.task_submissions newer
+                         WHERE newer.organization_id=s.organization_id
+                           AND newer.task_id=s.task_id AND newer.enrollment_id=s.enrollment_id
+                           AND newer.attempt_number>s.attempt_number
+                       ) AS is_latest_attempt,
                        u.full_name AS student_name
                 FROM app.task_submissions s
+                LEFT JOIN app.task_official_grades g ON g.organization_id=s.organization_id
+                  AND g.task_id=s.task_id AND g.submission_id=s.id
                 JOIN app.enrollments e ON e.organization_id=s.organization_id
                   AND e.id=s.enrollment_id AND e.offering_id=s.offering_id
                 JOIN app.students st ON st.organization_id=e.organization_id AND st.id=e.student_id
@@ -411,6 +420,12 @@ async def get_submission_for_review(
             row = (await conn.execute(text("""
                 SELECT s.id, s.attempt_number, s.answer_text, s.status,
                        s.submitted_at, s.review_notes, s.reviewed_at,
+                       NOT EXISTS (
+                         SELECT 1 FROM app.task_submissions newer
+                         WHERE newer.organization_id=s.organization_id
+                           AND newer.task_id=s.task_id AND newer.enrollment_id=s.enrollment_id
+                           AND newer.attempt_number>s.attempt_number
+                       ) AS is_latest_attempt,
                        u.full_name AS student_name
                 FROM app.task_submissions s
                 JOIN app.enrollments e ON e.organization_id=s.organization_id

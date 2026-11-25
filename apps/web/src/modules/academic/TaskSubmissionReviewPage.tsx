@@ -3,7 +3,7 @@
  * oferta, asignación del docente y pertenencia de la entrega en cada GET/POST.
  */
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
-import { ArrowLeft, CalendarClock, CheckCircle2, FileText, Send } from 'lucide-react';
+import { ArrowLeft, BookOpenCheck, CalendarClock, CheckCircle2, FileText, Send } from 'lucide-react';
 import { useLocation, useNavigate } from 'react-router';
 import { useTranslation } from 'react-i18next';
 import { Spinner } from '../../components/shared/Spinner';
@@ -11,12 +11,13 @@ import { useToast } from '../../components/shared/Toast';
 import { normalizeLocale } from '../../i18n';
 import { courseTaskPath } from '../../routes';
 import { TaskSubmissionFileList } from './TaskSubmissionFiles';
+import { TaskGradePanel } from './TaskRubricPanel';
 
 interface Props { organizationId:string;offeringId:string;taskId:string;submissionId:string;token:string }
 interface Task { id:string;title:string;instructions:string;due_at:string|null;status:'draft'|'published'|'closed' }
 interface Submission {
   id:string;attempt_number:number;answer_text:string;status:'submitted'|'reviewed';
-  submitted_at:string;review_notes:string|null;reviewed_at:string|null;student_name:string;
+  submitted_at:string;review_notes:string|null;reviewed_at:string|null;student_name:string;is_latest_attempt:boolean;
 }
 const API=import.meta.env.VITE_API_URL || 'http://localhost:8000';
 const copy={
@@ -24,17 +25,17 @@ const copy={
     assignment:'Tarea',student:'Estudiante',attempt:'Intento',date:'Entregada',answer:'Respuesta del estudiante',
     empty:'El estudiante entregó únicamente archivos.',notes:'Observaciones docentes',placeholder:'Escribe observaciones concretas para el estudiante...',
     save:'Guardar revisión',saved:'Revisión registrada.',already:'Esta entrega ya fue revisada.',loading:'Cargando revisión...',
-    retry:'Reintentar',error:'No se pudo consultar la entrega.',limit:'La calificación oficial se incorporará en el próximo incremento.'},
+    retry:'Reintentar',error:'No se pudo consultar la entrega.',gradeAction:'Calificar con rúbrica',gradeClosed:'Para calificar, primero cierra la tarea.',gradeReviewed:'Para calificar, guarda primero la revisión docente.',gradeLatest:'Solo se puede calificar el último intento.',limit:'Tras revisar la entrega y cerrar la tarea podrás registrar su nota oficial.'},
   en:{breadcrumb:'Courses / Assignments / Review submission',back:'Back to submissions',title:'Review submission',
     assignment:'Assignment',student:'Student',attempt:'Attempt',date:'Submitted',answer:'Student response',
     empty:'The student submitted files only.',notes:'Teacher feedback',placeholder:'Write specific feedback for the student...',
     save:'Save review',saved:'Review saved.',already:'This submission has already been reviewed.',loading:'Loading review...',
-    retry:'Retry',error:'Could not retrieve the submission.',limit:'Official grading will be added in the next increment.'},
+    retry:'Retry',error:'Could not retrieve the submission.',gradeAction:'Grade with rubric',gradeClosed:'Close the assignment before grading.',gradeReviewed:'Save the teacher review before grading.',gradeLatest:'Only the latest attempt can be graded.',limit:'After reviewing and closing the assignment, you can issue an official grade.'},
   pt:{breadcrumb:'Cursos / Tarefas / Revisar entrega',back:'Voltar às entregas',title:'Revisar entrega',
     assignment:'Tarefa',student:'Estudante',attempt:'Tentativa',date:'Enviada',answer:'Resposta do estudante',
     empty:'O estudante enviou apenas arquivos.',notes:'Comentários do docente',placeholder:'Escreva comentários específicos para o estudante...',
     save:'Salvar revisão',saved:'Revisão registrada.',already:'Esta entrega já foi revisada.',loading:'Carregando revisão...',
-    retry:'Tentar novamente',error:'Não foi possível consultar a entrega.',limit:'A nota oficial será adicionada na próxima etapa.'},
+    retry:'Tentar novamente',error:'Não foi possível consultar a entrega.',gradeAction:'Avaliar com rubrica',gradeClosed:'Encerre a tarefa antes de avaliar.',gradeReviewed:'Salve a revisão docente antes de avaliar.',gradeLatest:'Somente a última tentativa pode ser avaliada.',limit:'Após revisar e encerrar a tarefa, poderá registrar a nota oficial.'},
 } as const;
 
 async function fetchReview(path:string,token:string,signal?:AbortSignal):Promise<{task:Task;submission:Submission}>{
@@ -58,6 +59,10 @@ export function TaskSubmissionReviewPage({organizationId,offeringId,taskId,submi
   const rawPage=Number(new URLSearchParams(location.search).get('page')??'0');
   const page=Number.isSafeInteger(rawPage)&&rawPage>=0&&rawPage<=100000?rawPage:0;
   const back=()=>navigate(`${courseTaskPath(organizationId,offeringId,taskId)}?page=${page}`);
+  const gradeReason = !record ? '' : record.task.status !== 'closed' ? t.gradeClosed
+    : !record.submission.is_latest_attempt ? t.gradeLatest
+    : record.submission.status !== 'reviewed' ? t.gradeReviewed : '';
+  const jumpToGrade = () => document.getElementById('calificacion-oficial')?.scrollIntoView({behavior:'smooth',block:'start'});
   const stamp=(value:string)=>new Date(value).toLocaleString(locale==='en'?'en-US':locale==='pt'?'pt-BR':'es-PE');
   const load=useCallback(async(signal?:AbortSignal)=>{
     setLoading(true);setError('');
@@ -68,6 +73,13 @@ export function TaskSubmissionReviewPage({organizationId,offeringId,taskId,submi
     finally{if(!signal?.aborted)setLoading(false);}
   },[endpoint,token,t.error]);
   useEffect(()=>{const controller=new AbortController();void load(controller.signal);return()=>controller.abort();},[load,reload]);
+  // Respeta el enlace directo desde la tabla incluso tras cargar el registro asíncronamente.
+  useEffect(()=>{
+    if(location.hash==='#calificacion-oficial' && record && !loading){
+      const frame=requestAnimationFrame(jumpToGrade);
+      return ()=>cancelAnimationFrame(frame);
+    }
+  },[location.hash,record,loading]);
 
   async function save(event:FormEvent<HTMLFormElement>){
     event.preventDefault();if(busy||record?.submission.status!=='submitted'||notes.trim().length<2)return;
@@ -85,11 +97,17 @@ export function TaskSubmissionReviewPage({organizationId,offeringId,taskId,submi
 
   return <section className="space-y-5" aria-label={t.title}>
     {/* La cabecera/título de página pertenecen al topbar global. Navegación a la izquierda. */}
-    <div className="flex justify-start">
+    <div className="flex flex-wrap items-center justify-between gap-3">
       <button type="button" className="app-secondary-button inline-flex min-h-11 items-center gap-2 rounded-xl border px-4 py-2 text-sm" onClick={back}>
         <ArrowLeft size={17}/>{t.back}
       </button>
+      {/* La acción está visible; se deshabilita hasta completar los requisitos académicos. */}
+      {record&&!loading&&<button type="button" className="app-primary-button inline-flex min-h-11 items-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold disabled:opacity-50"
+        disabled={Boolean(gradeReason)} title={gradeReason || t.gradeAction} onClick={jumpToGrade}>
+        <BookOpenCheck size={17}/>{t.gradeAction}
+      </button>}
     </div>
+    {record&&!loading&&gradeReason&&<p className="app-muted text-sm" role="status">{gradeReason}</p>}
     {loading&&<Spinner label={t.loading}/>}
     {error&&!loading&&<div role="alert" className="app-warning rounded-2xl border p-5"><p className="font-semibold">{t.error}</p><p className="mt-1 text-sm">{error}</p><button type="button" className="app-secondary-button mt-4 rounded-xl border px-4 py-2 text-sm" onClick={()=>setReload(value=>value+1)}>{t.retry}</button></div>}
     {record&&!loading&&<>
@@ -129,6 +147,9 @@ export function TaskSubmissionReviewPage({organizationId,offeringId,taskId,submi
             {record.submission.reviewed_at&&<p className="app-muted text-xs">{stamp(record.submission.reviewed_at)}</p>}</>}
         </article>
       </div>
+      <TaskGradePanel root={root} taskId={taskId} submissionId={submissionId} token={token}
+        status={record.task.status} reviewStatus={record.submission.status}
+        isLatest={record.submission.is_latest_attempt} revision={reload}/>
     </>}
   </section>;
 }

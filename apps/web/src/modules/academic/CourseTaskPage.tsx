@@ -15,6 +15,7 @@ import { courseOfferingPath, courseTaskPath } from '../../routes';
 import { canSendTextSubmission, hasSubmissionContent, taskLocalDateToISO } from './courseTaskRules';
 import { TaskStagedFiles, TaskSubmissionFileList } from './TaskSubmissionFiles';
 import { TaskSubmissionsPage } from './TaskSubmissionsPage';
+import { TaskRubricPanel } from './TaskRubricPanel';
 
 type TaskState='draft'|'published'|'closed';
 interface Task {
@@ -35,34 +36,34 @@ const copy={
     used:'Intentos utilizados',draft:'Borrador',published:'Publicada',closed:'Cerrada',save:'Guardar borrador',saved:'Tarea guardada.',
     publish:'Publicar tarea',close:'Cerrar tarea',publishConfirm:'¿Confirmas publicar esta tarea?',closeConfirm:'¿Confirmas cerrar esta tarea?',
     cancel:'Cancelar',publishOk:'Tarea publicada.',closeOk:'Tarea cerrada.',review:'Revisar entregas',mine:'Mis entregas',
-    send:'Enviar entrega',answer:'Tu respuesta',onlyFiles:'Este intento contiene únicamente archivos.',
+    send:'Enviar entrega',confirmSend:'Confirmar envío',sendConfirmTitle:'Confirmar entrega',sendConfirm:'¿Confirmas el envío definitivo de esta tarea? Se registrará un intento y no podrás modificar esta entrega después de enviarla.',sendAttempt:'Intento que se registrará',attachedCount:'Archivos adjuntos',answer:'Tu respuesta',onlyFiles:'Este intento contiene únicamente archivos.',
     pending:'Prepara una respuesta o adjunta archivos para enviar.',sent:'Entrega enviada.',notes:'Observaciones docentes',
     noNotes:'Todavía no hay observaciones.',none:'Todavía no has enviado esta tarea.',attempt:'Intento',date:'Fecha de envío',
     status:'Estado',actions:'Acciones',view:'Ver detalle',hide:'Ocultar detalle',submitted:'Enviada',reviewed:'Revisada',
     blocked:'Esta tarea no admite nuevos envíos.',loading:'Cargando tarea...',error:'No se pudo consultar la tarea.',
     invalid:'Esta tarea no existe o no tienes permiso para verla.',onlyEditor:'Solo un docente autorizado puede crear tareas.',
-    limit:'Las calificaciones oficiales se incorporarán más adelante.'},
+    limit:'El docente podrá registrar la nota oficial tras cerrar la tarea y revisar la entrega.'},
   en:{back:'Back to assignments',new:'New assignment',title:'Assignment',description:'Instructions',due:'Deadline (optional)',dueTime:'Deadline time',noDue:'Without a date, the assignment has no deadline.',attempts:'Allowed attempts',
     used:'Attempts used',draft:'Draft',published:'Published',closed:'Closed',save:'Save draft',saved:'Assignment saved.',
     publish:'Publish assignment',close:'Close assignment',publishConfirm:'Confirm publishing this assignment?',closeConfirm:'Confirm closing this assignment?',
     cancel:'Cancel',publishOk:'Assignment published.',closeOk:'Assignment closed.',review:'Review submissions',mine:'My submissions',
-    send:'Submit work',answer:'Your response',onlyFiles:'This attempt contains files only.',pending:'Write a response or attach files to submit.',
+    send:'Submit work',confirmSend:'Confirm submission',sendConfirmTitle:'Confirm submission',sendConfirm:'Submit this assignment now? This will use one attempt; the submission cannot be edited after sending.',sendAttempt:'Attempt to be recorded',attachedCount:'Attached files',answer:'Your response',onlyFiles:'This attempt contains files only.',pending:'Write a response or attach files to submit.',
     sent:'Submission recorded.',notes:'Teacher feedback',noNotes:'No feedback yet.',none:'No submissions yet.',attempt:'Attempt',date:'Submitted',
     status:'Status',actions:'Actions',view:'View details',hide:'Hide details',submitted:'Submitted',reviewed:'Reviewed',
     blocked:'No further submissions are allowed.',loading:'Loading assignment...',error:'Could not load assignment.',
     invalid:'Assignment not found or you do not have access.',onlyEditor:'Only authorized teachers can create assignments.',
-    limit:'Official grades will be added later.'},
+    limit:'Teachers may issue an official grade after closing and reviewing the assignment.'},
   pt:{back:'Voltar às tarefas',new:'Nova tarefa',title:'Tarefa',description:'Instruções',due:'Prazo (opcional)',dueTime:'Hora limite',noDue:'Sem data, a tarefa não terá prazo.',attempts:'Tentativas permitidas',
     used:'Tentativas utilizadas',draft:'Rascunho',published:'Publicada',closed:'Encerrada',save:'Salvar rascunho',saved:'Tarefa salva.',
     publish:'Publicar tarefa',close:'Encerrar tarefa',publishConfirm:'Confirmar publicação da tarefa?',closeConfirm:'Confirmar encerramento da tarefa?',
     cancel:'Cancelar',publishOk:'Tarefa publicada.',closeOk:'Tarefa encerrada.',review:'Revisar entregas',mine:'Minhas entregas',
-    send:'Enviar entrega',answer:'Sua resposta',onlyFiles:'Esta tentativa contém apenas arquivos.',
+    send:'Enviar entrega',confirmSend:'Confirmar envio',sendConfirmTitle:'Confirmar entrega',sendConfirm:'Confirma o envio definitivo da tarefa? Será registrada uma tentativa e a entrega não poderá ser alterada.',sendAttempt:'Tentativa a registrar',attachedCount:'Arquivos anexados',answer:'Sua resposta',onlyFiles:'Esta tentativa contém apenas arquivos.',
     pending:'Escreva uma resposta ou anexe arquivos para enviar.',sent:'Entrega registrada.',notes:'Comentários do docente',
     noNotes:'Ainda não há comentários.',none:'Ainda não há entregas.',attempt:'Tentativa',date:'Data de envio',
     status:'Estado',actions:'Ações',view:'Ver detalhes',hide:'Ocultar detalhes',submitted:'Enviada',reviewed:'Revisada',
     blocked:'Esta tarefa não permite novos envios.',loading:'Carregando tarefa...',error:'Não foi possível consultar a tarefa.',
     invalid:'Tarefa inexistente ou acesso não autorizado.',onlyEditor:'Somente docentes autorizados podem criar tarefas.',
-    limit:'Notas oficiais serão adicionadas depois.'},
+    limit:'O docente poderá lançar a nota após o encerramento e revisão da tarefa.'},
 } as const;
 
 /** Siempre solicita datos autorizados; nunca interpreta un UUID de URL como permiso. */
@@ -94,6 +95,7 @@ export function CourseTaskPage({organizationId,offeringId,taskId,token}:Props){
   const [dueDay,setDueDay]=useState('');const [dueTime,setDueTime]=useState('23:59');
   const [maxAttempts,setMaxAttempts]=useState(1);
   const [confirmAction,setConfirmAction]=useState<'publish'|'close'|null>(null);
+  const [confirmSubmission,setConfirmSubmission]=useState(false);
   const [showComposer,setShowComposer]=useState(false);const [answer,setAnswer]=useState('');
   const [attachmentCount,setAttachmentCount]=useState(0);const [attachmentsBusy,setAttachmentsBusy]=useState(false);
   const selectedId=new URLSearchParams(location.search).get('intento');
@@ -148,14 +150,21 @@ export function CourseTaskPage({organizationId,offeringId,taskId,token}:Props){
     }catch(reason){notify(reason instanceof Error?reason.message:t.error);}
     finally{setBusy(false);}
   }
-  async function submit(event:FormEvent<HTMLFormElement>){
+  /** El formulario solo abre confirmación. La API se invoca tras confirmar en Modal. */
+  function requestSubmission(event:FormEvent<HTMLFormElement>){
     event.preventDefault();
     if(!task||!canAnswer||busy||attachmentsBusy||!hasSubmissionContent(answer,attachmentCount))return;
+    setConfirmSubmission(true);
+  }
+  /** Revalida el intento y el contenido antes de efectuar el envío definitivo. */
+  async function submitConfirmed(){
+    if(!confirmSubmission||!task||!canAnswer||busy||attachmentsBusy||!hasSubmissionContent(answer,attachmentCount))return;
     setBusy(true);
     try{
       await api(`${root}/${task.id}/submissions`,token,{
         method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({answer_text:answer.trim()}),
       });
+      setConfirmSubmission(false);
       notify(t.sent,'success');setShowComposer(false);setAnswer('');setAttachmentCount(0);
       setRevision(value=>value+1);
     }catch(reason){notify(reason instanceof Error?reason.message:t.error);}
@@ -211,12 +220,15 @@ export function CourseTaskPage({organizationId,offeringId,taskId,token}:Props){
         {task.status==='draft'&&<button className={primary} type="button" onClick={()=>setConfirmAction('publish')}><BookOpenCheck size={16}/>{t.publish}</button>}
 
       </div>}
+      {/* Rúbrica por tarea; su estado y permisos se validan también en FastAPI. */}
+      {task && <TaskRubricPanel root={root} taskId={task.id} token={token}
+        editor={editor} taskStatus={task.status} revision={revision}/>}
       {/* El docente ve las entregas paginadas directamente debajo del detalle.
           Se reutiliza el componente con control de rol de la página anterior. */}
       {editor&&task&&task.status!=='draft'&&<TaskSubmissionsPage
         organizationId={organizationId} offeringId={offeringId} taskId={task.id} token={token} embedded/>}
       {!editor&&task&&<>
-        {showComposer&&canAnswer&&<form id="formulario-entrega" onSubmit={event=>void submit(event)} className="app-panel app-task-form scroll-mt-28 space-y-4 rounded-2xl border p-5 sm:p-6">
+        {showComposer&&canAnswer&&<form id="formulario-entrega" onSubmit={requestSubmission} className="app-panel app-task-form scroll-mt-28 space-y-4 rounded-2xl border p-5 sm:p-6">
           <h3 className="font-bold">{t.send}</h3>
           <label className="block text-sm font-semibold">{t.answer}<textarea rows={8} maxLength={10000} className={field} value={answer} onChange={event=>setAnswer(event.target.value)}/></label>
           <TaskStagedFiles root={root} taskId={task.id} token={token} locale={locale} onCountChange={setAttachmentCount} onBusyChange={setAttachmentsBusy}/>
@@ -227,7 +239,7 @@ export function CourseTaskPage({organizationId,offeringId,taskId,token}:Props){
         {!canAnswer&&<p className="app-muted text-sm">{t.blocked}</p>}
         <section className="space-y-4" aria-label={t.mine}>
           <h3 className="text-lg font-bold">{t.mine}</h3>
-          {history.length>0?<DataTable<Submission> rows={history} columns={columns} label={t.mine} pageSize={8}/>:<p className="app-muted text-sm">{t.none}</p>}
+          {history.length>0?<DataTable<Submission> rows={history} columns={columns} label={t.mine}/>:<p className="app-muted text-sm">{t.none}</p>}
           {selected&&<article className="app-panel app-task-card space-y-4 rounded-2xl border p-5" aria-label={`${t.attempt} ${selected.attempt_number}`}>
             <div className="flex flex-wrap items-center justify-between gap-2"><h4 className="font-bold">{t.attempt} {selected.attempt_number}</h4>
               <span className={`app-task-submission-state app-task-submission-${selected.status} rounded-lg border px-2 py-1 text-xs font-semibold`}>{t[selected.status]}</span></div>
@@ -242,6 +254,25 @@ export function CourseTaskPage({organizationId,offeringId,taskId,token}:Props){
         </section>
       </>}
     </>}
+    {/* El estudiante confirma ANTES del POST: cancelar no consume un intento.
+        Los archivos ya preparados se conservan si cancela el diálogo. */}
+    <Modal open={confirmSubmission} title={t.sendConfirmTitle} onClose={() => { if (!busy) setConfirmSubmission(false); }}>
+      <div className="space-y-4 text-sm">
+        <div className="app-warning flex items-start gap-2 rounded-xl border p-3">
+          <AlertTriangle size={18} className="mt-0.5 shrink-0"/>
+          <p>{t.sendConfirm}</p>
+        </div>
+        {task && <div className="space-y-1"><p className="font-semibold">{task.title}</p>
+          <p className="app-muted">{t.sendAttempt}: {task.my_attempts + 1} / {task.max_attempts}</p>
+          <p className="app-muted">{t.attachedCount}: {attachmentCount}</p></div>}
+        <div className="app-divider flex justify-end gap-2 border-t pt-4">
+          <button type="button" className={secondary} disabled={busy} onClick={() => setConfirmSubmission(false)}>{t.cancel}</button>
+          <button type="button" className={primary}
+            disabled={busy || attachmentsBusy || !canAnswer || !hasSubmissionContent(answer, attachmentCount)}
+            onClick={() => void submitConfirmed()}><Send size={16}/>{t.confirmSend}</button>
+        </div>
+      </div>
+    </Modal>
     {/* Confirmación visual uniforme con la acción «Suspender» de Usuarios.
         La mutación no sucede hasta confirmar en el modal compartido. */}
     <Modal open={confirmAction !== null} title={confirmAction === 'publish' ? t.publish : t.close}

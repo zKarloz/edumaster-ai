@@ -7,7 +7,7 @@ import { Activity, ArrowRight, BookOpen, Building2, CheckCircle2, ChevronDown, D
 import type { Session } from '@supabase/supabase-js';
 import { useLocation, useNavigate } from 'react-router';
 import { useTranslation } from 'react-i18next';
-import { activityDetail, courseWorkspaceDetail, lessonEditorDetail, newLessonDetail, taskReviewDetail, taskSubmissionsDetail, myTaskSubmissionsDetail, courseTaskDetail, enrollmentHistoryPath, legacyRedirect, sectionForPath, sectionPaths, type Section } from './routes';
+import { activityDetail, courseWorkspaceDetail, lessonEditorDetail, newLessonDetail, taskReviewDetail, taskSubmissionsDetail, myTaskSubmissionsDetail, courseTaskDetail, enrollmentHistoryPath, legacyRedirect, sectionForPath, sectionPaths, isUsersCsvImportPath, type Section } from './routes';
 import { DataTable, type Column } from './components/shared/DataTable';
 import { Modal } from './components/shared/Modal';
 import { Spinner } from './components/shared/Spinner';
@@ -28,6 +28,8 @@ const CourseTaskPage = lazy(() => import('./modules/academic/CourseTaskPage').th
 const TaskSubmissionReviewPage = lazy(() => import('./modules/academic/TaskSubmissionReviewPage').then(mod => ({default:mod.TaskSubmissionReviewPage})));
 import { AcademicActivityPage } from './modules/academic/AcademicActivityPage';
 import { UsersPage } from './modules/users/UsersPage';
+import { UsersCsvImportPage } from './modules/users/UsersCsvImportPage';
+import { InvitePasswordSetup } from './modules/users/InvitePasswordSetup';
 import { InstitutionalUsersPage } from './modules/users/InstitutionalUsersPage';
 import { AccountMenu } from './components/shared/AccountMenu';
 import { ProfilePage } from './modules/profile/ProfilePage';
@@ -75,6 +77,7 @@ export default function App() {
   const location = useLocation();
   const navigate = useNavigate();
   const section = sectionForPath(location.pathname) ?? 'dashboard';
+  const usersCsvImportRoute = isUsersCsvImportPath(location.pathname);
   const detailRoute = activityDetail(location.pathname);
   const courseRoute = courseWorkspaceDetail(location.pathname);
   const lessonRoute = lessonEditorDetail(location.pathname);
@@ -85,6 +88,11 @@ export default function App() {
   const courseTaskRoute = courseTaskDetail(location.pathname);
   const [apiStatus, setApiStatus] = useState<Connection>('checking');
   const [session, setSession] = useState<Session | null>(null);
+  // Se detecta antes de que Supabase consuma el fragmento de Auth.
+  const [inviteSetup, setInviteSetup] = useState(() => {
+    try { return /(?:[?#&])type=invite(?:&|$)/.test(window.location.href) || sessionStorage.getItem('edumaster:invite-setup') === '1'; }
+    catch { return /(?:[?#&])type=invite(?:&|$)/.test(window.location.href); }
+  });
   const [orgs, setOrgs] = useState<Organization[]>([]);
   const [orgError, setOrgError] = useState('');
   const [orgRefreshKey, setOrgRefreshKey] = useState(0);
@@ -352,6 +360,8 @@ export default function App() {
     if (!client) return false;
     const { error } = await client.auth.signOut();
     if (error) { notify(`No se pudo cerrar sesión: ${error.message}`); return false; }
+    try { sessionStorage.removeItem('edumaster:invite-setup'); } catch { /* Sin persistencia. */ }
+    setInviteSetup(false);
     setSession(null); setIdentity(null); navigate('/iniciar-sesion', { replace: true }); setPassword(''); setAuthorizedUserId(null); setGlobalRoles([]); setMemberships([]); setAcademicOrgId(''); setAccountStatus('checking');
     notify('Sesión cerrada correctamente.', 'success');
     return true;
@@ -366,7 +376,10 @@ export default function App() {
   const institutionalAdminOrganizations = useMemo(() => orgs.filter(org =>
     memberships.some(item => item.organization_id === org.id && item.roles.includes('institution_admin'))),
     [orgs, memberships]);
-  const canManageUserAdministration = globalRoles.includes('superadmin') || institutionalAdminOrganizations.length > 0;
+  // Los permisos proceden de /me, no del catálogo de instituciones (que carga
+  // después). Así una recarga en Usuarios o Importar CSV no vuelve a Resumen.
+  const canManageUserAdministration = globalRoles.includes('superadmin') ||
+    memberships.some(member => member.roles.includes('institution_admin'));
   // Solo administradores/coordinadores cambian el contexto desde Instituciones.
   // Docentes y estudiantes reciben automáticamente su organización autorizada.
   const canChooseInstitution = maySelectAcademicInstitution(globalRoles,memberships);
@@ -407,12 +420,12 @@ export default function App() {
     en: {list:'Review submissions', detail:'Review submission', mine:'My submissions', taskDetail:'Assignment', newTask:'New assignment', path:'Courses / Assignments'},
     pt: {list:'Revisar entregas', detail:'Revisar entrega', mine:'Minhas entregas', taskDetail:'Tarefa', newTask:'Nova tarefa', path:'Cursos / Tarefas'},
   }[academicLanguage];
-  const title = taskReviewRoute ? reviewNames.detail : taskSubmissionsRoute ? reviewNames.list
+  const title = usersCsvImportRoute ? 'Importar usuarios desde CSV' : taskReviewRoute ? reviewNames.detail : taskSubmissionsRoute ? reviewNames.list
     : courseTaskRoute ? (courseTaskRoute.taskId==='nueva' ? reviewNames.newTask : reviewNames.taskDetail)
     : newLessonRoute ? t('workspace.addLesson') : lessonRoute ? t('lessonEditor.pageTitle')
     : myTaskSubmissionsRoute ? reviewNames.taskDetail
     : t(`nav.${section === 'dashboard' ? 'dashboard' : section}`);
-  const headerPath = newLessonRoute || lessonRoute ? reviewNames.path + ' / ' + t('workspace.content')
+  const headerPath = usersCsvImportRoute ? 'Usuarios / Importación CSV' : newLessonRoute || lessonRoute ? reviewNames.path + ' / ' + t('workspace.content')
     : taskReviewRoute ? `${reviewNames.path} / ${reviewNames.list}`
     : taskSubmissionsRoute || myTaskSubmissionsRoute || courseTaskRoute ? reviewNames.path : null;
   // La categoría superior procede de la misma definición del menú: al cambiar
@@ -431,17 +444,20 @@ export default function App() {
     return roles.some(role => role === 'institution_admin' || role === 'coordinator') ? 'manager'
       : roles.includes('instructor') ? 'instructor' : 'student';
   };
-  // La URL no concede privilegios: la UI oculta módulos restringidos y FastAPI
-  // vuelve a comprobar el JWT, el rol y la institución en cada petición.
+  // Una ruta de módulo válida no debe perderse al recargar mientras cambian
+  // los estados asíncronos de identidad e instituciones. La autorización se
+  // controla antes de montar cada módulo; FastAPI vuelve a validar cada petición.
+  const sectionPermissionDenied =
+    (section === 'organizations' && !canOpenInstitutions) ||
+    (section === 'users' && !canManageUserAdministration) ||
+    (section === 'activity' && !canViewAcademicActivity);
   useEffect(() => {
     if (!accessGranted) return;
-    if (!sectionForPath(location.pathname)
-      || (section === 'organizations' && !canOpenInstitutions)
-      || (section === 'users' && !canManageUserAdministration)
-      || (section === 'activity' && !canViewAcademicActivity)) {
-      if (!legacyRedirect(location.pathname)) navigate(sectionPaths.dashboard, { replace: true });
+    // Solo las URLs realmente desconocidas regresan a Resumen.
+    if (!sectionForPath(location.pathname) && !legacyRedirect(location.pathname)) {
+      navigate(sectionPaths.dashboard, { replace: true });
     }
-  }, [location.pathname, section, accessGranted, navigate, canOpenInstitutions, canManageUserAdministration, canViewAcademicActivity]);
+  }, [location.pathname, accessGranted, navigate]);
   useEffect(() => {
     if (!courseRoute || !accessGranted) return;
     if (orgs.some(org=>org.id===courseRoute.organizationId) && academicOrgId!==courseRoute.organizationId)
@@ -463,6 +479,10 @@ export default function App() {
   if (!authInitialized) return <div className="app-shell flex min-h-screen items-center justify-center dark:bg-[#06152B] dark:text-white"><Spinner label={t('login.restoring')}/></div>;
   if (!session) return <LoginScreen email={email} password={password} busy={authBusy} error={authError} theme={theme}
     onEmailChange={setEmail} onPasswordChange={setPassword} onThemeChange={cycleTheme} onSubmit={signIn}/>;
+  if (inviteSetup && session) return <InvitePasswordSetup email={session.user.email || ''} onDone={() => {
+    try { sessionStorage.removeItem('edumaster:invite-setup'); } catch { /* Sin persistencia. */ }
+    setInviteSetup(false);
+  }}/>;
   if (!accessGranted) return <div className="app-shell flex min-h-screen items-center justify-center bg-[#F5F7FB] p-5 text-slate-900 dark:bg-[#06152B] dark:text-slate-100">
     <div className="app-panel w-full max-w-lg rounded-2xl border border-slate-200 bg-white p-7 shadow-xl dark:border-[#23456A] dark:bg-[#0A1F3D]">
       <div className="mb-4 flex justify-center"><UserAvatar userId={session.user.id}
@@ -634,13 +654,21 @@ export default function App() {
             {orgError && <div role="alert" className="app-warning rounded-xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900">{orgError}{t('legacy.k7644712905')}</div>}
             <DataTable<Organization> rows={rows} columns={columns} label={t('dashboard.organizations')} />
           </>}
-          {section === 'organizations' && canOpenInstitutions && <OrganizationsPage
+          {sectionPermissionDenied && <section role="alert" className="app-warning rounded-2xl border p-6">
+            <div className="flex items-center gap-2 font-semibold"><ShieldCheck size={20}/> Acceso restringido</div>
+            <p className="mt-2 text-sm">No tienes permisos para acceder a este módulo. Consulta al administrador de tu institución.</p>
+          </section>}
+          {section === 'organizations' && !sectionPermissionDenied && canOpenInstitutions && <OrganizationsPage
             organizations={orgs} loading={loadingOrgs} error={orgError}
             activeOrganizationId={academicOrgId} onChooseOrganization={selectAcademicInstitution}
             canManage={globalRoles.includes('superadmin')}
             onSave={saveOrganization}
           />}
-          {section === 'users' && accessToken && (globalRoles.includes('superadmin')
+          {section === 'users' && !sectionPermissionDenied && accessToken && usersCsvImportRoute && <UsersCsvImportPage
+            token={accessToken} organizations={globalRoles.includes('superadmin') ? orgs : institutionalAdminOrganizations}
+            organizationId={globalRoles.includes('superadmin') ? undefined : academicOrgId}
+            globalAdmin={globalRoles.includes('superadmin')}/>}
+          {section === 'users' && !sectionPermissionDenied && accessToken && !usersCsvImportRoute && (globalRoles.includes('superadmin')
             ? <UsersPage token={accessToken} organizations={orgs} canManage/>
             : <InstitutionalUsersPage token={accessToken} organizations={institutionalAdminOrganizations} organizationId={academicOrgId}/>)}
           {section === 'settings' && <SettingsPage token={accessToken ?? ''} apiStatus={apiStatus} onCheckApi={checkApi}/>}
@@ -673,7 +701,7 @@ export default function App() {
             token={accessToken}
             courseRole={academicRole(academicOrgId)}
             canManageOrganization={canManageAcademicOrganization}/>}
-          {section === 'activity' && accessToken && <AcademicActivityPage
+          {section === 'activity' && !sectionPermissionDenied && accessToken && <AcademicActivityPage
             organizationId={academicOrgId} token={accessToken}
             selectedEnrollmentId={detailRoute?.enrollmentId ?? ''}
             selectedOfferingId={detailRoute?.offeringId ?? ''}

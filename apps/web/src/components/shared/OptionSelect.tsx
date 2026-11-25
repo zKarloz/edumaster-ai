@@ -1,5 +1,5 @@
 // Selector compartido con opciones accesibles por teclado y lista flotante limitada
-// a tres filas visibles. El portal evita que los modales recorten el desplegable.
+// hasta tres filas completas sin desplazamiento innecesario. El portal evita que los modales recorten el desplegable.
 import { useEffect, useId, useLayoutEffect, useRef, useState, type KeyboardEvent } from 'react';
 import { useTranslation } from 'react-i18next';
 import { createPortal } from 'react-dom';
@@ -39,11 +39,12 @@ export function OptionSelect({ value, options, onChange, ariaLabel, placeholder,
       const rect = triggerRef.current?.getBoundingClientRect();
       if (!rect) return;
       const visibleRows = Math.min(options.length, 3);
-      const estimatedHeight = Math.max(48, visibleRows * 44 + 8);
+      // Incluye bordes y padding: 3 x 44 + 8 + 2 px, con holgura visual.
+      const estimatedHeight = Math.max(48, visibleRows * 44 + 18);
       const spaceBelow = window.innerHeight - rect.bottom;
       const showAbove = spaceBelow < estimatedHeight + 12 && rect.top > spaceBelow;
       const available = showAbove ? rect.top - 14 : spaceBelow - 14;
-      const maxHeight = Math.max(44, Math.min(140, available));
+      const maxHeight = Math.max(44, Math.min(168, Math.min(estimatedHeight, available)));
       const top = showAbove ? Math.max(8, rect.top - maxHeight - 6) : rect.bottom + 6;
       const width = Math.min(rect.width, window.innerWidth - 16);
       const left = Math.max(8, Math.min(rect.left, window.innerWidth - width - 8));

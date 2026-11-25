@@ -286,7 +286,7 @@ export function AcademicActivityPage({ organizationId, token,
         </div>
       </div>
       <p className="app-muted text-sm">{t('activity.studentHint')}</p>
-      <DataTable<EnrollmentSummary> rows={overview} columns={columns} label={t('activity.offeringStudents')} pageSize={8}/>
+      <DataTable<EnrollmentSummary> rows={overview} columns={columns} label={t('activity.offeringStudents')}/>
     </>}
     {offeringId && selectedEnrollmentId && <div className="space-y-4">
       <button type="button" className={secondary} onClick={onBackToOverview}><ArrowLeft size={17}/> {t('activity.backStudents')}</button>
@@ -314,7 +314,7 @@ export function AcademicActivityPage({ organizationId, token,
           {loadingRecords && <Spinner label={t('activity.loadingHistory')}/>}
           {!loadingRecords && records.length===0 && <p className="app-muted rounded-lg p-4 text-sm">{t('activity.emptyHistory')}</p>}
           {!loadingRecords && records.length>0 && <DataTable<AcademicRecord> key={`${selectedEnrollmentId}-${recordKind}-${recordPage}`}
-            rows={records} columns={recordColumns} label={t('activity.individualHistory')} pageSize={10} manualMode/>}
+            rows={records} columns={recordColumns} label={t('activity.individualHistory')} manualMode/>}
           <div className="flex flex-wrap items-center justify-between gap-3">
             <p className="app-muted text-xs">{recordTotal} {t('legacy.kb94e05ce9d')} {recordPage+1} {t('legacy.k600ccd1b71')} {Math.max(1,Math.ceil(recordTotal/10))}</p>
             <div className="flex gap-2"><button type="button" className={secondary} disabled={recordPage===0 || loadingRecords}

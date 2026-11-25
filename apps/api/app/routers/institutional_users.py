@@ -178,7 +178,9 @@ async def list_members(
             rows = (await conn.execute(text("""
                 SELECT m.id::text AS membership_id, m.organization_id::text AS organization_id,
                        u.id::text AS user_id,
-                       u.full_name, u.email_normalized AS email, m.status,
+                       u.full_name, u.email_normalized AS email,
+                       CASE WHEN au.email_confirmed_at IS NULL AND m.status='active'
+                            THEN 'invited' ELSE m.status END AS status,
                        (u.id=:actor) AS is_self,
                        (EXISTS (
                          SELECT 1 FROM app.global_role_assignments gra
@@ -189,10 +191,11 @@ async def list_members(
                            FILTER (WHERE r.code IS NOT NULL), ARRAY[]::text[]) AS roles
                 FROM app.organization_memberships m
                 JOIN app.users u ON u.id=m.user_id
+                JOIN auth.users au ON au.id=u.auth_user_id
                 LEFT JOIN app.membership_roles mr ON mr.membership_id=m.id
                 LEFT JOIN app.roles r ON r.id=mr.role_id AND r.scope='organization'
                 WHERE m.organization_id=:organization_id
-                GROUP BY m.id, m.organization_id, u.id, u.full_name, u.email_normalized, m.status
+                GROUP BY m.id, m.organization_id, u.id, u.full_name, u.email_normalized, m.status, au.email_confirmed_at
                 ORDER BY u.full_name, u.email_normalized
                 LIMIT 500
             """), {"organization_id": organization_id, "actor": actor})).mappings().all()

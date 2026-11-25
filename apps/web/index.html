@@ -9,6 +9,14 @@
   </head>
   <body>
     <div id="root"></div>
+    <!-- Se detecta la invitación ANTES de que Supabase consuma el fragmento Auth.
+         Solo se guarda una marca booleana, jamás se persisten tokens. -->
+    <script>
+      try {
+        if (/(?:[?#&])type=invite(?:&|$)/.test(window.location.href))
+          sessionStorage.setItem('edumaster:invite-setup', '1');
+      } catch (_) { /* Se mantiene la autenticación aunque storage esté bloqueado. */ }
+    </script>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

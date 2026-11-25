@@ -10,6 +10,7 @@ import { Spinner } from '../../components/shared/Spinner';
 import { useToast } from '../../components/shared/Toast';
 import type { Organization } from '../organizations/types';
 import { UserDetailModal } from './UserDetailModal';
+import { UserProvisioningPanel } from './UserProvisioningPanel';
 
 interface Member {
   membership_id: string;
@@ -166,6 +167,7 @@ export function InstitutionalUsersPage({ token, organizations, organizationId }:
       ].map(item => <div className="app-panel rounded-2xl border p-5" key={item.label}><p className="app-muted text-sm">{item.label}</p><p className="mt-2 text-2xl font-semibold">{item.count}</p></div>)}
     </section>
     <section className="app-panel space-y-4 rounded-2xl border p-5 sm:p-6">
+      <UserProvisioningPanel token={token} organizations={organizations} organizationId={organizationId} globalAdmin={false} onChange={() => setRefresh(value => value + 1)}/>
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div><h3 className="text-lg font-semibold">{t('legacy.k43fafce483')}</h3><p className="app-muted mt-1 text-sm">{t('legacy.kb75e4247be')}</p></div>
         <button type="button" className={buttonPrimary} disabled={!selectedAuthorized} onClick={() => openDialog('add')}><UserRoundPlus size={17}/> {t('legacy.k354a7ee56f')}</button>
@@ -176,7 +178,7 @@ export function InstitutionalUsersPage({ token, organizations, organizationId }:
       {!selectedAuthorized && organizations.length>0 && <p role="status" className="app-info rounded-xl border p-3 text-sm">La institución actual no está bajo tu administración. Selecciona una institución que administras desde Instituciones.</p>}
       {loading && <Spinner label="Cargando usuarios institucionales..."/>}
       {error && <div role="alert" className="app-warning rounded-xl border p-4 text-sm">{error}</div>}
-      {!loading && !error && <DataTable<Member> key={organizationId} rows={filtered} label="Usuarios institucionales" columns={columns} pageSize={8}/>}
+      {!loading && !error && <DataTable<Member> key={organizationId} rows={filtered} label="Usuarios institucionales" columns={columns}/>}
       {!loading && !error && members.length === 0 && <div className="app-info flex items-start gap-2 rounded-xl border p-4 text-sm"><Info size={18}/>{t('legacy.kc73ae30860')}</div>}
     </section>
 

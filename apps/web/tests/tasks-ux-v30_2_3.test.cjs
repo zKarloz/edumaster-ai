@@ -20,7 +20,7 @@ test('el docente consulta entregas integradas y regresa desde la revisión indiv
   assert.match(source('modules/academic/CourseTaskPage.tsx'),/<TaskSubmissionsPage/);
   assert.doesNotMatch(panel,/Modal open=\{selectedTask!==null\}/);
   assert.match(detail,/courseTaskPath\(/);
-  assert.match(detail,/className="flex justify-start"/);
+  assert.match(detail,/className="flex flex-wrap items-center justify-between gap-3"/);
 });
 test('pestañas del curso mantienen tamaño y admiten scroll horizontal',()=>{
   const workspace=source('modules/academic/CourseWorkspacePage.tsx');

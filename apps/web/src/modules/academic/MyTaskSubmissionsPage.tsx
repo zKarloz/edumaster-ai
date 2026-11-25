@@ -94,7 +94,7 @@ export function MyTaskSubmissionsPage({organizationId,offeringId,taskId,token}:P
         <h2 className="mt-2 text-xl font-bold">{task.title}</h2>
         <p className="app-muted mt-2 whitespace-pre-wrap text-sm">{task.instructions}</p>
       </header>
-      <DataTable<Submission> rows={rows} columns={columns} label={t.mine} pageSize={8}/>
+      <DataTable<Submission> rows={rows} columns={columns} label={t.mine}/>
       {rows.length===0&&<p className="app-muted text-sm">{t.empty}</p>}
       {selected&&<article className="app-panel app-task-card space-y-4 rounded-2xl border p-5" aria-label={`${t.attempt} ${selected.attempt_number}`}>
         <div className="flex flex-wrap items-center justify-between gap-2">
