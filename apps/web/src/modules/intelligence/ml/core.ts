@@ -21,3 +21,11 @@ export function evaluate(y: number[], p: number[]) {
   });
   return { accuracy: (tp+tn)/y.length, f1: (2*tp)/(2*tp+fp+fn || 1), roc_auc: pairs ? wins/pairs : null, brier: brier/y.length, log_loss: loss/y.length };
 }
+
+/** Matriz de confusión con el mismo umbral fijo que el baseline. */
+export function confusion(y:number[], p:number[]) {
+  if(y.length!==p.length || y.some(v=>v!==0&&v!==1) || p.some(v=>!Number.isFinite(v)||v<0||v>1)) throw new Error('Invalid predictions');
+  const counts={tp:0,tn:0,fp:0,fn:0};
+  y.forEach((v,i)=>{if(v===1) {if(p[i]!>=.5) counts.tp++;else counts.fn++;} else {if(p[i]!>=.5) counts.fp++;else counts.tn++;}});
+  return counts;
+}
