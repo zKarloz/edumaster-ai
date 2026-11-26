@@ -85,7 +85,9 @@ def test_reaction_is_scoped_and_idempotent(scoped):
 def test_feed_scoped(scoped):
     conn, _ = scoped
     conn.execute.return_value.mappings.return_value.all.return_value = []
-    assert TestClient(app).get(PATH).json() == {'editor': False, 'writable': True, 'items': []}
+    conn.execute.return_value.scalar_one.return_value = 0
+    assert TestClient(app).get(PATH).json() == {'editor': False, 'writable': True, 'items': [],
+                                          'total': 0, 'page': 1, 'page_size': 5}
     assert 'p.organization_id=:org AND p.offering_id=:off' in str(conn.execute.await_args.args[0])
 
 
@@ -96,3 +98,19 @@ def test_editor_hide(scoped):
     assert TestClient(app).patch(f'{PATH}/{ID}/hide').status_code == 200
     assert 'hidden_at=now()' in str(conn.execute.await_args.args[0])
     community._audit.assert_awaited_once()
+
+
+def test_feed_pagination(scoped):
+    conn, _ = scoped
+    conn.execute.return_value.scalar_one.return_value = 27
+    conn.execute.return_value.mappings.return_value.all.return_value = []
+    result = TestClient(app).get(PATH, params={'page': 9, 'page_size': 10}).json()
+    assert result['page'] == 3 and result['total'] == 27
+    sql, params = conn.execute.await_args.args
+    assert params['offset'] == 20 and params['limit'] == 10
+    assert 'LIMIT :limit OFFSET :offset' in str(sql)
+    assert 'author_auth_id' in str(sql) and 'email' not in str(sql)
+
+
+def test_invalid_page_size(scoped):
+    assert TestClient(app).get(PATH, params={'page_size': 7}).status_code == 422

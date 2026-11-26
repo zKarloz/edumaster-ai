@@ -16,3 +16,9 @@ test('comunidad reutiliza componentes y controles temáticos',()=>{
  assert.match(panel,/data\.editor&&/);
  assert.match(panel,/data\.writable/);
 });
+
+test('comunidad pagina desde servidor y usa perfil académico mínimo',()=>{
+ const panel=read('modules/academic/CourseCommunity.tsx');
+ for(const text of ['page_size=${pageSize}','[5,10,20]','UserAvatar','useAvatar','OptionSelect','setProfile(p)','setProfile(c)'])assert.ok(panel.includes(text),text);
+ assert.doesNotMatch(panel,/directory\/users|UserDetailModal/);
+});
