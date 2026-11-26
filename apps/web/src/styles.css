@@ -1271,3 +1271,24 @@ html[data-motion='off'] .login-feature-card { transition: none; transform: none;
 @media (prefers-reduced-motion: reduce) {
   .login-feature-card { transition: none !important; transform: none !important; }
 }
+
+/* CAMBIOS 32 v1.1.2: máscara alfa fija en la ventana, no en la pista.
+   Las tarjetas y sus sombras se desvanecen al cruzar cualquiera de los bordes,
+   dejando ver la fotografía y el fondo del tema sin franjas de color sólido. */
+.login-carousel-window {
+  --login-carousel-fade: clamp(24px, 7%, 72px);
+  -webkit-mask-image: linear-gradient(to right, transparent, #000 var(--login-carousel-fade), #000 calc(100% - var(--login-carousel-fade)), transparent);
+  mask-image: linear-gradient(to right, transparent, #000 var(--login-carousel-fade), #000 calc(100% - var(--login-carousel-fade)), transparent);
+}
+/* Sin movimiento, conservar los extremos legibles y el scrollbar accesible. */
+.login-carousel-static,
+html[data-motion='off'] .login-carousel-window {
+  -webkit-mask-image: none;
+  mask-image: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  .login-carousel-window {
+    -webkit-mask-image: none;
+    mask-image: none;
+  }
+}

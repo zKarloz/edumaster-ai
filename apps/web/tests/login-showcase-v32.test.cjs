@@ -36,3 +36,16 @@ test('fusión del fondo por tema y elevación accesible del carrusel',()=>{
   assert.match(css,/html\[data-motion='off'\] \.login-feature-card \{ transition: none; transform: none/);
   assert.match(css,/padding-block: 12px 20px/);
 });
+
+test('desvanecido bilateral fijo y sin máscara en modo estático',()=>{
+  const css=read('src/styles.css');
+  const fade=css.slice(css.indexOf('/* CAMBIOS 32 v1.1.2:'));
+  const gradient='linear-gradient(to right, transparent, #000 var(--login-carousel-fade), #000 calc(100% - var(--login-carousel-fade)), transparent)';
+  assert.ok(fade.includes('--login-carousel-fade: clamp(24px, 7%, 72px)'));
+  assert.ok(fade.includes(`-webkit-mask-image: ${gradient}`));
+  assert.ok(fade.includes(`\n  mask-image: ${gradient}`));
+  assert.match(fade,/\.login-carousel-window \{\s*--login-carousel-fade/);
+  assert.match(fade,/\.login-carousel-static,\s*html\[data-motion='off'\] \.login-carousel-window \{\s*-webkit-mask-image: none;\s*mask-image: none;/);
+  assert.match(fade,/@media \(prefers-reduced-motion: reduce\) \{\s*\.login-carousel-window \{\s*-webkit-mask-image: none;\s*mask-image: none;/);
+  assert.doesNotMatch(fade,/\.login-carousel-track\s*\{/);
+});
