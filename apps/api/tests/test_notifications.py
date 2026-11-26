@@ -13,7 +13,7 @@ ID = UUID('11111111-1111-4111-8111-111111111111')
 PATH = '/api/v1/notifications'
 
 
-@pytest.mark.parametrize('method,path', [('GET', PATH), ('PATCH', PATH+'/read-all'),
+@pytest.mark.parametrize('method,path', [('GET', PATH), ('POST', PATH+'/refresh'), ('PATCH', PATH+'/read-all'),
                                          ('PATCH', f'{PATH}/{ID}/read')])
 def test_requires_auth(method, path):
     assert TestClient(app).request(method, path).status_code == 401
@@ -70,3 +70,19 @@ def test_academic_notifications_revalidate_current_recipient(conn):
                       'v.event_type=n.event_type', 'v.resource_type=n.resource_type',
                       'v.recipient_id=n.recipient_id', 'u.auth_user_id=:auth_id'):
         assert condition in sql
+
+
+def test_refresh_materializes_only_authenticated_reminders(conn):
+    conn.execute.return_value.scalar_one.return_value = 0
+    conn.execute.return_value.mappings.return_value.all.return_value = []
+    assert TestClient(app).post(PATH+'/refresh').json() == {'unread': 0, 'items': []}
+    assert conn.execute.await_count == 3
+    sql, params = conn.execute.await_args_list[0].args
+    assert 'INSERT INTO app.notifications' in str(sql)
+    assert 'app.notification_reminder_events' in str(sql)
+    assert 'u.auth_user_id=:auth_id' in str(sql)
+    assert 'ON CONFLICT (recipient_id,deduplication_key) DO NOTHING' in str(sql)
+    assert params == {'auth_id': ID}
+    for call in conn.execute.await_args_list[1:]:
+        assert 'app.notification_management_events' in str(call.args[0])
+        assert 'v.recipient_id=n.recipient_id' in str(call.args[0])

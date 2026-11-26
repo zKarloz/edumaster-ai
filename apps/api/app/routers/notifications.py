@@ -36,6 +36,27 @@ VISIBLE = """
   AND v.resource_id=n.resource_id AND v.event_type=n.event_type
   AND v.resource_type=n.resource_type AND v.recipient_id=n.recipient_id
  WHERE u.auth_user_id=:auth_id
+ UNION ALL
+ SELECT DISTINCT n.id,n.organization_id,n.event_type,n.resource_id,n.created_at,n.read_at,
+        v.offering_id,v.title,v.target_id
+ FROM app.notifications n
+ JOIN app.users u ON u.id=n.recipient_id AND u.status='active'
+ JOIN (SELECT * FROM app.notification_reminder_events
+       UNION ALL SELECT * FROM app.notification_management_events) v
+   ON v.organization_id=n.organization_id AND v.resource_id=n.resource_id
+  AND v.event_type=n.event_type AND v.resource_type=n.resource_type AND v.recipient_id=n.recipient_id
+ WHERE u.auth_user_id=:auth_id
+"""
+
+# Se materializan solo avisos del usuario autenticado. Una clave por tarea y tipo.
+MATERIALIZE = """
+ INSERT INTO app.notifications(organization_id,recipient_id,actor_id,event_type,resource_type,resource_id,deduplication_key)
+ SELECT DISTINCT v.organization_id,v.recipient_id,v.actor_id,v.event_type,v.resource_type,v.resource_id,
+        v.event_type || ':' || v.resource_id::text
+ FROM app.notification_reminder_events v
+ JOIN app.users u ON u.id=v.recipient_id AND u.status='active'
+ WHERE u.auth_user_id=:auth_id
+ ON CONFLICT (recipient_id,deduplication_key) DO NOTHING
 """
 
 
@@ -50,6 +71,16 @@ async def list_notifications(
             SELECT * FROM ({VISIBLE}) v ORDER BY (read_at IS NULL) DESC,created_at DESC,id DESC LIMIT 50
         """), params)).mappings().all()
         return {"unread": count, "items": [dict(row) for row in rows]}
+
+
+@router.post("/refresh")
+async def refresh_notifications(
+    auth_id: UUID = Depends(authenticated_user_id), engine: AsyncEngine = Depends(require_engine),
+) -> dict:
+    """Genera recordatorios vigentes sin un servicio de planificación externo."""
+    async with engine.begin() as conn:
+        await conn.execute(text(MATERIALIZE), {"auth_id": auth_id})
+    return await list_notifications(auth_id, engine)
 
 
 @router.patch("/read-all")

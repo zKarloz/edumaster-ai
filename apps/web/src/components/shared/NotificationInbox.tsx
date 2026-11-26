@@ -1,19 +1,19 @@
 /** Bandeja privada del topbar. No confundir con los avisos transitorios de Toast. */
 import { useCallback, useEffect, useId, useRef, useState } from 'react';
-import { Bell, CheckCheck, Lightbulb, RefreshCw, X, ClipboardList, ClipboardCheck, GraduationCap, Megaphone, MessageCircle } from 'lucide-react';
+import { Bell, CheckCheck, Lightbulb, RefreshCw, X, ClipboardList, ClipboardCheck, GraduationCap, Megaphone, MessageCircle, Clock, BookOpen } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router';
-import { courseOfferingPath, courseTaskPath, taskSubmissionsPath } from '../../routes';
+import { courseOfferingPath, courseTaskPath, taskSubmissionsPath, enrollmentHistoryPath } from '../../routes';
 import { Spinner } from './Spinner';
 import { useToast } from './Toast';
 
 // Tipos cerrados: ningún destino de navegación se acepta como URL externa.
-type EventType = 'recommendation_created'|'task_published'|'task_submitted'|'grade_issued'|'community_announcement'|'community_question'|'community_reply';
-const eventIcons = {recommendation_created:Lightbulb,task_published:ClipboardList,task_submitted:ClipboardCheck,grade_issued:GraduationCap,community_announcement:Megaphone,community_question:MessageCircle,community_reply:MessageCircle};
+type EventType = 'recommendation_created'|'task_published'|'task_submitted'|'grade_issued'|'community_announcement'|'community_question'|'community_reply'|'task_due_soon'|'task_grading_pending'|'enrollment_created'|'instructor_assigned';
+const eventIcons = {recommendation_created:Lightbulb,task_published:ClipboardList,task_submitted:ClipboardCheck,grade_issued:GraduationCap,community_announcement:Megaphone,community_question:MessageCircle,community_reply:MessageCircle,task_due_soon:Clock,task_grading_pending:ClipboardCheck,enrollment_created:GraduationCap,instructor_assigned:BookOpen};
 const eventLabels = {
- es:{recommendation_created:'Nueva recomendación docente',task_published:'Nueva tarea disponible',task_submitted:'Nueva entrega de tarea',grade_issued:'Nueva calificación oficial',community_announcement:'Nuevo anuncio',community_question:'Nueva pregunta en Comunidad',community_reply:'Nuevo comentario en tu publicación'},
- en:{recommendation_created:'New teacher recommendation',task_published:'New task available',task_submitted:'New task submission',grade_issued:'New official grade',community_announcement:'New announcement',community_question:'New community question',community_reply:'New comment on your post'},
- pt:{recommendation_created:'Nova recomendação docente',task_published:'Nova tarefa disponível',task_submitted:'Nova entrega de tarefa',grade_issued:'Nova nota oficial',community_announcement:'Novo anúncio',community_question:'Nova pergunta na comunidade',community_reply:'Novo comentário na sua publicação'},
+ es:{recommendation_created:'Nueva recomendación docente',task_published:'Nueva tarea disponible',task_submitted:'Nueva entrega de tarea',grade_issued:'Nueva calificación oficial',community_announcement:'Nuevo anuncio',community_question:'Nueva pregunta en Comunidad',community_reply:'Nuevo comentario en tu publicación',task_due_soon:'Tarea pendiente próxima a vencer',task_grading_pending:'Tarea pendiente de calificar',enrollment_created:'Nueva matrícula',instructor_assigned:'Nueva asignación docente'},
+ en:{recommendation_created:'New teacher recommendation',task_published:'New task available',task_submitted:'New task submission',grade_issued:'New official grade',community_announcement:'New announcement',community_question:'New community question',community_reply:'New comment on your post',task_due_soon:'Pending task due soon',task_grading_pending:'Task awaiting grading',enrollment_created:'New enrollment',instructor_assigned:'New teaching assignment'},
+ pt:{recommendation_created:'Nova recomendação docente',task_published:'Nova tarefa disponível',task_submitted:'Nova entrega de tarefa',grade_issued:'Nova nota oficial',community_announcement:'Novo anúncio',community_question:'Nova pergunta na comunidade',community_reply:'Novo comentário na sua publicação',task_due_soon:'Tarefa pendente perto do prazo',task_grading_pending:'Tarefa aguardando avaliação',enrollment_created:'Nova matrícula',instructor_assigned:'Nova atribuição docente'},
 };
 type Item = {id:string; organization_id:string; offering_id:string; resource_id:string; event_type:EventType; target_id:string; title:string; created_at:string; read_at:string|null};
 type Inbox = {unread:number;items:Item[]};
@@ -37,7 +37,7 @@ export function NotificationInbox({token}:{token:string}) {
   if(mutation.current)return;
   request.current?.abort(); const controller=new AbortController(); request.current=controller;
   try {
-   const response=await fetch(API,{headers:{Authorization:`Bearer ${token}`},cache:'no-store',signal:controller.signal});
+   const response=await fetch(`${API}/refresh`,{method:'POST',headers:{Authorization:`Bearer ${token}`},cache:'no-store',signal:controller.signal});
    if(!response.ok)throw new Error('load'); const result:Inbox=await response.json();
    if(!controller.signal.aborted){setData(result);setError(false);}
   } catch {if(!controller.signal.aborted)setError(true);}
@@ -69,8 +69,10 @@ export function NotificationInbox({token}:{token:string}) {
     setOpen(false);
     const base=courseOfferingPath(item.organization_id,item.offering_id);
     if(item.event_type==='recommendation_created')navigate(`${base}?tab=recommendations&recommendation=${encodeURIComponent(item.resource_id)}`);
-    else if(item.event_type==='task_submitted')navigate(taskSubmissionsPath(item.organization_id,item.offering_id,item.target_id));
-    else if(item.event_type==='task_published'||item.event_type==='grade_issued')navigate(courseTaskPath(item.organization_id,item.offering_id,item.target_id));
+    else if(item.event_type==='task_submitted'||item.event_type==='task_grading_pending')navigate(taskSubmissionsPath(item.organization_id,item.offering_id,item.target_id));
+    else if(item.event_type==='task_published'||item.event_type==='grade_issued'||item.event_type==='task_due_soon')navigate(courseTaskPath(item.organization_id,item.offering_id,item.target_id));
+    else if(item.event_type==='enrollment_created')navigate(enrollmentHistoryPath(item.organization_id,item.offering_id,item.target_id));
+    else if(item.event_type==='instructor_assigned')navigate(base);
     else navigate(`${base}?tab=community&post=${encodeURIComponent(item.target_id)}`);
    }
   }catch{if(!controller.signal.aborted)notify(t.failed,'info');}

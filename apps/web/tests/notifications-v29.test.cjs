@@ -26,3 +26,12 @@ test('avisos académicos usan rutas internas y enfocan Comunidad',()=>{
  assert.match(inbox,/tab=community&post=/);
  assert.match(read('modules/academic/CourseCommunity.tsx'),/focus=\$\{encodeURIComponent\(focus\)\}/);
 });
+
+// Contratos del nuevo refresh y los destinos de los avisos operativos.
+test('recordatorios y eventos administrativos conservan rutas autorizadas',()=>{
+ const inbox=read('components/shared/NotificationInbox.tsx');
+ for(const event of ['task_due_soon','task_grading_pending','enrollment_created','instructor_assigned'])assert.ok(inbox.includes(event));
+ assert.ok(inbox.includes("fetch(`${API}/refresh`,{method:'POST'"));
+ assert.match(inbox,/enrollmentHistoryPath\(item.organization_id,item.offering_id,item.target_id\)/);
+ assert.match(inbox,/item.event_type==='instructor_assigned'\)navigate\(base\)/);
+});
