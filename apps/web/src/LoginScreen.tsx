@@ -4,9 +4,10 @@ import type { FormEvent } from 'react';
 import { Link } from 'react-router';
 import { useTranslation } from 'react-i18next';
 import { useSettings } from './providers/SettingsProvider';
-import { ArrowRight, BookOpen, BrainCircuit, Building2, GraduationCap, LockKeyhole, Moon, ShieldCheck, Sun, Contrast } from 'lucide-react';
+import { ArrowLeft, ArrowRight, GraduationCap, LockKeyhole, Moon, ShieldCheck, Sun, Contrast } from 'lucide-react';
 import type { ThemeName } from './providers/SettingsProvider';
 import { landingCopy } from './modules/landing/landingCopy';
+import { LoginShowcase } from './modules/auth/LoginShowcase';
 import { PasswordInput } from './components/shared/PasswordInput';
 
 type Props = {
@@ -44,23 +45,11 @@ export function LoginScreen({ email, password, busy, error, theme,
       </button></div>
     </header>
 
-    <div className="mx-auto grid w-full max-w-6xl flex-1 items-center gap-10 px-5 py-10 lg:grid-cols-[1.2fr_0.8fr] lg:px-8">
-      <section className="space-y-6">
-        <span className="app-status-chip inline-flex rounded-full bg-sky-500/10 px-3 py-1 text-xs font-semibold text-sky-700 dark:text-sky-300">{t('login.badge')}</span>
-        <h1 className="max-w-2xl text-4xl font-bold leading-tight tracking-tight sm:text-5xl">{t('login.hero')}</h1>
-        <p className="app-muted max-w-xl text-base leading-7 text-slate-600 dark:text-slate-300">{t('login.description')}</p>
-        <div className="grid max-w-xl gap-3 sm:grid-cols-3">
-          {[
-            { Icon: Building2, text: t('login.multi') },
-            { Icon: BookOpen, text: t('login.academics') },
-            { Icon: BrainCircuit, text: t('login.ai') },
-          ].map(({ Icon, text }) => <div key={text} className="app-panel flex items-center gap-2 rounded-xl border border-slate-200 bg-white p-3 text-sm dark:border-[#23456A] dark:bg-[#0A1F3D]">
-            <Icon className="app-accent shrink-0 text-[#087FE5] dark:text-[#20C8F5]" size={18}/><span>{text}</span>
-          </div>)}
-        </div>
-      </section>
-
-      <section className="app-panel rounded-2xl border border-slate-200 bg-white p-6 shadow-xl shadow-slate-900/5 dark:border-[#23456A] dark:bg-[#0A1F3D] sm:p-8" aria-labelledby="login-heading">
+    {/* El formulario conserva sus callbacks; la presentación no maneja credenciales. */}
+    <div className="grid w-full flex-1 lg:grid-cols-[1.15fr_0.85fr]">
+      <LoginShowcase/>
+      <div className="flex min-w-0 items-center justify-center px-5 py-10 sm:px-8 lg:py-14">
+      <section className="app-panel w-full max-w-md rounded-2xl border border-slate-200 bg-white p-6 shadow-xl shadow-slate-900/5 dark:border-[#23456A] dark:bg-[#0A1F3D] sm:p-8" aria-labelledby="login-heading">
         <div className="app-status-chip mb-5 inline-flex rounded-xl bg-sky-500/10 p-3 text-sky-600 dark:text-sky-300"><LockKeyhole size={23}/></div>
         <h2 id="login-heading" className="text-2xl font-bold">{t('login.title')}</h2>
         <p className="app-muted mt-2 text-sm text-slate-600 dark:text-slate-300">{t('login.subtitle')}</p>
@@ -77,9 +66,10 @@ export function LoginScreen({ email, password, busy, error, theme,
             {t(busy ? 'login.busy' : 'login.submit')}{!busy && <ArrowRight size={18}/>}
           </button>
         </form>
-        <Link to="/" className="mt-5 inline-block text-sm font-medium text-sky-700 dark:text-sky-300">{landingCopy[locale].home}</Link>
+        <Link to="/" className="mt-5 inline-flex items-center gap-2 text-sm font-medium text-sky-700 dark:text-sky-300"><ArrowLeft size={16}/>{landingCopy[locale].home}</Link>
         <p className="app-muted mt-5 flex items-start gap-2 text-xs leading-5 text-slate-500 dark:text-slate-300"><ShieldCheck size={16} className="mt-0.5 shrink-0"/> {t('login.protected')}</p>
       </section>
+      </div>
     </div>
     <footer className="app-page-footer border-t border-slate-200 px-5 py-4 text-center text-xs text-slate-500 dark:border-[#23456A] dark:text-slate-400">EduMaster.ai · {t('common.development')}</footer>
   </main>;

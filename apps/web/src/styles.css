@@ -1220,3 +1220,25 @@ html[data-motion="off"] .app-notification-inbox { transition: none !important; }
 .income-paid { background:#dcfce7; border-color:#86efac; color:#166534; }
 html.dark .income-paid { background:#173b30; border-color:#356a50; color:#a7e7bd; }
 html.black-theme .income-paid { background:#212d25; border-color:#49644f; color:#a5d3af; }
+
+/* Login público: dos grupos de igual ancho, desplazamiento de izquierda a derecha.
+   El modo estático mantiene las tarjetas disponibles mediante scroll horizontal. */
+.login-carousel-window { overflow: hidden; }
+.login-carousel-track { display: flex; width: max-content; animation: login-cards-right 45s linear infinite; }
+.login-carousel-group { display: flex; flex: none; gap: 16px; padding-right: 16px; }
+.login-feature-card { flex: none; width: 260px; min-height: 172px; }
+@keyframes login-cards-right { from { transform: translateX(-50%); } to { transform: translateX(0); } }
+.login-carousel-window:hover .login-carousel-track,
+.login-carousel-track.login-carousel-paused { animation-play-state: paused; }
+.login-carousel-static { overflow-x: auto; }
+.login-carousel-static .login-carousel-track { animation: none !important; transform: none; }
+.login-carousel-static .login-carousel-clone { display: none; }
+html[data-motion='off'] .login-carousel-window { overflow-x: auto; }
+html[data-motion='off'] .login-carousel-track { animation: none !important; transform: none; }
+html[data-motion='off'] .login-carousel-clone { display: none; }
+html[data-motion='off'] .login-carousel-toggle { display: none; }
+@media (prefers-reduced-motion: reduce) {
+  .login-carousel-window { overflow-x: auto; }
+  .login-carousel-track { animation: none !important; transform: none; }
+  .login-carousel-clone, .login-carousel-toggle { display: none; }
+}
