@@ -1,3 +1,5 @@
+import { FavoriteStar } from '../favorites/Favorites';
+import { matchingScopes, type FavoriteScope } from '../favorites/favoriteRules';
 /** v26 · Espacio de aprendizaje por oferta y editor autorizado del curso base.
  * Las tareas se consultan desde su pestaña dedicada, sin duplicar tarjetas en Inicio.
  * Todos los datos son reales y llegan desde FastAPI con JWT y alcance institucional.
@@ -44,7 +46,7 @@ interface Course {
   appearance_icon?: string; appearance_color?: string;
 }
 interface Workspace {course: Course; role: 'manager' | 'instructor' | 'student'; can_edit_base: boolean; can_edit_offering: boolean; units: Unit[]}
-interface Props {organizationId: string; offeringId?: string; courseId?: string; token: string}
+interface Props {organizationId: string; offeringId?: string; courseId?: string; token: string; favoriteScopes?:FavoriteScope[]}
 
 type ContentDialog = {kind: 'unit'; source: Source; current?: Unit} | {kind: 'lesson'; source: Source; unitId: string; current?: Lesson} | null;
 const API = import.meta.env.VITE_API_URL || 'http://localhost:8000';
@@ -71,7 +73,7 @@ function StateBadge({status}: {status: State}) {
   return <span className={`app-workspace-state app-workspace-${status} rounded-lg border px-2 py-1 text-[11px] font-semibold`}>{t(`workspace.${status}`)}</span>;
 }
 
-export function CourseWorkspacePage({organizationId, offeringId, courseId, token}: Props) {
+export function CourseWorkspacePage({organizationId, offeringId, courseId, token, favoriteScopes=[]}: Props) {
   const {t} = useTranslation();
   const navigate = useNavigate();
   const location = useLocation();
@@ -200,6 +202,7 @@ export function CourseWorkspacePage({organizationId, offeringId, courseId, token
       <button className={secondary} type="button" onClick={()=>navigate(sectionPaths.courses)}>
         <ArrowLeft size={17}/>{t('workspace.back')}
       </button>
+      {!loading&&!error&&workspace&&offeringId&&<FavoriteStar token={token} key={`${offeringId}:${tab}`} scopes={matchingScopes(favoriteScopes,workspace.role)} item={{offeringId,kind:tab,title:workspace.course.title}}/>}
     </div>
 
     {loading && <Spinner label={t('workspace.loading')}/>}

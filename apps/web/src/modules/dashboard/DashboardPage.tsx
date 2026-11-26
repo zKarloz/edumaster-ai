@@ -1,3 +1,5 @@
+import { FavoritesPanel } from '../favorites/Favorites';
+import { isFavoriteRole } from '../favorites/favoriteRules';
 /** Inicio por contexto: consultas existentes, sin ampliar permisos ni simular estadísticas. */
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -25,7 +27,7 @@ const words={
 type Offering={id:string;course_title:string;instructor_id:string|null;status:string;active_enrollments:number};
 type Snapshot={offers:number|null;teachers:number|null;assignments:Offering[]|null;failed:boolean};
 const empty:Snapshot={offers:null,teachers:null,assignments:null,failed:false};
-interface Props {name:string;token:string|null;globalRoles:string[];memberships:InstitutionMembership[];organizationId:string;organizations:Organization[];loading:boolean;error:string;apiStatus:'checking'|'online'|'offline';access:Record<Section,boolean>;onNavigate:(s:Section)=>void;}
+interface Props {userId:string;name:string;token:string|null;globalRoles:string[];memberships:InstitutionMembership[];organizationId:string;organizations:Organization[];loading:boolean;error:string;apiStatus:'checking'|'online'|'offline';access:Record<Section,boolean>;onNavigate:(s:Section)=>void;}
 export function DashboardPage(props:Props){
  const navigate=useNavigate();
  const {t,i18n}=useTranslation();const lang=i18n.language.startsWith('pt')?'pt':i18n.language.startsWith('en')?'en':'es';const c=words[lang];
@@ -63,6 +65,7 @@ export function DashboardPage(props:Props){
  </div>{global&&totalsReady&&<InstitutionSummary lang={lang} rows={scopedOrgs}/>}</>}
  {(role==='student'||role==='instructor')&&props.token&&props.organizationId&&props.access.courses&&<AcademicDashboard key={`${role}:${props.organizationId}`} organizationId={props.organizationId} token={props.token} role={role}/>}
  {(role==='analyst'||role==='ml_engineer')&&<SpecialistDashboard role={role} canUseLab={props.access.intelligence} isSuperadmin={props.globalRoles.includes('superadmin')} token={props.token} organizations={props.organizations} onOpenLab={()=>props.onNavigate('intelligence')}/>}
+ {role&&isFavoriteRole(role)&&props.organizationId&&props.token&&props.access.courses&&<FavoritesPanel key={`${props.userId}:${props.organizationId}:${role}`} scope={{userId:props.userId,organizationId:props.organizationId,role}} token={props.token}/>}
  {!global&&!manager&&role!=='student'&&role!=='instructor'&&role!=='analyst'&&role!=='ml_engineer'&&<Panel title={t(`account.role_${role??'user'}`)}><p className="app-muted text-sm">{c.later}</p></Panel>}
 
  </div>;

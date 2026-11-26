@@ -1,3 +1,4 @@
+import { isFavoriteRole, type FavoriteScope } from './modules/favorites/favoriteRules';
 // Shell de Sprint 1: navegación, estado API, tema, componentes y Auth opcional.
 // Los ejemplos académicos están rotulados DEMO; nunca simulan datos reales.
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, type FormEvent, type PointerEvent as ReactPointerEvent } from 'react';
@@ -506,6 +507,7 @@ export default function App() {
   </div>;
 
   const accountIdentity = identity && identity.id === session.user.id ? identity.value : { name: session.user.email?.split('@')[0] || 'Usuario', email: session.user.email || '' };
+  const favoriteScopes = (orgId:string):FavoriteScope[] => (memberships.find(m=>m.organization_id===orgId)?.roles??[]).filter(isFavoriteRole).map(role=>({userId:session.user.id,organizationId:orgId,role}));
   // Una cuenta puede tener varios roles; se muestran los del contexto institucional
   // seleccionado, o todos los de su primera institución cuando aún no se eligió.
   const contextRoles = memberships.find(m => m.organization_id === academicOrgId)?.roles ?? memberships[0]?.roles ?? [];
@@ -627,7 +629,7 @@ export default function App() {
           </div>
         </header>
         <main key={section} className="module-enter mx-auto w-full app-content-container space-y-6 py-6">
-          {section === 'dashboard' && <DashboardPage key={`${session.user.id}:${academicOrgId}`} name={accountIdentity.name} token={accessToken} globalRoles={globalRoles} memberships={memberships} organizationId={academicOrgId} organizations={orgs} loading={loadingOrgs} error={orgError} apiStatus={apiStatus} access={navigationAccess} onNavigate={navTo}/>}
+          {section === 'dashboard' && <DashboardPage key={`${session.user.id}:${academicOrgId}`} userId={session.user.id} name={accountIdentity.name} token={accessToken} globalRoles={globalRoles} memberships={memberships} organizationId={academicOrgId} organizations={orgs} loading={loadingOrgs} error={orgError} apiStatus={apiStatus} access={navigationAccess} onNavigate={navTo}/>}
           {sectionPermissionDenied && <section role="alert" className="app-warning rounded-2xl border p-6">
             <div className="flex items-center gap-2 font-semibold"><ShieldCheck size={20}/> {({es:'Acceso restringido',en:'Access restricted',pt:'Acesso restrito'})[academicLanguage]}</div>
             <p className="mt-2 text-sm">{({es:'No tienes permisos para acceder a este módulo. Consulta al administrador de tu institución.',en:'You do not have permission to access this module. Contact your institution administrator.',pt:'Você não tem permissão para acessar este módulo. Consulte o administrador da sua instituição.'})[academicLanguage]}</p>
@@ -660,20 +662,20 @@ export default function App() {
             <LessonEditorPage key={`${lessonRoute.lessonId}:${lessonRoute.source}`} {...lessonRoute} token={accessToken} onConfirmSignOut={completeSignOut}/>
           </Suspense>}
           {section === 'courses' && !sectionPermissionDenied && taskSubmissionsRoute && accessToken && <Suspense fallback={<Spinner label={reviewNames.list}/>}>
-            <TaskSubmissionsPage {...taskSubmissionsRoute} token={accessToken}/>
+            <TaskSubmissionsPage {...taskSubmissionsRoute} token={accessToken} favoriteScopes={favoriteScopes(taskSubmissionsRoute.organizationId)}/>
           </Suspense>}
           {/* Los favoritos antiguos /mis-entregas siguen abriendo la tarea autorizada. */}
           {section === 'courses' && !sectionPermissionDenied && myTaskSubmissionsRoute && accessToken && <Suspense fallback={<Spinner label={reviewNames.taskDetail}/>}>
-            <CourseTaskPage key={`${myTaskSubmissionsRoute.offeringId}:${myTaskSubmissionsRoute.taskId}`} {...myTaskSubmissionsRoute} token={accessToken}/>
+            <CourseTaskPage key={`${myTaskSubmissionsRoute.offeringId}:${myTaskSubmissionsRoute.taskId}`} {...myTaskSubmissionsRoute} token={accessToken} favoriteScopes={favoriteScopes(myTaskSubmissionsRoute.organizationId)}/>
           </Suspense>}
           {section === 'courses' && !sectionPermissionDenied && courseTaskRoute && accessToken && <Suspense fallback={<Spinner label={reviewNames.taskDetail}/>}>
-            <CourseTaskPage key={`${courseTaskRoute.offeringId}:${courseTaskRoute.taskId}`} {...courseTaskRoute} token={accessToken}/>
+            <CourseTaskPage key={`${courseTaskRoute.offeringId}:${courseTaskRoute.taskId}`} {...courseTaskRoute} token={accessToken} favoriteScopes={favoriteScopes(courseTaskRoute.organizationId)}/>
           </Suspense>}
           {section === 'courses' && !sectionPermissionDenied && taskReviewRoute && accessToken && <Suspense fallback={<Spinner label="Cargando entrega..."/>}>
             <TaskSubmissionReviewPage {...taskReviewRoute} token={accessToken}/>
           </Suspense>}
           {section === 'courses' && !sectionPermissionDenied && courseRoute && accessToken && <CourseWorkspacePage key={location.pathname+((new URLSearchParams(location.search).has('recommendation')||new URLSearchParams(location.search).has('post'))?location.key:'')}
-            organizationId={courseRoute.organizationId} courseId={courseRoute.courseId} offeringId={courseRoute.offeringId} token={accessToken}/>}
+            organizationId={courseRoute.organizationId} courseId={courseRoute.courseId} offeringId={courseRoute.offeringId} token={accessToken} favoriteScopes={favoriteScopes(courseRoute.organizationId)}/>}
           {((section === 'courses' && !courseRoute && !lessonRoute && !newLessonRoute && !taskReviewRoute && !taskSubmissionsRoute && !myTaskSubmissionsRoute && !courseTaskRoute) || section === 'students' || section === 'enrollments') && !sectionPermissionDenied && accessToken && <AcademicPage
             mode={section} organizations={orgs} organizationId={academicOrgId}
             token={accessToken}

@@ -1,3 +1,5 @@
+import { FavoriteStar } from '../favorites/Favorites';
+import { matchingScopes, type FavoriteScope } from '../favorites/favoriteRules';
 /** CAMBIOS 21 v30.2.3 · Lista de entregas de una tarea como página enlazable.
  * La ruta no autoriza por sí sola: FastAPI verifica rol y alcance institucional
  * para ambas consultas. La tabla compartida delega la paginación al backend.
@@ -11,7 +13,7 @@ import { Spinner } from '../../components/shared/Spinner';
 import { normalizeLocale } from '../../i18n';
 import { courseTaskPath, taskReviewPath } from '../../routes';
 
-interface Props {organizationId:string;offeringId:string;taskId:string;token:string;embedded?:boolean}
+interface Props {organizationId:string;offeringId:string;taskId:string;token:string;embedded?:boolean;favoriteScopes?:FavoriteScope[]}
 interface Assignment {id:string;title:string;status:'draft'|'published'|'closed';instructions:string}
 interface Submission {
   id:string;attempt_number:number;student_name:string;submitted_at:string;
@@ -40,7 +42,7 @@ async function get<T>(path:string,token:string,signal:AbortSignal):Promise<T>{
   return response.json() as Promise<T>;
 }
 
-export function TaskSubmissionsPage({organizationId,offeringId,taskId,token,embedded=false}:Props){
+export function TaskSubmissionsPage({organizationId,offeringId,taskId,token,embedded=false,favoriteScopes=[]}:Props){
   const {i18n}=useTranslation();const locale=normalizeLocale(i18n.language);const t=labels[locale];
   const navigate=useNavigate();const location=useLocation();
   const page=safePage(location.search);
@@ -94,9 +96,10 @@ export function TaskSubmissionsPage({organizationId,offeringId,taskId,token,embe
       {!embedded&&<header className="app-panel app-task-review-header rounded-2xl border p-5 sm:p-6">
         <p className="app-muted flex items-center gap-2 text-xs font-semibold uppercase tracking-wide"><ClipboardList size={16}/>{t.task}</p>
         <h2 className="mt-1 text-xl font-bold">{assignment.title}</h2>
+        <FavoriteStar token={token} key={taskId} scopes={matchingScopes(favoriteScopes,'editor')} item={{offeringId,taskId,kind:'submissions',title:assignment.title}}/>
         <p className="app-muted mt-2 whitespace-pre-wrap text-sm">{assignment.instructions}</p>
       </header>}
-      {embedded&&<h3 className="flex items-center gap-2 text-lg font-bold"><ClipboardList size={19}/>{t.review}</h3>}
+      {embedded&&<div className="flex flex-wrap items-center justify-between gap-2"><h3 className="flex items-center gap-2 text-lg font-bold"><ClipboardList size={19}/>{t.review}</h3><FavoriteStar token={token} key={taskId} scopes={matchingScopes(favoriteScopes,'editor')} item={{offeringId,taskId,kind:'submissions',title:assignment.title}}/></div>}
       {assignment.status!=='closed' && <p className="app-muted text-sm">{t.gradeHelp}</p>}
       <DataTable<Submission> rows={rows} columns={columns} label={t.review} manualMode/>
       {rows.length===0&&<p className="app-muted text-sm">{t.empty}</p>}

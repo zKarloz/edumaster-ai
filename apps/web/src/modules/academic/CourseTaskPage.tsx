@@ -1,3 +1,5 @@
+import { FavoriteStar } from '../favorites/Favorites';
+import { matchingScopes, type FavoriteScope } from '../favorites/favoriteRules';
 /** CAMBIOS 21 v30.2.5 · Detalle de tarea y envíos sin modales.
  * La ruta es solo un identificador: FastAPI valida institución, oferta,
  * matrícula, docente y fecha límite en todas las mutaciones y consultas.
@@ -26,7 +28,7 @@ interface Submission {
   id:string;attempt_number:number;answer_text:string;status:'submitted'|'reviewed';
   submitted_at:string;review_notes:string|null;reviewed_at:string|null;
 }
-interface Props {organizationId:string;offeringId:string;taskId:string;token:string}
+interface Props {organizationId:string;offeringId:string;taskId:string;token:string;favoriteScopes?:FavoriteScope[]}
 const API=import.meta.env.VITE_API_URL || 'http://localhost:8000';
 const primary='app-primary-button inline-flex min-h-11 items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold disabled:opacity-50';
 const secondary='app-secondary-button inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border px-3 py-2 text-sm disabled:opacity-50';
@@ -80,7 +82,7 @@ function localDate(value:string|null):string{
   const date=new Date(value);return new Date(date.getTime()-date.getTimezoneOffset()*60000).toISOString().slice(0,16);
 }
 
-export function CourseTaskPage({organizationId,offeringId,taskId,token}:Props){
+export function CourseTaskPage({organizationId,offeringId,taskId,token,favoriteScopes=[]}:Props){
   const {i18n}=useTranslation();const locale=normalizeLocale(i18n.language);const t=copy[locale];
   const navigate=useNavigate();const location=useLocation();const {notify}=useToast();
   const root=`/api/v1/academic/organizations/${organizationId}/course-offerings/${offeringId}/tasks`;
@@ -197,6 +199,7 @@ export function CourseTaskPage({organizationId,offeringId,taskId,token}:Props){
       <div className="app-panel app-task-review-header space-y-3 rounded-2xl border p-5 sm:p-6">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <h2 className="flex items-center gap-2 text-xl font-bold"><ClipboardList size={20}/>{creating?t.new:task?.title}</h2>
+          {task&&<FavoriteStar token={token} key={taskId} scopes={matchingScopes(favoriteScopes,editor?'editor':'student')} item={{offeringId,taskId,kind:'task',title:task.title}}/>}
           {task&&<span className={`app-workspace-state app-workspace-${task.status==='closed'?'archived':task.status} rounded-lg border px-2 py-1 text-xs font-semibold`}>{t[task.status]}</span>}
         </div>
         {task&&<><p className="app-muted whitespace-pre-wrap text-sm leading-7">{task.instructions}</p>
@@ -226,7 +229,7 @@ export function CourseTaskPage({organizationId,offeringId,taskId,token}:Props){
       {/* El docente ve las entregas paginadas directamente debajo del detalle.
           Se reutiliza el componente con control de rol de la página anterior. */}
       {editor&&task&&task.status!=='draft'&&<TaskSubmissionsPage
-        organizationId={organizationId} offeringId={offeringId} taskId={task.id} token={token} embedded/>}
+        organizationId={organizationId} offeringId={offeringId} taskId={task.id} favoriteScopes={favoriteScopes} token={token} embedded/>}
       {!editor&&task&&<>
         {showComposer&&canAnswer&&<form id="formulario-entrega" onSubmit={requestSubmission} className="app-panel app-task-form scroll-mt-28 space-y-4 rounded-2xl border p-5 sm:p-6">
           <h3 className="font-bold">{t.send}</h3>
