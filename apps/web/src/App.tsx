@@ -675,7 +675,7 @@ export default function App() {
             ? <UsersPage token={accessToken} organizations={orgs} canManage/>
             : <InstitutionalUsersPage token={accessToken} organizations={institutionalAdminOrganizations} organizationId={academicOrgId}/>)}
           {section === 'intelligence' && <Suspense fallback={<Spinner label={t('common.loading')}/>}>
-            <NeuralNetworkPage token={accessToken??undefined} canRegister={globalRoles.includes('superadmin')}/>
+            <NeuralNetworkPage token={accessToken??undefined} canRegister={globalRoles.includes('superadmin')} organizations={orgs}/>
           </Suspense>}
           {section === 'settings' && <SettingsPage token={accessToken ?? ''} apiStatus={apiStatus} onCheckApi={checkApi}/>}
           {section === 'profile' && accessToken && <ProfilePage key={session.user.id} identity={accountIdentity} token={accessToken}

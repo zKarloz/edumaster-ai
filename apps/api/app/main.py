@@ -15,6 +15,7 @@ from app.routers.lesson_published import router as lesson_published_router
 from app.routers.lesson_resources import router as lesson_resources_router
 from app.routers.lesson_revisions import router as lesson_revisions_router
 from app.routers.neural_demo import router as neural_demo_router
+from app.routers.neural_readiness import router as neural_readiness_router
 from app.routers.offering_content import router as offering_content_router
 from app.routers.organizations import router as organizations_router
 from app.routers.profile import router as profile_router
@@ -36,6 +37,7 @@ app.add_middleware(
 app.include_router(organizations_router)
 app.include_router(academic_router)
 app.include_router(neural_demo_router)
+app.include_router(neural_readiness_router)
 app.include_router(academic_activity_router)
 app.include_router(course_appearance_router)
 app.include_router(course_content_router)

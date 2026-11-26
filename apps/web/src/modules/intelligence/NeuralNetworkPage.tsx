@@ -11,11 +11,12 @@ import type { WorkerEvent } from './ml/protocol';
 import { TrainedNetwork } from './components/TrainedNetwork';
 import { type LabTab, LAB_TABS } from './ml/labTabs';
 import { LocalTrainingPanel } from './components/LocalTrainingPanel';
+import { AcademicReadiness } from './components/AcademicReadiness';
 import { NEURAL_TEXT } from './neuralNetworkConfig';
 
 const tabLabels={es:['Arquitectura','Entrenamiento','Evaluación','Inspección','Modelos'],en:['Architecture','Training','Evaluation','Inspection','Models'],pt:['Arquitetura','Treinamento','Avaliação','Inspeção','Modelos']} as const;
 
-export function NeuralNetworkPage({token,canRegister}:{token?:string;canRegister?:boolean}) {
+export function NeuralNetworkPage({token,canRegister,organizations=[]}:{token?:string;canRegister?:boolean;organizations?:{id:string;name:string}[]}) {
   const { i18n } = useTranslation();
   const locale = normalizeLocale(i18n.language);
   const labels = NEURAL_TEXT[locale];
@@ -67,6 +68,7 @@ export function NeuralNetworkPage({token,canRegister}:{token?:string;canRegister
     </nav>
     <div id="neural-tab-content" role="tabpanel" aria-labelledby={`neural-tab-${tab}`} tabIndex={0} className="min-w-0">
     <LocalTrainingPanel token={token} canRegister={canRegister} tab={tab} onTab={setTab} locale={locale} sampleIndex={sampleIndex} onSample={setSampleIndex} onResult={value=>{setResult(value);setSampleIndex(0);}}>
+    {tab==='training' && canRegister && token && <AcademicReadiness locale={locale} token={token} organizations={organizations}/>}
     {tab==='architecture' && <div className="space-y-5">
       {/* No se dibuja una topología ficticia cuando no hay checkpoint disponible. */}
       {result ? <TrainedNetwork locale={locale} result={result} sampleIndex={sampleIndex} onSample={setSampleIndex} allowMotion={allowMotion}/> :
