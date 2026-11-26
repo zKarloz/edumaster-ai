@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { ArrowRight, Building2, Users, GraduationCap, BookOpen, Wallet, MapPinned, Activity, ShieldCheck, BrainCircuit, ClipboardList, type LucideIcon } from 'lucide-react';
 import { Panel, Stat } from './DashboardComponents';
 import { AcademicDashboard } from './AcademicDashboard';
+import { SpecialistDashboard } from './SpecialistDashboard';
 import { Spinner } from '../../components/shared/Spinner';
 import { OptionSelect } from '../../components/shared/OptionSelect';
 import { InstitutionMap } from '../organizations/InstitutionMap';
@@ -60,7 +61,8 @@ export function DashboardPage(props:Props){
  {global&&<Panel title={c.service}><p role="status" className="flex items-center gap-2"><Activity className="app-accent"/>{c[props.apiStatus]}</p></Panel>}
  </div></>}
  {(role==='student'||role==='instructor')&&props.token&&props.organizationId&&props.access.courses&&<AcademicDashboard key={`${role}:${props.organizationId}`} organizationId={props.organizationId} token={props.token} role={role}/>}
- {!global&&!manager&&role!=='student'&&role!=='instructor'&&<Panel title={t(`account.role_${role??'user'}`)}><p className="app-muted text-sm">{c.later}</p></Panel>}
+ {(role==='analyst'||role==='ml_engineer')&&<SpecialistDashboard role={role} canUseLab={props.access.intelligence} isSuperadmin={props.globalRoles.includes('superadmin')} token={props.token} organizations={props.organizations} onOpenLab={()=>props.onNavigate('intelligence')}/>}
+ {!global&&!manager&&role!=='student'&&role!=='instructor'&&role!=='analyst'&&role!=='ml_engineer'&&<Panel title={t(`account.role_${role??'user'}`)}><p className="app-muted text-sm">{c.later}</p></Panel>}
  <Panel title={c.quick}><div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">{shortcuts.filter(([s])=>(allowed.includes(s)||s==='profile'||s==='settings')&&props.access[s]).map(([s,Icon])=><button key={s} onClick={()=>props.onNavigate(s)} className="app-secondary-button flex items-center gap-2 rounded-xl border p-3 text-left text-sm"><Icon size={20} className="app-accent"/><span className="flex-1">{s==='profile'?t('account.viewProfile'):t(`nav.${s}`)}</span><ArrowRight size={15}/></button>)}</div></Panel>
  </div>;
 }

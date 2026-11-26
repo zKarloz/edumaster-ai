@@ -27,3 +27,16 @@ test('Inicio académico limita ofertas propias y no mezcla recomendaciones de ge
  assert.match(source,/taskSubmissionsPath\(organizationId,r.offering_id,r.target_id\)/);
  assert.match(source,/ctrl.signal.aborted/);
 });
+test('Inicio especializado conserva permisos y usa exclusivamente configuración DEMO',()=>{
+ const source=fs.readFileSync(path.join(__dirname,'../src/modules/dashboard/SpecialistDashboard.tsx'),'utf8');
+ const page=fs.readFileSync(path.join(__dirname,'../src/modules/dashboard/DashboardPage.tsx'),'utf8');
+ assert.match(source,/isSuperadmin&&token&&<AcademicReadiness/);
+ assert.match(source,/if\(!canUseLab\)/);
+ assert.match(source,/dataset\.splits\.train\.x\.length/);
+ assert.match(page,/canUseLab=\{props.access.intelligence\}/);
+ assert.match(page,/isSuperadmin=\{props.globalRoles.includes\('superadmin'\)\}/);
+ const dataset=JSON.parse(fs.readFileSync(path.join(__dirname,'../src/modules/intelligence/ml/demoDataset.json'),'utf8'));
+ assert.equal(dataset.classification,'SYNTHETIC_DEMO');
+ assert.equal(dataset.columns.length,13);
+ assert.deepEqual(['train','validation','test'].map(k=>dataset.splits[k].x.length),[150,50,50]);
+});
