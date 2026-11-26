@@ -9,8 +9,10 @@ const source = file => fs.readFileSync(path.resolve(__dirname, '..', file), 'utf
 
 test('Usuarios obtiene el permiso desde /me sin esperar el listado de instituciones', () => {
   const app = source('src/App.tsx');
-  assert.match(app, /const canManageUserAdministration = globalRoles\.includes\('superadmin'\) \|\|\s*memberships\.some\(member => member\.roles\.includes\('institution_admin'\)\)/);
-  assert.doesNotMatch(app, /const canManageUserAdministration =[^;]*institutionalAdminOrganizations\.length/);
+  assert.match(app, /const navigationAccess = moduleAccess\(globalRoles, memberships, academicOrgId\)/);
+  const policy = source('src/lib/moduleAccess.ts');
+  assert.match(policy, /users: globalAdmin \|\| institutionAdmin/);
+  assert.doesNotMatch(policy, /institutionalAdminOrganizations|orgs\.length/);
 });
 
 test('recargar rutas validas no redirige a Resumen por una carga asincrona', () => {

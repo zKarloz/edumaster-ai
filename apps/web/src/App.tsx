@@ -14,6 +14,7 @@ import { Spinner } from './components/shared/Spinner';
 import { useToast } from './components/shared/Toast';
 import { supabase } from './lib/supabase';
 import { chooseAcademicInstitution, maySelectAcademicInstitution } from './lib/institutionContext';
+import { moduleAccess } from './lib/moduleAccess';
 import { useSettings } from './providers/SettingsProvider';
 import { SettingsPage } from './modules/settings/SettingsPage';
 import { LoginScreen } from './LoginScreen';
@@ -379,10 +380,6 @@ export default function App() {
   const institutionalAdminOrganizations = useMemo(() => orgs.filter(org =>
     memberships.some(item => item.organization_id === org.id && item.roles.includes('institution_admin'))),
     [orgs, memberships]);
-  // Los permisos proceden de /me, no del catálogo de instituciones (que carga
-  // después). Así una recarga en Usuarios o Importar CSV no vuelve a Resumen.
-  const canManageUserAdministration = globalRoles.includes('superadmin') ||
-    memberships.some(member => member.roles.includes('institution_admin'));
   // Solo administradores/coordinadores cambian el contexto desde Instituciones.
   // Docentes y estudiantes reciben automáticamente su organización autorizada.
   const canChooseInstitution = maySelectAcademicInstitution(globalRoles,memberships);
@@ -414,7 +411,6 @@ export default function App() {
     taskReviewRoute?.organizationId,taskSubmissionsRoute?.organizationId,myTaskSubmissionsRoute?.organizationId,
     courseTaskRoute?.organizationId]);
 
-  const canViewAcademicActivity = memberships.some(m => m.roles.some(role => ['institution_admin', 'coordinator', 'instructor'].includes(role)));
   const canManageAcademicOrganization = useCallback((orgId: string) => memberships.some(item => item.organization_id === orgId && item.roles.some(role => ['institution_admin', 'coordinator'].includes(role))), [memberships]);
   // La cabecera global presenta el contexto de las dos páginas docentes.
   const academicLanguage = i18n.language.toLowerCase().startsWith('pt') ? 'pt' : i18n.language.toLowerCase().startsWith('en') ? 'en' : 'es';
@@ -438,8 +434,15 @@ export default function App() {
     : navGroups.find(group => group.sections.some(id => id === section))?.label ?? 'nav.platform';
   const isDemo = false;
   const rows = orgs;
+  // Los permisos proceden de /me, no del catálogo de instituciones que carga después.
+  const navigationAccess = moduleAccess(globalRoles, memberships, academicOrgId);
+  // Las rutas profundas se evalúan contra su propia institución, no una preferencia anterior.
+  const routeOrganizationId = courseRoute?.organizationId ?? detailRoute?.organizationId ?? lessonRoute?.organizationId ?? newLessonRoute?.organizationId
+    ?? taskReviewRoute?.organizationId ?? taskSubmissionsRoute?.organizationId ?? myTaskSubmissionsRoute?.organizationId ?? courseTaskRoute?.organizationId;
+  const routeAccess = routeOrganizationId ? moduleAccess(globalRoles, memberships, routeOrganizationId) : navigationAccess;
   const navTo = (next: Section) => {
     // useBlocker en LessonEditorPage protege todas las navegaciones SPA.
+    if (!navigationAccess[next]) return;
     navigate(sectionPaths[next]); setMobileMenu(false);
   };
   const academicRole = (orgId: string): 'manager'|'instructor'|'student' => {
@@ -450,10 +453,7 @@ export default function App() {
   // Una ruta de módulo válida no debe perderse al recargar mientras cambian
   // los estados asíncronos de identidad e instituciones. La autorización se
   // controla antes de montar cada módulo; FastAPI vuelve a validar cada petición.
-  const sectionPermissionDenied =
-    (section === 'organizations' && !canOpenInstitutions) ||
-    (section === 'users' && !canManageUserAdministration) ||
-    (section === 'activity' && !canViewAcademicActivity);
+  const sectionPermissionDenied = !routeAccess[section];
   useEffect(() => {
     if (!accessGranted) return;
     // Solo las URLs realmente desconocidas regresan a Resumen.
@@ -554,7 +554,7 @@ export default function App() {
           <nav aria-label={t('nav.platform')} className="app-sidebar-scroll min-h-0 flex-1 space-y-5 overflow-x-hidden overflow-y-auto pb-3">
             {navGroups.map(group => {
               const visible = group.sections.map(id => nav.find(link => link.id === id)).filter((link): link is typeof nav[number] =>
-                Boolean(link && (link.id !== 'organizations' || canOpenInstitutions) && (link.id !== 'users' || canManageUserAdministration) && (link.id !== 'activity' || canViewAcademicActivity)));
+                Boolean(link && navigationAccess[link.id]));
               if (!visible.length) return null;
               return <div key={group.label} className="space-y-1">
                 <p aria-label={t(group.label)} className={`app-sidebar-group-heading h-5 overflow-hidden whitespace-nowrap px-3 pb-1 text-xs font-semibold uppercase tracking-widest app-meta-text text-slate-400 ${!sidebarWide ? 'md:flex md:min-h-4 md:items-center md:px-0' : ''}`}>
@@ -649,7 +649,7 @@ export default function App() {
               <div className="app-panel rounded-2xl border border-slate-200 bg-white p-6 dark:border-[#23456A] dark:bg-[#0A1F3D]">
                 <h3 className="font-semibold">{t('dashboard.nextSteps')}</h3>
                 <p className="mt-3 text-sm leading-7 app-muted text-slate-500 dark:text-slate-300">{t('dashboard.nextDescription')}</p>
-                <button onClick={() => navTo('security')} className="app-accent mt-5 flex items-center gap-2 text-sm font-semibold text-[#087FE5] dark:text-[#20C8F5]">{t('dashboard.checkSecurity')} <ArrowRight size={15}/></button>
+                {navigationAccess.security && <button onClick={() => navTo('security')} className="app-accent mt-5 flex items-center gap-2 text-sm font-semibold text-[#087FE5] dark:text-[#20C8F5]">{t('dashboard.checkSecurity')} <ArrowRight size={15}/></button>}
               </div>
             </div>
           </>}
@@ -659,8 +659,8 @@ export default function App() {
             <DataTable<Organization> rows={rows} columns={columns} label={t('dashboard.organizations')} />
           </>}
           {sectionPermissionDenied && <section role="alert" className="app-warning rounded-2xl border p-6">
-            <div className="flex items-center gap-2 font-semibold"><ShieldCheck size={20}/> Acceso restringido</div>
-            <p className="mt-2 text-sm">No tienes permisos para acceder a este módulo. Consulta al administrador de tu institución.</p>
+            <div className="flex items-center gap-2 font-semibold"><ShieldCheck size={20}/> {({es:'Acceso restringido',en:'Access restricted',pt:'Acesso restrito'})[academicLanguage]}</div>
+            <p className="mt-2 text-sm">{({es:'No tienes permisos para acceder a este módulo. Consulta al administrador de tu institución.',en:'You do not have permission to access this module. Contact your institution administrator.',pt:'Você não tem permissão para acessar este módulo. Consulte o administrador da sua instituição.'})[academicLanguage]}</p>
           </section>}
           {section === 'organizations' && !sectionPermissionDenied && canOpenInstitutions && <OrganizationsPage
             organizations={orgs} loading={loadingOrgs} error={orgError}
@@ -675,46 +675,46 @@ export default function App() {
           {section === 'users' && !sectionPermissionDenied && accessToken && !usersCsvImportRoute && (globalRoles.includes('superadmin')
             ? <UsersPage token={accessToken} organizations={orgs} canManage/>
             : <InstitutionalUsersPage token={accessToken} organizations={institutionalAdminOrganizations} organizationId={academicOrgId}/>)}
-          {section === 'intelligence' && <Suspense fallback={<Spinner label={t('common.loading')}/>}>
+          {section === 'intelligence' && !sectionPermissionDenied && <Suspense fallback={<Spinner label={t('common.loading')}/>}>
             <NeuralNetworkPage token={accessToken??undefined} canRegister={globalRoles.includes('superadmin')} organizations={orgs}/>
           </Suspense>}
           {section === 'settings' && <SettingsPage token={accessToken ?? ''} apiStatus={apiStatus} onCheckApi={checkApi}/>}
           {section === 'profile' && accessToken && <ProfilePage key={session.user.id} identity={accountIdentity} token={accessToken}
             userId={session.user.id} photo={avatar.photo} photoLoading={avatar.loading} onIdentity={value => setIdentity({ id: session.user.id, value })}
             onSavePhoto={avatar.save} onRemovePhoto={avatar.remove}/>}
-          {section === 'courses' && newLessonRoute && accessToken && <Suspense fallback={<Spinner label={t('common.loading')}/>}>
+          {section === 'courses' && !sectionPermissionDenied && newLessonRoute && accessToken && <Suspense fallback={<Spinner label={t('common.loading')}/>}>
             <LessonCreatePage key={`${newLessonRoute.unitId}:${newLessonRoute.source}`} {...newLessonRoute} token={accessToken} onConfirmSignOut={completeSignOut}/>
           </Suspense>}
-          {section === 'courses' && lessonRoute && accessToken && <Suspense fallback={<Spinner label={t('lessonEditor.loading')}/>}>
+          {section === 'courses' && !sectionPermissionDenied && lessonRoute && accessToken && <Suspense fallback={<Spinner label={t('lessonEditor.loading')}/>}>
             <LessonEditorPage key={`${lessonRoute.lessonId}:${lessonRoute.source}`} {...lessonRoute} token={accessToken} onConfirmSignOut={completeSignOut}/>
           </Suspense>}
-          {section === 'courses' && taskSubmissionsRoute && accessToken && <Suspense fallback={<Spinner label={reviewNames.list}/>}>
+          {section === 'courses' && !sectionPermissionDenied && taskSubmissionsRoute && accessToken && <Suspense fallback={<Spinner label={reviewNames.list}/>}>
             <TaskSubmissionsPage {...taskSubmissionsRoute} token={accessToken}/>
           </Suspense>}
           {/* Los favoritos antiguos /mis-entregas siguen abriendo la tarea autorizada. */}
-          {section === 'courses' && myTaskSubmissionsRoute && accessToken && <Suspense fallback={<Spinner label={reviewNames.taskDetail}/>}>
+          {section === 'courses' && !sectionPermissionDenied && myTaskSubmissionsRoute && accessToken && <Suspense fallback={<Spinner label={reviewNames.taskDetail}/>}>
             <CourseTaskPage key={`${myTaskSubmissionsRoute.offeringId}:${myTaskSubmissionsRoute.taskId}`} {...myTaskSubmissionsRoute} token={accessToken}/>
           </Suspense>}
-          {section === 'courses' && courseTaskRoute && accessToken && <Suspense fallback={<Spinner label={reviewNames.taskDetail}/>}>
+          {section === 'courses' && !sectionPermissionDenied && courseTaskRoute && accessToken && <Suspense fallback={<Spinner label={reviewNames.taskDetail}/>}>
             <CourseTaskPage key={`${courseTaskRoute.offeringId}:${courseTaskRoute.taskId}`} {...courseTaskRoute} token={accessToken}/>
           </Suspense>}
-          {section === 'courses' && taskReviewRoute && accessToken && <Suspense fallback={<Spinner label="Cargando entrega..."/>}>
+          {section === 'courses' && !sectionPermissionDenied && taskReviewRoute && accessToken && <Suspense fallback={<Spinner label="Cargando entrega..."/>}>
             <TaskSubmissionReviewPage {...taskReviewRoute} token={accessToken}/>
           </Suspense>}
-          {section === 'courses' && courseRoute && accessToken && <CourseWorkspacePage
+          {section === 'courses' && !sectionPermissionDenied && courseRoute && accessToken && <CourseWorkspacePage
             organizationId={courseRoute.organizationId} courseId={courseRoute.courseId} offeringId={courseRoute.offeringId} token={accessToken}/>}
-          {((section === 'courses' && !courseRoute && !lessonRoute && !newLessonRoute && !taskReviewRoute && !taskSubmissionsRoute && !myTaskSubmissionsRoute && !courseTaskRoute) || section === 'students' || section === 'enrollments') && accessToken && <AcademicPage
+          {((section === 'courses' && !courseRoute && !lessonRoute && !newLessonRoute && !taskReviewRoute && !taskSubmissionsRoute && !myTaskSubmissionsRoute && !courseTaskRoute) || section === 'students' || section === 'enrollments') && !sectionPermissionDenied && accessToken && <AcademicPage
             mode={section} organizations={orgs} organizationId={academicOrgId}
             token={accessToken}
             courseRole={academicRole(academicOrgId)}
             canManageOrganization={canManageAcademicOrganization}/>}
           {section === 'activity' && !sectionPermissionDenied && accessToken && <AcademicActivityPage
-            organizationId={academicOrgId} token={accessToken}
+            organizationId={detailRoute?.organizationId ?? academicOrgId} token={accessToken}
             selectedEnrollmentId={detailRoute?.enrollmentId ?? ''}
             selectedOfferingId={detailRoute?.offeringId ?? ''}
-            onSelectEnrollment={(offeringId, enrollmentId) => navigate(enrollmentHistoryPath(academicOrgId, offeringId, enrollmentId))}
+            onSelectEnrollment={(offeringId, enrollmentId) => navigate(enrollmentHistoryPath(detailRoute?.organizationId ?? academicOrgId, offeringId, enrollmentId))}
             onBackToOverview={() => navTo('activity')}/>}
-          {section === 'security' && <div className="app-panel rounded-2xl border border-slate-200 bg-white p-6 dark:border-[#23456A] dark:bg-[#0A1F3D]">
+          {section === 'security' && !sectionPermissionDenied && <div className="app-panel rounded-2xl border border-slate-200 bg-white p-6 dark:border-[#23456A] dark:bg-[#0A1F3D]">
             <LockKeyhole size={24} className="app-accent text-[#20C8F5]"/><h3 className="mt-3 text-lg font-semibold">{t('legacy.k58c0760579')}</h3>
             <p className="mt-2 text-sm leading-7 app-muted text-slate-500 dark:text-slate-300">{t('legacy.k71ac295807')}</p>
             <button type="button" onClick={() => setShowPermissions(true)} className="app-secondary-button mt-4 flex items-center gap-2 rounded-lg border border-slate-200 px-4 py-2 text-sm dark:border-slate-600">{t('legacy.k9027157396')} <ChevronDown size={16}/></button>
