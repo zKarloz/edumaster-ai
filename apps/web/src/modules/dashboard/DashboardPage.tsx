@@ -1,7 +1,9 @@
 /** Inicio por contexto: consultas existentes, sin ampliar permisos ni simular estadísticas. */
-import { useEffect, useState, type ReactNode } from 'react';
+import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ArrowRight, Building2, Users, GraduationCap, BookOpen, Wallet, MapPinned, Activity, ShieldCheck, BrainCircuit, ClipboardList, type LucideIcon } from 'lucide-react';
+import { Panel, Stat } from './DashboardComponents';
+import { AcademicDashboard } from './AcademicDashboard';
 import { Spinner } from '../../components/shared/Spinner';
 import { OptionSelect } from '../../components/shared/OptionSelect';
 import { InstitutionMap } from '../organizations/InstitutionMap';
@@ -16,8 +18,6 @@ const words={
  en:{welcome:'Welcome',view:'Home view',global:'Global administration',choose:'Select an institution',institutions:'Institutions retrieved',students:'Registered students',enrollments:'Registered enrollments',located:'Geolocated institutions',offers:'Published offerings',teachers:'Active instructors retrieved',map:'Institution map',quick:'Quick actions',service:'FastAPI connection',online:'Available',offline:'Unavailable',checking:'Checking',finance:'DEMO financial summary',paid:'Income received',pending:'Outstanding',month:'November 2026 · Initial fictional data',assignment:'Instructor assignments',assigned:'Assigned',unassigned:'Unassigned',sample:'Non-cancelled offerings retrieved (up to 200)',limited:'Directory retrieved (up to 250)',empty:'No records available',failed:'Some data could not be retrieved.',later:'Your specialized home will be added in the next increment.',enrollment:'Enrollments',monthly:'Monthly fees',course:'Course sales',certificate:'Certificates'},
  pt:{welcome:'Bem-vindo',view:'Visão inicial',global:'Administração global',choose:'Selecione uma instituição',institutions:'Instituições consultadas',students:'Alunos registrados',enrollments:'Matrículas registradas',located:'Instituições geolocalizadas',offers:'Ofertas publicadas',teachers:'Docentes ativos consultados',map:'Mapa institucional',quick:'Acessos rápidos',service:'Conexão com FastAPI',online:'Disponível',offline:'Indisponível',checking:'Verificando',finance:'Resumo financeiro DEMO',paid:'Receitas recebidas',pending:'Valor pendente',month:'Novembro 2026 · Dados fictícios iniciais',assignment:'Atribuições docentes',assigned:'Com docente',unassigned:'Sem docente',sample:'Ofertas não canceladas consultadas (até 200)',limited:'Diretório consultado (até 250)',empty:'Sem registros disponíveis',failed:'Não foi possível consultar alguns dados.',later:'Sua visão inicial especializada será adicionada na próxima versão.',enrollment:'Matrículas',monthly:'Mensalidades',course:'Venda de cursos',certificate:'Certificações'}
 };
-function Panel({title,children}:{title:string;children:ReactNode}) {return <section className="app-panel rounded-2xl border p-5 space-y-4"><h3 className="font-semibold">{title}</h3>{children}</section>}
-function Stat({title,value,Icon,hint}:{title:string;value:string|number|null|undefined;Icon:LucideIcon;hint?:string}) {return <section className="app-panel app-indicator-card rounded-2xl border p-5"><div className="flex justify-between gap-2"><span className="app-muted text-sm">{title}</span><Icon size={22} className="app-accent shrink-0"/></div><p className="mt-3 text-2xl font-semibold tabular-nums">{value??'—'}</p>{hint&&<p className="app-muted mt-2 text-xs">{hint}</p>}</section>}
 type Offering={id:string;course_title:string;instructor_id:string|null};
 type Snapshot={offers:number|null;teachers:number|null;assignments:Offering[]|null;failed:boolean};
 const empty:Snapshot={offers:null,teachers:null,assignments:null,failed:false};
@@ -59,7 +59,8 @@ export function DashboardPage(props:Props){
  {role==='institution_admin'&&props.access.income&&<Panel title={c.finance}><p className="app-muted text-xs">{c.month}</p><div className="grid grid-cols-2 gap-3"><Stat title={c.paid} value={money(totals.paid)} Icon={Wallet}/><Stat title={c.pending} value={money(totals.pending)} Icon={Wallet}/></div>{concepts.map(k=>{const n=summarize(finance.filter(r=>r.concept===k)).paid;return <div key={k}><div className="flex justify-between text-sm"><span>{c[k]}</span><span>{money(n)}</span></div><div className="mt-1 h-2 rounded-full" style={{background:'var(--app-control-hover)'}}><div className="h-full rounded-full bg-sky-500" style={{width:`${totals.paid?n/totals.paid*100:0}%`}}/></div></div>})}<button onClick={()=>props.onNavigate('income')} className="app-accent flex items-center gap-2 text-sm">{t('nav.income')}<ArrowRight size={16}/></button></Panel>}
  {global&&<Panel title={c.service}><p role="status" className="flex items-center gap-2"><Activity className="app-accent"/>{c[props.apiStatus]}</p></Panel>}
  </div></>}
- {!global&&!manager&&<Panel title={t(`account.role_${role??'user'}`)}><p className="app-muted text-sm">{c.later}</p></Panel>}
+ {(role==='student'||role==='instructor')&&props.token&&props.organizationId&&props.access.courses&&<AcademicDashboard key={`${role}:${props.organizationId}`} organizationId={props.organizationId} token={props.token} role={role}/>}
+ {!global&&!manager&&role!=='student'&&role!=='instructor'&&<Panel title={t(`account.role_${role??'user'}`)}><p className="app-muted text-sm">{c.later}</p></Panel>}
  <Panel title={c.quick}><div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">{shortcuts.filter(([s])=>(allowed.includes(s)||s==='profile'||s==='settings')&&props.access[s]).map(([s,Icon])=><button key={s} onClick={()=>props.onNavigate(s)} className="app-secondary-button flex items-center gap-2 rounded-xl border p-3 text-left text-sm"><Icon size={20} className="app-accent"/><span className="flex-1">{s==='profile'?t('account.viewProfile'):t(`nav.${s}`)}</span><ArrowRight size={15}/></button>)}</div></Panel>
  </div>;
 }

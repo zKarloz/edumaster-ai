@@ -240,3 +240,12 @@ def test_unverified_instructor_rejected():
     res = call("PUT", f"/offerings/{OFFER}/instructor", Engine(assigned=False),
                {"instructor_id": str(STUDENT)})
     assert res.status_code == 422
+
+
+def test_own_offerings_disables_manager_bypass():
+    engine = Engine(manager=True, assigned=True)
+    assert call('GET', '/activity/offerings?own=true', engine).status_code == 200
+    sql, params = engine.conn.statements[-1]
+    assert 'm.user_id=:actor' in sql
+    assert params['manager'] is False
+    assert params['actor'] == ACTOR

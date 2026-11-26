@@ -155,6 +155,7 @@ async def activity_offerings(
     organization_id: UUID,
     auth_id: UUID = Depends(authenticated_user_id),
     engine: AsyncEngine = Depends(require_engine),
+    own: bool = False,
 ) -> dict:
     """Gestor: todas las ofertas no canceladas; docente: solo las asignadas."""
     sql = text(f"""
@@ -183,7 +184,7 @@ async def activity_offerings(
         async with engine.connect() as conn:
             scope = await _actor_scope(conn, auth_id, organization_id)
             rows = (await conn.execute(sql, {"organization_id": organization_id,
-                "manager": scope["is_manager"], "actor": scope["actor_id"]})).mappings().all()
+                "manager": scope["is_manager"] and not own, "actor": scope["actor_id"]})).mappings().all()
         return {"items": [dict(row) for row in rows], "can_manage": bool(scope["is_manager"])}
     except SQLAlchemyError as exc:
         raise _sql_failure(exc) from exc

@@ -349,7 +349,10 @@ async def my_courses(
                   COALESCE(off.appearance_icon_override,c.appearance_icon) AS appearance_icon,
                   COALESCE(off.appearance_color_override,c.appearance_color) AS appearance_color,
                   e.id::text AS enrollment_id, e.status AS enrollment_status,
-                  1 AS enrolled_count
+                  1 AS enrolled_count,
+                  (SELECT p.completion_ratio * 100 FROM app.progress_snapshots p
+                   WHERE p.organization_id=e.organization_id AND p.student_id=e.student_id
+                     AND p.offering_id=e.offering_id) AS progress_percent
             """ + where + " ORDER BY e.enrolled_at DESC, e.id DESC LIMIT :limit OFFSET :offset"),
                 {**params, "limit": limit, "offset": offset})).mappings().all()
         return {"items": [dict(item) for item in rows], "total": total, "limit": limit, "offset": offset}

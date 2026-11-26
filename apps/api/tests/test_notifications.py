@@ -86,3 +86,18 @@ def test_refresh_materializes_only_authenticated_reminders(conn):
     for call in conn.execute.await_args_list[1:]:
         assert 'app.notification_management_events' in str(call.args[0])
         assert 'v.recipient_id=n.recipient_id' in str(call.args[0])
+
+
+def test_academic_pending_is_private_and_independent_of_read_status(conn):
+    conn.execute.return_value.mappings.return_value.all.return_value = []
+    assert TestClient(app).get(f'{PATH}/academic-pending?organization_id={ID}').json() == {'items': []}
+    sql, params = conn.execute.await_args.args
+    assert 'app.notification_reminder_events' in str(sql)
+    assert 'u.auth_user_id=:auth_id' in str(sql)
+    assert 'v.organization_id=:org' in str(sql)
+    assert 'read_at' not in str(sql)
+    assert params == {'auth_id': ID, 'org': ID}
+
+
+def test_academic_pending_requires_auth():
+    assert TestClient(app).get(f'{PATH}/academic-pending?organization_id={ID}').status_code == 401

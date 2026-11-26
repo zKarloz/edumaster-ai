@@ -154,3 +154,12 @@ def test_history_limit_bounds_and_type_validation():
     base = f"/activity/offerings/{OFFER}/records?enrollment_id={ENROLL}"
     assert call(base + "&limit=200", Engine()).status_code == 422
     assert call(base + "&kind=unknown", Engine()).status_code == 422
+
+
+def test_my_courses_progress_is_scoped_and_not_coalesced():
+    engine = Engine(manager=False)
+    assert call('/my-courses', engine).status_code == 200
+    sql = next(q for q, _ in engine.conn.statements if 'AS progress_percent' in q)
+    assert 'p.student_id=e.student_id' in sql
+    assert 'p.organization_id=e.organization_id' in sql
+    assert 'p.offering_id=e.offering_id' in sql

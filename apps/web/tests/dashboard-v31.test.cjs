@@ -18,3 +18,12 @@ test('dashboard utiliza datos autorizados y resumen financiero de la semilla com
  assert.match(source,/ctrl.signal.aborted/);assert.match(source,/seedIncome.filter/);assert.match(source,/props.access.income/);assert.match(source,/&&props.access\[s\]/);
  const app=fs.readFileSync(path.join(__dirname,'../src/App.tsx'),'utf8');assert.match(app,/<DashboardPage key=\{`\$\{session.user.id\}:\$\{academicOrgId\}`\}/);
 });
+test('Inicio académico limita ofertas propias y no mezcla recomendaciones de gestor',()=>{
+ const source=fs.readFileSync(path.join(__dirname,'../src/modules/dashboard/AcademicDashboard.tsx'),'utf8');
+ assert.match(source,/activity\/offerings\?own=true/);
+ assert.match(source,/my-courses\?current=true&limit=6/);
+ assert.match(source,/if\(r.editor\)throw/);
+ assert.match(source,/academic-pending/);
+ assert.match(source,/taskSubmissionsPath\(organizationId,r.offering_id,r.target_id\)/);
+ assert.match(source,/ctrl.signal.aborted/);
+});

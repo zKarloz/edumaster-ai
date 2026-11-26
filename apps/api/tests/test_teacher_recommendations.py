@@ -126,3 +126,19 @@ def test_focus_preserves_enrollment_scope(scoped):
     assert 'r.enrollment_id=:enrollment' in str(sql)
     assert 'r.id=CAST(:focus AS uuid)' in str(sql)
     assert params['focus'] == ID
+
+
+def test_own_recommendations_do_not_use_editor_privileges(scoped):
+    conn, context = scoped
+    context['editor'] = True
+    conn.execute.return_value.mappings.return_value.all.return_value = []
+    assert TestClient(app).get(PATH+'?own=true').json() == {'editor': False, 'recipients': [], 'items': []}
+    assert conn.execute.await_count == 1
+    assert conn.execute.await_args.args[1]['editor'] is False
+
+
+def test_own_recommendations_require_enrollment(scoped):
+    conn, context = scoped
+    context.update({'editor': True, 'enrollment_id': None})
+    assert TestClient(app).get(PATH+'?own=true').status_code == 403
+    conn.execute.assert_not_awaited()

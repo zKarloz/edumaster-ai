@@ -108,3 +108,25 @@ async def read_notification(
         if found is None:
             raise HTTPException(404, "Notificación no disponible")
     return {"ok": True}
+
+
+@router.get("/academic-pending")
+async def academic_pending(
+    organization_id: UUID, auth_id: UUID = Depends(authenticated_user_id),
+    engine: AsyncEngine = Depends(require_engine),
+) -> dict:
+    """Recordatorios actuales, independientemente de su estado de lectura."""
+    async with engine.connect() as conn:
+        rows = (await conn.execute(text("""
+            SELECT DISTINCT v.event_type,v.offering_id,v.target_id,v.title,
+                   c.title AS course_title,t.due_at
+            FROM app.notification_reminder_events v
+            JOIN app.course_tasks t ON t.id=v.target_id AND t.organization_id=v.organization_id
+              AND t.offering_id=v.offering_id
+            JOIN app.course_offerings off ON off.id=v.offering_id AND off.organization_id=v.organization_id
+            JOIN app.courses c ON c.id=off.course_id AND c.organization_id=off.organization_id
+            JOIN app.users u ON u.id=v.recipient_id AND u.status='active'
+            WHERE u.auth_user_id=:auth_id AND v.organization_id=:org
+            ORDER BY v.event_type,t.due_at NULLS LAST,v.title,v.target_id LIMIT 200
+        """), {"auth_id": auth_id, "org": organization_id})).mappings().all()
+    return {"items": [dict(row) for row in rows]}
