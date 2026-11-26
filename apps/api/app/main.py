@@ -5,7 +5,6 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.core.config import get_settings
 from app.routers.academic import router as academic_router
-from app.routers.neural_demo import router as neural_demo_router
 from app.routers.academic_activity import router as academic_activity_router
 from app.routers.course_appearance import router as course_appearance_router
 from app.routers.course_content import router as course_content_router
@@ -15,6 +14,7 @@ from app.routers.lesson_publication import router as lesson_publication_router
 from app.routers.lesson_published import router as lesson_published_router
 from app.routers.lesson_resources import router as lesson_resources_router
 from app.routers.lesson_revisions import router as lesson_revisions_router
+from app.routers.neural_demo import router as neural_demo_router
 from app.routers.offering_content import router as offering_content_router
 from app.routers.organizations import router as organizations_router
 from app.routers.profile import router as profile_router

@@ -1,13 +1,15 @@
 """Registro global de experimentos sintéticos no verificados, solo superadmin."""
 import json
-from pathlib import Path
 from functools import lru_cache
+from pathlib import Path
+from typing import Literal
 from uuid import UUID
+
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
-from typing import Literal
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncEngine
+
 from app.core.database import require_engine
 from app.core.security import authenticated_user_id
 from app.routers.organizations import _require_superadmin
@@ -95,7 +97,7 @@ def fixture():
 def validate_checkpoint(raw: bytes) -> Checkpoint:
     from datetime import datetime
     c = Checkpoint.model_validate_json(raw)
-    datetime.fromisoformat(c.savedAt.replace('Z','+00:00'))
+    datetime.fromisoformat(c.savedAt)
     r=c.result
     if r.columns != COLUMNS or not 1 <= r.epoch <= r.completedEpochs <= r.config.epochs or len(c.history)!=r.completedEpochs:
         raise ValueError('dimensions')
@@ -116,7 +118,7 @@ def validate_checkpoint(raw: bytes) -> Checkpoint:
     return c
 
 async def audit(conn, actor, action, model_id):
-    await conn.execute(text("INSERT INTO app.audit_logs(actor_id,action,resource,resource_id) VALUES (:actor,:action,'neural_demo_model',:id)"),dict(actor=actor,action=action,id=model_id))
+    await conn.execute(text("INSERT INTO app.audit_logs(actor_id,action,resource,resource_id) VALUES (:actor,:action,'neural_demo_model',:id)"),{'actor': actor, 'action': action, 'id': model_id})
 
 @router.get('')
 async def list_models(auth_id: UUID=Depends(authenticated_user_id), engine: AsyncEngine=Depends(require_engine)):
@@ -140,7 +142,7 @@ async def register(request: Request, auth_id: UUID=Depends(authenticated_user_id
         await conn.execute(text('SELECT pg_advisory_xact_lock(3163)'))
         if (await conn.execute(text('SELECT count(*) FROM app.neural_demo_models'))).scalar_one()>=100:
             raise HTTPException(409,'Límite de 100 registros DEMO alcanzado')
-        model_id=(await conn.execute(text('INSERT INTO app.neural_demo_models(created_by,dataset_hash,checkpoint) VALUES (:actor,:hash,CAST(:body AS jsonb)) RETURNING id'),dict(actor=actor,hash=HASH,body=c.model_dump_json(exclude_none=False)))).scalar_one()
+        model_id=(await conn.execute(text('INSERT INTO app.neural_demo_models(created_by,dataset_hash,checkpoint) VALUES (:actor,:hash,CAST(:body AS jsonb)) RETURNING id'),{'actor': actor, 'hash': HASH, 'body': c.model_dump_json(exclude_none=False)})).scalar_one()
         await audit(conn,actor,'register',model_id)
         return {'id':model_id}
 
