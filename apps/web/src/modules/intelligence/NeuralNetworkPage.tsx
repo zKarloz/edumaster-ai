@@ -7,6 +7,8 @@ import { BrainCircuit, CircleHelp, Pause, Play, RotateCcw, Sparkles } from 'luci
 import { useTranslation } from 'react-i18next';
 import { normalizeLocale } from '../../i18n';
 import { useSettings } from '../../providers/SettingsProvider';
+import type { WorkerEvent } from './ml/protocol';
+import { TrainedNetwork } from './components/TrainedNetwork';
 import { LocalTrainingPanel } from './components/LocalTrainingPanel';
 import { NeuralNetworkVisualizer } from './NeuralNetworkVisualizer';
 import { NEURAL_INPUTS, NEURAL_OUTPUTS, NEURAL_TEXT, type InputId } from './neuralNetworkConfig';
@@ -17,6 +19,10 @@ export function NeuralNetworkPage() {
   const { i18n } = useTranslation();
   const locale = normalizeLocale(i18n.language);
   const labels = NEURAL_TEXT[locale];
+  const [mode, setMode] = useState<'concept' | 'trained'>('concept');
+  const [result, setResult] = useState<Extract<WorkerEvent,{type:'done'}> | null>(null);
+  const [sampleIndex, setSampleIndex] = useState(0);
+  const views = {es:['Vista conceptual','Modelo entrenado','Entrena un modelo DEMO en el laboratorio para inspeccionarlo aquí.'],en:['Conceptual view','Trained model','Train a DEMO model in the laboratory to inspect it here.'],pt:['Vista conceitual','Modelo treinado','Treine um modelo DEMO no laboratório para inspecioná-lo aqui.']}[locale];
   const { animationsEnabled } = useSettings();
   const [selected, setSelected] = useState<InputId | null>(null);
   const [playing, setPlaying] = useState(true);
@@ -39,9 +45,10 @@ export function NeuralNetworkPage() {
   // cancelan el anterior. Nunca se anima ni se hace inferencia en el backend.
   useEffect(() => {
     if (selected === null || !playing || phase >= 3) return;
+    if (mode !== 'concept') return;
     const timer = window.setTimeout(() => setPhase(previous => Math.min(3, previous + 1)), allowMotion ? PHASE_DURATION_MS : 0);
     return () => window.clearTimeout(timer);
-  }, [selected, playing, phase, replayKey, allowMotion]);
+  }, [selected, playing, phase, replayKey, allowMotion, mode]);
 
   const selectedInput = useMemo(() => NEURAL_INPUTS.find(item => item.id === selected), [selected]);
   const outputs = NEURAL_OUTPUTS.filter(output => selectedInput?.demoOutputs.includes(output.id));
@@ -66,6 +73,10 @@ export function NeuralNetworkPage() {
   }
 
   return <section className="space-y-5" aria-label={labels.visualTitle}>
+    <div role="group" aria-label={labels.visualTitle} className="flex flex-wrap gap-2">
+      {(['concept','trained'] as const).map((view,i)=><button key={view} type="button" aria-pressed={mode===view} onClick={()=>setMode(view)} className="app-secondary-button rounded-xl border border-[var(--app-control-border)] px-4 py-2 text-sm font-semibold" style={mode===view?{borderColor:'var(--neural-active)',background:'var(--neural-focus)'}:undefined}>{views[i]}</button>)}
+    </div>
+    {mode==='concept' && <>
     <header className="app-panel neural-page-intro flex flex-wrap items-center justify-between gap-4 rounded-2xl border px-5 py-4 sm:px-6">
       <div className="flex min-w-0 flex-1 items-start gap-3">
         <div className="neural-intro-icon rounded-xl p-2.5" aria-hidden="true"><BrainCircuit size={24}/></div>
@@ -148,6 +159,8 @@ export function NeuralNetworkPage() {
         <p className="mt-3 text-xs">{labels.note}</p>
       </aside>
     </div>
-    <LocalTrainingPanel locale={locale}/>
+    </>}
+    {mode==='trained' && (result ? <TrainedNetwork locale={locale} result={result} sampleIndex={sampleIndex} onSample={setSampleIndex} allowMotion={allowMotion}/> : <div className="app-panel rounded-xl border border-[var(--app-panel-border)] p-5 text-sm">{views[2]}</div>)}
+    <LocalTrainingPanel locale={locale} sampleIndex={sampleIndex} onSample={setSampleIndex} onResult={value=>{setResult(value);setSampleIndex(0);}}/>
   </section>;
 }

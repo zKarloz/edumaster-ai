@@ -13,7 +13,7 @@ const labels = {
 } as const;
 type Result = Extract<WorkerEvent,{type:'done'}>;
 type Epoch = Extract<WorkerEvent,{type:'epoch'}>;
-export function LocalTrainingPanel({locale}:{locale:Locale}) {
+export function LocalTrainingPanel({locale,onResult,sampleIndex,onSample}:{locale:Locale;onResult:(r:Result|null)=>void;sampleIndex:number;onSample:(i:number)=>void}) {
   const t=labels[locale];
   const worker=useRef<Worker|null>(null);
   const [status,setStatus]=useState<'idle'|'busy'|'done'|'error'|'cancel'>('idle');
@@ -28,7 +28,7 @@ export function LocalTrainingPanel({locale}:{locale:Locale}) {
   function stop(){worker.current?.terminate();worker.current=null;setStatus('cancel');}
   function start(){
     if(worker.current||!validConfig(config))return;
-    setRunEpochs(config.epochs);setResult(null);setEpoch(null);setHistory([]);setBackend('');setStatus('busy');
+    setRunEpochs(config.epochs);setResult(null);onResult(null);setEpoch(null);setHistory([]);setBackend('');setStatus('busy');
     try {
       const w=new Worker(new URL('../workers/training.worker.ts',import.meta.url),{type:'module'});
       worker.current=w;
@@ -40,7 +40,7 @@ export function LocalTrainingPanel({locale}:{locale:Locale}) {
         if(data.type==='backend')setBackend(data.backend);
         // Confirmar el estado por mensaje, sin esperar al resultado final.
         if(data.type==='epoch')flushSync(()=>{setEpoch(data);setHistory(old=>[...old,data]);});
-        if(data.type==='done'){setResult(data);finish('done');}
+        if(data.type==='done'){setResult(data);onResult(data);finish('done');}
         if(data.type==='error')finish('error');
       };
       w.postMessage({type:'start',config});
@@ -66,7 +66,7 @@ export function LocalTrainingPanel({locale}:{locale:Locale}) {
     <TrainingHistory locale={locale} history={history} best={result?.epoch??epoch?.bestEpoch}/>
     {result&&<div className="space-y-3"><p className="app-info rounded-lg border p-3 text-sm">{result.stopReason==='earlyStopping'?({es:'Detención anticipada: sin mejora en validación.',en:'Early stopping: no validation improvement.',pt:'Parada antecipada: sem melhora na validação.'}[locale]):({es:'Se alcanzó el máximo de épocas.',en:'Maximum epochs reached.',pt:'Máximo de épocas atingido.'}[locale])} {result.completedEpochs}/{result.config.epochs} · {t.best}: {result.epoch}</p><h4 className="font-semibold">{t.test} · {t.best}: {result.epoch}</h4>
       <div className="overflow-x-auto"><table className="w-full text-left text-sm"><thead><tr><th scope="col">{t.metric}</th><th scope="col">{t.network}</th><th scope="col">{t.base}</th></tr></thead><tbody>{(['f1','roc_auc','brier','log_loss'] as const).map(key=><tr key={key} className="app-divider border-b border-[var(--app-panel-border)]"><th scope="row" className="py-2 font-medium">{key}</th><td>{format(result.metrics[key])}</td><td>{format(result.baseline[key])}</td></tr>)}</tbody></table></div>
-      <ExperimentDetails locale={locale} result={result}/> 
+      <ExperimentDetails locale={locale} result={result} sampleIndex={sampleIndex} onSample={onSample}/> 
     </div>}
   </section>;
 }
