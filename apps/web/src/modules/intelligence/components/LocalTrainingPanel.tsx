@@ -89,13 +89,13 @@ export function LocalTrainingPanel({locale,onResult,sampleIndex,onSample,tab,onT
   // El trabajador y su estado viven aquí, no en los paneles condicionales.
   const statusText=status==='idle'?t.idle:status==='done'?t.done:status==='error'?t.error:status==='cancel'?t.cancel:t.busy;
   const goTraining={es:'Ir a Entrenamiento',en:'Go to Training',pt:'Ir para Treinamento'}[locale];
-  return <section className={tab==='architecture'?'space-y-4':'app-panel space-y-4 rounded-2xl border border-[var(--app-panel-border)] p-5'} aria-label={t.title}>
+  return <section className={tab==='architecture'?'min-w-0 space-y-4':'app-panel min-w-0 space-y-4 rounded-2xl border border-[var(--app-panel-border)] p-5'} aria-label={t.title}>
     <div className="app-panel flex flex-wrap items-center justify-between gap-2 rounded-xl border border-[var(--app-panel-border)] px-3 py-2 text-sm">
       <div className="flex flex-wrap items-center gap-2">
         <span className="neural-demo-pill rounded-full px-2.5 py-1 text-[10px] font-bold">SYNTHETIC DEMO</span>
         <span role="status">{statusText}{status==='busy'&&epoch?` · ${t.epoch} ${epoch.epoch}/${runEpochs}`:''}{backend?` · ${backend}`:''}</span>
       </div>
-      {tab!=='training'&&<button type="button" className="app-secondary-button rounded-lg border border-[var(--app-control-border)] px-3 py-2" onClick={()=>onTab('training')}>{goTraining}</button>}
+      {tab!=='training'&&(tab!=='architecture'||result)&&<button type="button" className="app-secondary-button rounded-lg border border-[var(--app-control-border)] px-3 py-2" onClick={()=>onTab('training')}>{goTraining}</button>}
     </div>
     {children}
     {tab==='training'&&<>
@@ -110,7 +110,7 @@ export function LocalTrainingPanel({locale,onResult,sampleIndex,onSample,tab,onT
       {status==='busy'&&<Spinner label={t.busy}/>}
     </div>
     <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-      {[[t.engine,backend||'—'],[t.epoch,epoch?`${epoch.epoch}/${runEpochs}`:'—'],[t.loss,format(epoch?.loss)],[t.val,format(epoch?.validationLoss)]].map(([name,value])=><div key={name} className="app-secondary-button rounded-xl border border-[var(--app-control-border)] p-3"><p className="app-muted text-xs">{name}</p><p className="mt-1 font-semibold tabular-nums">{value}</p></div>)}
+      {[[t.engine,backend||'—'],[t.epoch,epoch?`${epoch.epoch}/${runEpochs}`:'—'],[t.loss,format(epoch?.loss)],[t.val,format(epoch?.validationLoss)]].map(([name,value])=><div key={name} className="app-secondary-button rounded-xl border border-[var(--app-control-border)] p-3"><p className="app-muted text-xs">{name}</p><p key={String(value)} className="neural-epoch-value mt-1 font-semibold tabular-nums">{value}</p></div>)}
     </div>
     <TrainingHistory locale={locale} history={history} best={result?.epoch??epoch?.bestEpoch}/>
     {result&&<p className="app-muted text-sm">{result.stopReason==='earlyStopping'?({es:'Detención anticipada: sin mejora en validación.',en:'Early stopping: no validation improvement.',pt:'Parada antecipada: sem melhora na validação.'}[locale]):({es:'Se alcanzó el máximo de épocas.',en:'Maximum epochs reached.',pt:'Máximo de épocas atingido.'}[locale])} · {t.best}: {result.epoch}</p>}

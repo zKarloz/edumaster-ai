@@ -45,9 +45,10 @@ test('los pulsos se muestran solo en las conexiones activas de cada etapa', () =
   assert.match(visual, /relevant\.includes\(output\.id\)/);
 });
 
-test('pausar sigue funcionando una vez activada la última capa', () => {
-  assert.match(page, /disabled=\{selected === null \|\| !allowMotion\}/);
-  assert.match(page, /setPlaying\(value => !value\)/);
+test('el modelo entrenado conserva controles de pausa mientras propaga', () => {
+  const trained = read('src/modules/intelligence/components/TrainedNetwork.tsx');
+  assert.match(trained, /disabled=\{!allowMotion\|\|phase>=last\}/);
+  assert.match(trained, /setPlaying\(p=>!p\)/);
 });
 
 test('sin movimiento se mantienen las líneas y se ocultan las partículas', () => {

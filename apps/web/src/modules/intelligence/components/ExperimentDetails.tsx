@@ -23,12 +23,52 @@ export function ConfigEditor({locale,config,onChange,busy}:{locale:Locale;config
  <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={config.earlyStopping} onChange={e=>onChange({...config,earlyStopping:e.target.checked})}/>{earlyWords[locale].toggle}</label><p className="app-muted text-xs">{earlyWords[locale].hint}</p>
  <button type="button" className="app-secondary-button rounded-lg border border-[var(--app-control-border)] px-3 py-2 text-sm" onClick={()=>onChange({...defaults})}>{t.reset}</button>{!validConfig(config)&&<p role="alert" className="text-sm">{t.invalid}</p>}</fieldset>;
 }
-/** SVG con escala compartida y tabla paginada; no depende de bibliotecas de gráficos. */
+/** Gráfico amplio con scroll interno: cada segmento nuevo se anima sin alterar los datos. */
 export function TrainingHistory({locale,history,best}:{locale:Locale;history:Epoch[];best?:number}){
- const t=words[locale];const [hover,setHover]=useState<number|null>(null);const [historyOpen,setHistoryOpen]=useState(false);if(!history.length)return null;
+ const t=words[locale];
+ const [hover,setHover]=useState<number|null>(null);
+ const [historyOpen,setHistoryOpen]=useState(false);
+ if(!history.length)return null;
  const selected=history[hover??history.length-1]??history[history.length-1]!;
- const max=Math.max(.01,...history.flatMap(e=>[e.loss,e.validationLoss]));const n=Math.max(2,history.length);const x=(i:number)=>45+i*510/(n-1);const y=(v:number)=>180-v*150/max;const points=(key:'loss'|'validationLoss')=>history.map((e,i)=>`${x(i)},${y(e[key])}`).join(' ');
- return <section className="space-y-3 rounded-xl border border-[var(--app-panel-border)] p-4"><h4 className="font-semibold">{t.history}</h4><div className="flex gap-4 text-xs"><span className="text-blue-500">● {t.train}</span><span className="text-violet-500">● {t.val}</span></div><svg role="group" aria-label={t.history} onPointerLeave={()=>setHover(null)} viewBox="0 0 580 210" className="w-full max-h-64"><path d="M45 30 V180 H555" fill="none" stroke="currentColor" opacity=".5"/>{[0,.5,1].map(v=><g key={v}><text x="40" y={y(v*max)+4} textAnchor="end" fontSize="10" fill="currentColor">{(v*max).toFixed(2)}</text><path d={`M45 ${y(v*max)} H555`} stroke="currentColor" opacity=".15"/></g>)}<polyline points={points('loss')} fill="none" stroke="#3b82f6" strokeWidth="2.5"/><polyline points={points('validationLoss')} fill="none" stroke="#a78bfa" strokeWidth="2.5"/>{best&&<path d={`M${x(best-1)} 30 V180`} stroke="currentColor" strokeDasharray="4 4"/>}{/* Cada época tiene un área de interacción y un foco de teclado. */}{history.map((e,i)=>{const step=510/(n-1);const left=i===0?45:x(i)-step/2;const right=i===history.length-1?555:x(i)+step/2;return <rect key={e.epoch} x={left} y="22" width={Math.max(1,right-left)} height="164" fill="transparent" tabIndex={0} role="button" aria-label={`${t.epoch} ${e.epoch}: ${t.train} ${fmt(e.loss)}, ${t.val} ${fmt(e.validationLoss)}`} onPointerEnter={()=>setHover(i)} onPointerDown={()=>setHover(i)} onFocus={()=>setHover(i)} onBlur={()=>setHover(null)} onKeyDown={event=>{if(event.key==='Enter'||event.key===' '){event.preventDefault();setHover(i);}}}/>;})}<g pointerEvents="none"><line x1={x(selected.epoch-1)} x2={x(selected.epoch-1)} y1="30" y2="180" stroke="currentColor" opacity=".45"/><circle cx={x(selected.epoch-1)} cy={y(selected.loss)} r="4" fill="#3b82f6"/><circle cx={x(selected.epoch-1)} cy={y(selected.validationLoss)} r="4" fill="#a78bfa"/></g>{hover!==null&&<g pointerEvents="none" transform={`translate(${Math.max(47,Math.min(390,x(selected.epoch-1)+8))},33)`}><rect width="163" height="51" rx="5" fill="var(--app-panel-bg)" stroke="var(--app-control-border)"/><text x="8" y="13" fontSize="10" fontWeight="bold" fill="currentColor">{t.epoch} {selected.epoch}</text><text x="8" y="28" fontSize="10" fill="currentColor">{t.train}: {fmt(selected.loss)}</text><text x="8" y="42" fontSize="10" fill="currentColor">{t.val}: {fmt(selected.validationLoss)}</text></g>}<text x="45" y="198" fontSize="11" fill="currentColor">1</text><text x="555" y="198" textAnchor="end" fontSize="11" fill="currentColor">{history.length}</text></svg><div className="app-panel rounded-lg border border-[var(--app-control-border)] p-3 text-sm tabular-nums"><strong>{t.epoch} {selected.epoch}</strong> · {t.train}: {fmt(selected.loss)} · {t.val}: {fmt(selected.validationLoss)}{selected.epoch===best?` · ${t.best}`:''}</div><Accordion open={historyOpen} onToggle={()=>setHistoryOpen(v=>!v)} title={t.history}><DataTable label={t.history} rows={history} columns={[{header:t.epoch,key:'epoch',render:e=>`${e.epoch}${e.epoch===best?` · ${t.best}`:''}`},{header:t.train,key:'loss',render:e=>fmt(e.loss)},{header:t.val,key:'validationLoss',render:e=>fmt(e.validationLoss)}]}/></Accordion></section>;
+ const max=Math.max(.01,...history.flatMap(e=>[e.loss,e.validationLoss]));
+ // Un mínimo de 760 px y espacio adicional para series largas mantienen legibles los puntos en móvil.
+ const width=Math.max(760,76+history.length*34), height=320, left=54, right=width-22, top=28, bottom=274;
+ const step=34;
+ const x=(i:number)=>left+i*step;
+ const y=(v:number)=>bottom-v*(bottom-top)/max;
+ const index=selected.epoch-1;
+ const tickEvery=Math.max(1,Math.ceil(history.length/12));
+ const scrollHint={es:'Desliza horizontalmente para explorar el gráfico.',en:'Scroll horizontally to explore the chart.',pt:'Deslize horizontalmente para explorar o gráfico.'}[locale];
+ return <section className="min-w-0 space-y-3 rounded-xl border border-[var(--app-panel-border)] p-4">
+  <h4 className="font-semibold">{t.history}</h4>
+  <div className="flex flex-wrap gap-4 text-xs"><span className="text-blue-500">● {t.train}</span><span className="text-violet-500">● {t.val}</span></div>
+  <p className="app-muted text-xs md:hidden">{scrollHint}</p>
+  <div className="neural-loss-scroll min-w-0 overflow-x-auto rounded-xl border border-[var(--app-control-border)]" tabIndex={0} role="region" aria-label={t.history}>
+   <svg role="group" aria-label={t.history} onPointerLeave={()=>setHover(null)} viewBox={`0 0 ${width} ${height}`} className="neural-loss-chart" style={{minWidth:width}}>
+    <path d={`M${left} ${top} V${bottom} H${right}`} fill="none" stroke="var(--app-control-border)"/>
+    {[0,.25,.5,.75,1].map(v=><g key={v}><text x={left-7} y={y(v*max)+4} textAnchor="end" fontSize="12" fill="currentColor">{(v*max).toFixed(2)}</text><path d={`M${left} ${y(v*max)} H${right}`} stroke="var(--app-panel-border)"/></g>)}
+    {/* Las claves por época conservan los segmentos anteriores; solo los nuevos se dibujan al llegar. */}
+    {(['loss','validationLoss'] as const).map((key,k)=><g key={key} stroke={k===0?'#3b82f6':'#a78bfa'} fill="none" strokeWidth="2.5" strokeLinecap="round">
+      {history.slice(1).map((e,i)=><line key={e.epoch} className={i===history.length-2?'neural-loss-segment':''} pathLength={1} x1={x(i)} y1={y(history[i]![key])} x2={x(i+1)} y2={y(e[key])}/>)}
+      {history.length===1&&<circle cx={x(0)} cy={y(history[0]![key])} r="3"/>}
+    </g>)}
+    {best&&<path d={`M${x(best-1)} ${top} V${bottom}`} stroke="currentColor" opacity=".5" strokeDasharray="4 4"/>}
+    {history.map((e,i)=>{
+      const start=i===0?left-8:x(i)-step/2;
+      const end=i===history.length-1?x(i)+8:x(i)+step/2;
+      return <g key={e.epoch}>
+        {(i%tickEvery===0||i===history.length-1)&&<text x={x(i)} y={bottom+22} textAnchor="middle" fontSize="12" fill="currentColor">{e.epoch}</text>}
+        <rect x={start} y={top-8} width={Math.max(1,end-start)} height={bottom-top+16} fill="transparent" tabIndex={0} role="button" aria-label={`${t.epoch} ${e.epoch}: ${t.train} ${fmt(e.loss)}, ${t.val} ${fmt(e.validationLoss)}`} onPointerEnter={()=>setHover(i)} onPointerDown={()=>setHover(i)} onFocus={()=>setHover(i)} onBlur={()=>setHover(null)} onKeyDown={event=>{if(event.key==='Enter'||event.key===' '){event.preventDefault();setHover(i);}}}/>
+      </g>;
+    })}
+    <g pointerEvents="none"><line x1={x(index)} x2={x(index)} y1={top} y2={bottom} stroke="currentColor" opacity=".45"/><circle className="neural-loss-marker" cx={x(index)} cy={y(selected.loss)} r="4.5" fill="#3b82f6"/><circle className="neural-loss-marker" cx={x(index)} cy={y(selected.validationLoss)} r="4.5" fill="#a78bfa"/></g>
+    {hover!==null&&<g pointerEvents="none" transform={`translate(${Math.max(left,Math.min(right-190,x(index)+10))},${top+5})`}><rect width="190" height="65" rx="6" fill="var(--app-panel-bg)" stroke="var(--app-control-border)"/><text x="10" y="17" fontSize="12" fontWeight="bold" fill="currentColor">{t.epoch} {selected.epoch}</text><text x="10" y="36" fontSize="12" fill="currentColor">{t.train}: {fmt(selected.loss)}</text><text x="10" y="53" fontSize="12" fill="currentColor">{t.val}: {fmt(selected.validationLoss)}</text></g>}
+    <text x={width/2} y={height-5} fontSize="12" textAnchor="middle" fill="currentColor">{t.epoch}</text>
+   </svg>
+  </div>
+  <div className="app-panel rounded-lg border border-[var(--app-control-border)] p-3 text-sm tabular-nums"><strong>{t.epoch} {selected.epoch}</strong> · {t.train}: {fmt(selected.loss)} · {t.val}: {fmt(selected.validationLoss)}{selected.epoch===best?` · ${t.best}`:''}</div>
+  <Accordion open={historyOpen} onToggle={()=>setHistoryOpen(v=>!v)} title={t.history}><DataTable label={t.history} rows={history} columns={[{header:t.epoch,key:'epoch',render:e=>`${e.epoch}${e.epoch===best?` · ${t.best}`:''}`},{header:t.train,key:'loss',render:e=>fmt(e.loss)},{header:t.val,key:'validationLoss',render:e=>fmt(e.validationLoss)}]}/></Accordion>
+ </section>;
 }
 /** El trabajador entrega un snapshot del mejor checkpoint y de los ejemplos de test. */
 export function ExperimentDetails({locale,result,sampleIndex,onSample,tab}:{tab:'evaluation'|'inspection';locale:Locale;result:Result;sampleIndex:number;onSample:(i:number)=>void}){

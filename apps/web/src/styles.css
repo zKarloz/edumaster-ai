@@ -1160,3 +1160,18 @@ html.black-theme .neural-input-button[data-selected='true'] {
   border-color: var(--neural-active);
   color: var(--app-text);
 }
+
+/* Laboratorio neuronal: gráfico legible y animación progresiva de cada época. */
+.neural-loss-scroll { border-color: var(--app-control-border); background: var(--app-panel-bg); }
+.neural-loss-chart { display: block; width: 100%; height: auto; }
+.neural-loss-segment { stroke-dasharray: 1; stroke-dashoffset: 0; animation: neural-loss-draw 180ms ease-out both; }
+.neural-loss-marker { transition: cx 140ms ease-out, cy 140ms ease-out; }
+.neural-epoch-value { animation: neural-epoch-enter 180ms ease-out both; }
+@keyframes neural-loss-draw { from { stroke-dashoffset: 1; } to { stroke-dashoffset: 0; } }
+@keyframes neural-epoch-enter { from { opacity: .55; transform: translateY(2px); } to { opacity: 1; transform: translateY(0); } }
+html[data-motion='off'] .neural-loss-segment, html[data-motion='off'] .neural-epoch-value { animation: none; }
+html[data-motion='off'] .neural-loss-marker { transition: none; }
+@media (prefers-reduced-motion: reduce) {
+  .neural-loss-segment, .neural-epoch-value { animation: none; }
+  .neural-loss-marker { transition: none; }
+}

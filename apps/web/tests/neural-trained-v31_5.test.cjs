@@ -9,5 +9,5 @@ test('grafo dinámico conserva pesos, activaciones y contribuciones',()=>{
 });
 test('selector conserva laboratorio y comparte ejemplo; no hace inferencias ficticias',()=>{
  const page=fs.readFileSync(path.join(root,'NeuralNetworkPage.tsx'),'utf8');const panel=fs.readFileSync(path.join(root,'components/LocalTrainingPanel.tsx'),'utf8');const graph=fs.readFileSync(path.join(root,'components/TrainedNetwork.tsx'),'utf8');
- assert.match(page,/mode==='concept'/);assert.match(page,/mode==='trained'/);assert.match(page,/onSample=\{setSampleIndex\}/);assert.match(panel,/onResult\(null\)/);assert.match(panel,/onResult\(data\)/);assert.match(graph,/buildGraph\(result.columns,result.weights,sample\)/);assert.match(graph,/border-\[var\(--app-panel-border\)\]/);assert.match(graph,/allowMotion/);
+ assert.doesNotMatch(page,/mode==='concept'|<NeuralNetworkVisualizer/);assert.match(page,/result \? <TrainedNetwork/);assert.match(page,/onSample=\{setSampleIndex\}/);assert.match(panel,/onResult\(null\)/);assert.match(panel,/onResult\(data\)/);assert.match(graph,/buildGraph\(result.columns,result.weights,sample\)/);assert.match(graph,/border-\[var\(--app-panel-border\)\]/);assert.match(graph,/allowMotion/);
 });

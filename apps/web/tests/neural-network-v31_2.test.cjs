@@ -8,6 +8,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const source = name => fs.readFileSync(path.resolve(__dirname, '..', name), 'utf8');
 const page = source('src/modules/intelligence/NeuralNetworkPage.tsx');
+const trained = source('src/modules/intelligence/components/TrainedNetwork.tsx');
 const visual = source('src/modules/intelligence/NeuralNetworkVisualizer.tsx');
 const config = source('src/modules/intelligence/neuralNetworkConfig.ts');
 const routes = source('src/routes.ts');
@@ -38,12 +39,10 @@ test('la arquitectura muestra seis salidas y dos capas ocultas', () => {
   assert.match(visual, /NEURAL_OUTPUTS\.map/);
 });
 
-test('el usuario puede seleccionar la neurona mediante botón o teclado', () => {
-  assert.match(page, /aria-pressed=\{selected === input\.id\}/);
-  assert.match(page, /onClick=\{\(\) => selectInput\(input\.id\)\}/);
-  assert.match(visual, /role="button" tabIndex=\{0\}/);
-  assert.match(visual, /event\.key === 'Enter' \|\| event\.key === ' '/);
-  assert.match(visual, /onSelect\(node\.id\)/);
+test('el modelo entrenado permite seleccionar neuronas por teclado y clic', () => {
+  assert.match(trained, /role="button" tabIndex=\{0\}/);
+  assert.match(trained, /onClick=\{\(\)=>chooseNode\(l,i\)\}/);
+  assert.match(trained, /e.key==='Enter'\|\|e.key===' '/);
 });
 
 test('solo la entrada seleccionada se destaca y las demás se atenúan visualmente', () => {
@@ -53,20 +52,18 @@ test('solo la entrada seleccionada se destaca y las demás se atenúan visualmen
   assert.match(css, /\.neural-input-button\[data-dimmed='true'\]/);
 });
 
-test('la animación recorre las tres etapas y se puede pausar o repetir', () => {
-  assert.match(page, /const PHASE_DURATION_MS = 850/);
-  assert.match(page, /setPhase\(previous => Math\.min\(3, previous \+ 1\)\)/);
-  assert.match(page, /if \(selected === null \|\| !playing \|\| phase >= 3\) return/);
-  assert.match(page, /setPlaying\(value => !value\)/);
-  assert.match(page, /function replay\(\)/);
-  assert.match(page, /window\.clearTimeout\(timer\)/);
-  assert.match(visual, /<animateMotion path=/);
-  assert.match(css, /stroke-dasharray: none/);
+test('la animación del modelo entrenado recorre las etapas y permite repetir', () => {
+  assert.match(trained, /PHASE_DURATION_MS/);
+  assert.match(trained, /setPhase\(p=>p\+1\)/);
+  assert.match(trained, /phase>=last/);
+  assert.match(trained, /setPlaying\(p=>!p\)/);
+  assert.match(trained, /function replay\(\)/);
+  assert.match(trained, /window\.clearTimeout\(timer\)/);
+  assert.match(trained, /<animateMotion/);
 });
 
-test('la vista general recupera las entradas sin navegación ni llamadas a API', () => {
-  assert.match(page, /function showAll\(\)/);
-  assert.match(page, /setSelected\(null\)/);
+test('la vista general recupera el enfoque sin llamadas a API', () => {
+  assert.match(trained, /setNode\(null\);setEdge\(null\);setGroup\(null\);replay\(\)/);
   assert.doesNotMatch(page, /\bfetch\s*\(|\/api\/v1\/|\bsupabase\s*\./i);
 });
 
@@ -89,6 +86,6 @@ test('la demostración nunca simula una predicción real ni certifica estudiante
   assert.match(config, /no representa pesos aprendidos/i);
   assert.match(config, /no se consultan alumnos, notas reales, Supabase/);
   assert.match(config, /No se otorgan certificaciones/);
-  assert.match(page, /\{labels\.badge\}/);
-  assert.match(page, /\{labels\.illustration\}/);
+  assert.match(trained, /SYNTHETIC DEMO/);
+  assert.match(page, /Entrena o recupera un modelo DEMO/);
 });
