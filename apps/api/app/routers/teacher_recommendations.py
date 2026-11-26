@@ -106,3 +106,33 @@ async def complete_recommendation(
             raise HTTPException(404, "Recomendación pendiente no disponible")
         await _audit(conn, organization_id, ctx["actor"], "complete", "teacher_recommendation", row)
         return {"id": row}
+
+
+@router.get(PATH + "/suggestions")
+async def list_suggestions(
+    organization_id: UUID, offering_id: UUID,
+    auth_id: UUID = Depends(authenticated_user_id), engine: AsyncEngine = Depends(require_engine),
+) -> dict:
+    """Reglas de tareas pendientes: lectura exclusiva de la matrícula autenticada."""
+    async with engine.connect() as conn:
+        ctx = await _context(conn, auth_id, organization_id, offering_id)
+        if (ctx["editor"] or ctx["enrollment_status"] != "active"
+                or ctx["offering_status"] != "open" or ctx["course_status"] != "published"):
+            return {"items": []}
+        enrollment = _student(ctx)
+        rows = (await conn.execute(text("""
+            SELECT t.id AS task_id, t.title, t.due_at,
+                   CASE WHEN t.due_at <= now() + interval '48 hours'
+                        THEN 'high' ELSE 'normal' END AS priority
+            FROM app.course_tasks t
+            WHERE t.organization_id=:org AND t.offering_id=:off AND t.status='published'
+              AND (t.due_at IS NULL OR t.due_at >= now())
+              AND NOT EXISTS (
+                SELECT 1 FROM app.task_submissions s
+                WHERE s.organization_id=t.organization_id AND s.task_id=t.id
+                  AND s.enrollment_id=:enrollment
+              )
+            ORDER BY t.due_at NULLS LAST, t.id LIMIT 50
+        """), {"org": organization_id, "off": offering_id,
+                "enrollment": enrollment})).mappings().all()
+        return {"items": [dict(row) for row in rows]}

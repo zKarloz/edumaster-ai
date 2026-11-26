@@ -82,3 +82,37 @@ def test_invalid_priority(scoped):
     context['editor'] = True
     assert TestClient(app).post(PATH, json=PAYLOAD | {'priority': 'critical'}).status_code == 422
     conn.execute.assert_not_awaited()
+
+
+def test_suggestions_anonymous():
+    assert TestClient(app).get(f'{PATH}/suggestions').status_code == 401
+
+
+@pytest.mark.parametrize('field,value', [('editor', True), ('enrollment_status', 'completed'),
+                                         ('offering_status', 'closed'), ('course_status', 'draft')])
+def test_suggestions_ineligible(scoped, field, value):
+    conn, context = scoped
+    engine = app.dependency_overrides[require_engine]()
+    engine.connect.return_value.__aenter__.return_value = conn
+    context.update({'enrollment_status': 'active', 'offering_status': 'open', 'course_status': 'published'})
+    context[field] = value
+    assert TestClient(app).get(f'{PATH}/suggestions').json() == {'items': []}
+    conn.execute.assert_not_awaited()
+
+
+def test_suggestions_scoped_to_pending_published_tasks(scoped):
+    conn, context = scoped
+    engine = app.dependency_overrides[require_engine]()
+    engine.connect.return_value.__aenter__.return_value = conn
+    context.update({'enrollment_status': 'active', 'offering_status': 'open', 'course_status': 'published'})
+    conn.execute.return_value.mappings.return_value.all.return_value = [
+        {'task_id': ID, 'title': 'Practicar', 'due_at': None, 'priority': 'normal'},
+    ]
+    response = TestClient(app).get(f'{PATH}/suggestions')
+    assert response.status_code == 200
+    assert response.json()['items'][0]['task_id'] == str(ID)
+    sql, params = conn.execute.await_args.args
+    for condition in ("t.status='published'", 't.offering_id=:off', 's.enrollment_id=:enrollment',
+                      'NOT EXISTS', "interval '48 hours'", 't.due_at >= now()'):
+        assert condition in str(sql)
+    assert params == {'org': ID, 'off': ID, 'enrollment': ID}

@@ -1180,3 +1180,20 @@ html[data-motion='off'] .neural-loss-marker { transition: none; }
 .neural-loss-tooltip { transition: transform 160ms ease-out, opacity 120ms ease-out; }
 html[data-motion='off'] .neural-loss-tooltip { transition: none; }
 @media (prefers-reduced-motion: reduce) { .neural-loss-tooltip { transition: none; } }
+
+/* CAMBIOS 24 v1.1: prioridad alta, conserva la semántica incluso en Negro. */
+.app-recommendation-high {
+  --workspace-badge-bg: #fee2e2;
+  --workspace-badge-border: #fca5a5;
+  --workspace-badge-text: #991b1b;
+}
+html.dark:not(.black-theme) .app-recommendation-high {
+  --workspace-badge-bg: #49252b;
+  --workspace-badge-border: #92505b;
+  --workspace-badge-text: #fecaca;
+}
+html.black-theme .app-recommendation-high {
+  --workspace-badge-bg: #342124;
+  --workspace-badge-border: #795056;
+  --workspace-badge-text: #f4b5b5;
+}
