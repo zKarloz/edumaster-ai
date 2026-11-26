@@ -1,5 +1,5 @@
 /** v26 · Espacio de aprendizaje por oferta y editor autorizado del curso base.
- * No confunde unidades/lecturas con tareas y notas (se implementarán después).
+ * Las tareas se consultan desde su pestaña dedicada, sin duplicar tarjetas en Inicio.
  * Todos los datos son reales y llegan desde FastAPI con JWT y alcance institucional.
  */
 import { lazy, Suspense, useEffect, useMemo, useState, type FormEvent } from 'react';
@@ -7,7 +7,7 @@ import { useLocation, useNavigate } from 'react-router';
 import { useTranslation } from 'react-i18next';
 import {
   ArrowDown, ArrowLeft, ArrowUp, BookOpen,
-  ClipboardList, FileCheck2, FileText, FolderOpen, LayoutDashboard,
+  ClipboardList, FileText, FolderOpen, LayoutDashboard,
   Eye, Lightbulb, MessageCircle, Pencil, Plus,
 } from 'lucide-react';
 import { Modal } from '../../components/shared/Modal';
@@ -240,14 +240,7 @@ export function CourseWorkspacePage({organizationId, offeringId, courseId, token
           <p className="app-muted mt-2 whitespace-pre-wrap text-sm leading-relaxed">{workspace.course.description || t('workspace.noDescription')}</p>
           <p className="app-muted mt-4 text-xs">{t(isBase?'workspace.baseNote':workspace.role==='student'?'workspace.studentNote':'workspace.offeringNote')}</p>
         </div>
-        <div className="grid gap-3 sm:grid-cols-2">
-          <div className="app-panel flex items-center gap-3 rounded-2xl border p-4"><ClipboardList size={21} className="app-muted"/>
-            <div><p className="font-medium">{t('workspace.tasks')}</p><p className="app-muted text-xs">{t('workspace.nextPhase')}</p></div>
-          </div>
-          <div className="app-panel flex items-center gap-3 rounded-2xl border p-4"><FileCheck2 size={21} className="app-muted"/>
-            <div><p className="font-medium">{t('workspace.assessments')}</p><p className="app-muted text-xs">{t('workspace.nextPhase')}</p></div>
-          </div>
-        </div>
+        {/* Inicio conserva solo el resumen; las tareas tienen su propia pestaña. */}
       </section> : tab==='tasks' && offeringId ? <Suspense fallback={<Spinner label={t('common.loading')}/>}>
         <CourseTasksPanel organizationId={organizationId} offeringId={offeringId} token={token}/>
       </Suspense> : tab==='community' && offeringId ? <Suspense fallback={<Spinner label={t('common.loading')}/>}><CourseCommunity key={`${organizationId}:${offeringId}`} organizationId={organizationId} offeringId={offeringId} token={token}/></Suspense> : tab==='recommendations' && offeringId ? <Suspense fallback={<Spinner label={t('common.loading')}/>}><TeacherRecommendations key={`${organizationId}:${offeringId}`} organizationId={organizationId} offeringId={offeringId} token={token}/></Suspense> : <section className="space-y-3" role="tabpanel">

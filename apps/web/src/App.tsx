@@ -557,8 +557,9 @@ export default function App() {
                 Boolean(link && (link.id !== 'organizations' || canOpenInstitutions) && (link.id !== 'users' || canManageUserAdministration) && (link.id !== 'activity' || canViewAcademicActivity)));
               if (!visible.length) return null;
               return <div key={group.label} className="space-y-1">
-                <p aria-label={t(group.label)} className={`app-sidebar-group-heading h-5 px-3 pb-1 text-xs font-semibold uppercase tracking-widest app-meta-text text-slate-400 ${!sidebarWide ? 'md:flex md:min-h-4 md:items-center md:px-0' : ''}`}>
-                  <span className={sidebarWide ? '' : 'md:hidden'}>{t(group.label)}</span>
+                <p aria-label={t(group.label)} className={`app-sidebar-group-heading h-5 overflow-hidden whitespace-nowrap px-3 pb-1 text-xs font-semibold uppercase tracking-widest app-meta-text text-slate-400 ${!sidebarWide ? 'md:flex md:min-h-4 md:items-center md:px-0' : ''}`}>
+                  {/* El rótulo conserva una sola línea mientras cambia el ancho del sidebar. */}
+                  <span className={`shrink-0 whitespace-nowrap ${sidebarWide ? '' : 'md:hidden'}`}>{t(group.label)}</span>
                   {/* En modo rail, el mismo separador horizontal que en el pie. */}
                   {!sidebarWide && <span aria-hidden="true" className="app-sidebar-category-dash hidden md:block"/>}
                 </p>
