@@ -1175,3 +1175,8 @@ html[data-motion='off'] .neural-loss-marker { transition: none; }
   .neural-loss-segment, .neural-epoch-value { animation: none; }
   .neural-loss-marker { transition: none; }
 }
+
+/* Tooltip persistente: interpolación de posición, sin recrear el nodo SVG. */
+.neural-loss-tooltip { transition: transform 160ms ease-out, opacity 120ms ease-out; }
+html[data-motion='off'] .neural-loss-tooltip { transition: none; }
+@media (prefers-reduced-motion: reduce) { .neural-loss-tooltip { transition: none; } }

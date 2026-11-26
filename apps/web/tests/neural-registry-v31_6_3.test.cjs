@@ -1,0 +1,4 @@
+const test=require('node:test');const assert=require('node:assert/strict');const fs=require('node:fs');const path=require('node:path');
+const root=path.join(__dirname,'../src');const read=p=>fs.readFileSync(path.join(root,p),'utf8');
+test('tooltip conserva el nodo SVG y respeta movimiento reducido',()=>{const s=read('modules/intelligence/components/ExperimentDetails.tsx');assert.match(s,/className="neural-loss-tooltip"/);assert.match(s,/opacity:hover===null\?0:1/);assert.match(read('styles.css'),/\.neural-loss-tooltip \{ transition: transform 160ms/);});
+test('registro remoto comparte estado y bloquea operaciones concurrentes',()=>{const s=read('modules/intelligence/components/LocalTrainingPanel.tsx');assert.match(s,/canRegister&&token/);assert.match(s,/remoteLock.current/);assert.match(s,/function restoreRemote/);assert.match(read('modules/intelligence/components/RemoteModels.tsx'),/Authorization:`Bearer \$\{token\}`/);});

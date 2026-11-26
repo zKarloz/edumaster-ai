@@ -5,6 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.core.config import get_settings
 from app.routers.academic import router as academic_router
+from app.routers.neural_demo import router as neural_demo_router
 from app.routers.academic_activity import router as academic_activity_router
 from app.routers.course_appearance import router as course_appearance_router
 from app.routers.course_content import router as course_content_router
@@ -34,6 +35,7 @@ app.add_middleware(
 )
 app.include_router(organizations_router)
 app.include_router(academic_router)
+app.include_router(neural_demo_router)
 app.include_router(academic_activity_router)
 app.include_router(course_appearance_router)
 app.include_router(course_content_router)

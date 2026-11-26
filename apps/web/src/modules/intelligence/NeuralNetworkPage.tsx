@@ -1,6 +1,6 @@
 /**
  * Laboratorio DEMO: muestra exclusivamente la arquitectura del modelo entrenado.
- * No consulta APIs ni utiliza registros académicos personales.
+ * Registro remoto DEMO opcional; no utiliza registros académicos personales.
  */
 import { useEffect, useState } from 'react';
 import { BrainCircuit, Network, Cpu, ChartNoAxesCombined, ScanSearch, Database } from 'lucide-react';
@@ -15,7 +15,7 @@ import { NEURAL_TEXT } from './neuralNetworkConfig';
 
 const tabLabels={es:['Arquitectura','Entrenamiento','Evaluación','Inspección','Modelos'],en:['Architecture','Training','Evaluation','Inspection','Models'],pt:['Arquitetura','Treinamento','Avaliação','Inspeção','Modelos']} as const;
 
-export function NeuralNetworkPage() {
+export function NeuralNetworkPage({token,canRegister}:{token?:string;canRegister?:boolean}) {
   const { i18n } = useTranslation();
   const locale = normalizeLocale(i18n.language);
   const labels = NEURAL_TEXT[locale];
@@ -66,7 +66,7 @@ export function NeuralNetworkPage() {
       })}
     </nav>
     <div id="neural-tab-content" role="tabpanel" aria-labelledby={`neural-tab-${tab}`} tabIndex={0} className="min-w-0">
-    <LocalTrainingPanel tab={tab} onTab={setTab} locale={locale} sampleIndex={sampleIndex} onSample={setSampleIndex} onResult={value=>{setResult(value);setSampleIndex(0);}}>
+    <LocalTrainingPanel token={token} canRegister={canRegister} tab={tab} onTab={setTab} locale={locale} sampleIndex={sampleIndex} onSample={setSampleIndex} onResult={value=>{setResult(value);setSampleIndex(0);}}>
     {tab==='architecture' && <div className="space-y-5">
       {/* No se dibuja una topología ficticia cuando no hay checkpoint disponible. */}
       {result ? <TrainedNetwork locale={locale} result={result} sampleIndex={sampleIndex} onSample={setSampleIndex} allowMotion={allowMotion}/> :

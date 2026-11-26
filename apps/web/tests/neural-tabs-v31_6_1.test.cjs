@@ -11,7 +11,7 @@ test('cinco pestañas con estado compartido y navegación de teclado',()=>{
   assert.match(tabs,/\['architecture','training','evaluation','inspection','models'\]/);
   assert.match(page,/useState<LabTab>\('architecture'\)/);
   assert.equal((page.match(/<LocalTrainingPanel\b/g)||[]).length,1);
-  assert.match(page,/<LocalTrainingPanel tab=\{tab\}[\s\S]*?\{tab==='architecture' &&/);
+  assert.match(page,/<LocalTrainingPanel[^>]* tab=\{tab\}[\s\S]*?\{tab==='architecture' &&/);
   assert.doesNotMatch(page,/<LocalTrainingPanel[^>]*\bkey=/);
   assert.match(page,/role="tablist"/);
   assert.match(page,/role="tabpanel"/);

@@ -18,7 +18,7 @@ const css = source('src/styles.css');
 test('la ruta del visualizador es estable y se reconoce al actualizar el navegador', () => {
   assert.match(routes, /intelligence:\s*'\/inteligencia-artificial\/red-neuronal'/);
   assert.match(app, /section === 'intelligence'/);
-  assert.match(app, /<NeuralNetworkPage\s*\/>/);
+  assert.match(app, /<NeuralNetworkPage token=\{accessToken\?\?undefined\} canRegister=/);
   assert.match(app, /id: 'intelligence'/);
   assert.match(source('src/i18n.ts'), /intelligence:'Neural network'/);
 });

@@ -62,7 +62,7 @@ export function TrainingHistory({locale,history,best}:{locale:Locale;history:Epo
       </g>;
     })}
     <g pointerEvents="none"><line x1={x(index)} x2={x(index)} y1={top} y2={bottom} stroke="currentColor" opacity=".45"/><circle className="neural-loss-marker" cx={x(index)} cy={y(selected.loss)} r="4.5" fill="#3b82f6"/><circle className="neural-loss-marker" cx={x(index)} cy={y(selected.validationLoss)} r="4.5" fill="#a78bfa"/></g>
-    {hover!==null&&<g pointerEvents="none" transform={`translate(${Math.max(left,Math.min(right-190,x(index)+10))},${top+5})`}><rect width="190" height="65" rx="6" fill="var(--app-panel-bg)" stroke="var(--app-control-border)"/><text x="10" y="17" fontSize="12" fontWeight="bold" fill="currentColor">{t.epoch} {selected.epoch}</text><text x="10" y="36" fontSize="12" fill="currentColor">{t.train}: {fmt(selected.loss)}</text><text x="10" y="53" fontSize="12" fill="currentColor">{t.val}: {fmt(selected.validationLoss)}</text></g>}
+    <g pointerEvents="none" className="neural-loss-tooltip" aria-hidden={hover===null} style={{opacity:hover===null?0:1,transform:`translate(${Math.max(left,Math.min(right-190,x(index)+10))}px,${top+5}px)`}}><rect width="190" height="65" rx="6" fill="var(--app-panel-bg)" stroke="var(--app-control-border)"/><text x="10" y="17" fontSize="12" fontWeight="bold" fill="currentColor">{t.epoch} {selected.epoch}</text><text x="10" y="36" fontSize="12" fill="currentColor">{t.train}: {fmt(selected.loss)}</text><text x="10" y="53" fontSize="12" fill="currentColor">{t.val}: {fmt(selected.validationLoss)}</text></g>
     <text x={width/2} y={height-5} fontSize="12" textAnchor="middle" fill="currentColor">{t.epoch}</text>
    </svg>
   </div>
