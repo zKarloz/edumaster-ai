@@ -15,7 +15,7 @@ test('totales distinguen cero de información desconocida',()=>{
 test('dashboard utiliza datos autorizados y resumen financiero de la semilla compartida',()=>{
  const source=fs.readFileSync(path.join(__dirname,'../src/modules/dashboard/DashboardPage.tsx'),'utf8');
  assert.match(source,/if\(!manager\|\|!props.token\|\|!props.organizationId\)return/);
- assert.match(source,/ctrl.signal.aborted/);assert.match(source,/seedIncome.filter/);assert.match(source,/props.access.income/);assert.match(source,/&&props.access\[s\]/);
+ assert.match(source,/ctrl.signal.aborted/);assert.match(source,/seedIncome.filter/);assert.match(source,/props.access.income/);assert.match(source,/props.access.courses\?id=>navigate/);
  const app=fs.readFileSync(path.join(__dirname,'../src/App.tsx'),'utf8');assert.match(app,/<DashboardPage key=\{`\$\{session.user.id\}:\$\{academicOrgId\}`\}/);
 });
 test('Inicio académico limita ofertas propias y no mezcla recomendaciones de gestor',()=>{
@@ -39,4 +39,19 @@ test('Inicio especializado conserva permisos y usa exclusivamente configuración
  assert.equal(dataset.classification,'SYNTHETIC_DEMO');
  assert.equal(dataset.columns.length,13);
  assert.deepEqual(['train','validation','test'].map(k=>dataset.splits[k].x.length),[150,50,50]);
+});
+const overviewRun=(fn,rows)=>JSON.parse(execFileSync(process.execPath,['--experimental-strip-types','-e',`const m=require(${JSON.stringify(path.join(__dirname,'../src/modules/dashboard/overviewCounts.ts'))});console.log(JSON.stringify(m[${JSON.stringify(fn)}](${JSON.stringify(rows)})))`],{encoding:'utf8',stdio:['ignore','pipe','ignore']}));
+test('estado institucional no convierte datos desconocidos en cero',()=>{
+ const organizationOverview=rows=>overviewRun('organizationOverview',rows);
+ assert.deepEqual(organizationOverview([{status:'active',latitude:0,longitude:0,student_count:0},{status:'suspended',latitude:null,longitude:null,student_count:null}]),{active:1,suspended:1,archived:0,noLocation:1,noStudents:null});
+ assert.equal(organizationOverview([{status:'active',latitude:0,longitude:0,student_count:0}]).noStudents,1);
+});
+test('atención académica excluye ofertas cerradas y canceladas',()=>{
+ const offeringOverview=rows=>overviewRun('offeringOverview',rows);
+ const rows=[{id:'a',status:'open',instructor_id:null,active_enrollments:0},{id:'b',status:'planned',instructor_id:'x',active_enrollments:0},{id:'c',status:'closed',instructor_id:null,active_enrollments:0},{id:'d',status:'cancelled',instructor_id:null,active_enrollments:0}];
+ const result=offeringOverview(rows);assert.equal(result.noTeacher,1);assert.equal(result.noEnrollment,2);assert.deepEqual(result.attention.map(r=>r.id),['a','b']);
+});
+test('Inicio elimina accesos duplicados y usa columnas según contenido',()=>{
+ const page=fs.readFileSync(path.join(__dirname,'../src/modules/dashboard/DashboardPage.tsx'),'utf8');
+ assert.doesNotMatch(page,/const shortcuts|c\.quick/);assert.match(page,/grid items-start/);assert.match(page,/InstitutionSummary/);assert.match(page,/OfferingOverview/);
 });

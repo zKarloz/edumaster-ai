@@ -27,7 +27,7 @@ export function SpecialistDashboard({role,canUseLab,isSuperadmin,token,organizat
   const c=copy[locale];
   // El diagnóstico existente exige superadmin también en FastAPI.
   const readiness=isSuperadmin&&token&&<AcademicReadiness locale={locale} token={token} organizations={organizations}/>;
-  if(role==='analyst') return <div className="grid gap-4 lg:grid-cols-2">
+  if(role==='analyst') return <div className="grid items-start gap-4 lg:grid-cols-2">
     <Panel title={c.sources}><p className="app-muted text-sm">{c.inventory}</p><ul className="grid gap-2 sm:grid-cols-2">{c.labels.map(label=><li key={label} className="flex items-center gap-2 rounded-lg border border-[var(--app-control-border)] p-3 text-sm"><Database size={16} className="app-accent shrink-0"/>{label}</li>)}</ul></Panel>
     <Panel title={c.access}><ShieldCheck className="app-accent" size={28}/><p className="app-muted text-sm">{isSuperadmin?c.authorized:c.restricted}</p>{readiness}</Panel>
   </div>;
@@ -39,7 +39,7 @@ export function SpecialistDashboard({role,canUseLab,isSuperadmin,token,organizat
   const total=partitions.reduce((a,b)=>a+b,0);
   return <div className="space-y-4">
     <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4"><Stat title={c.samples} value={total} Icon={Database}/><Stat title={c.inputs} value={dimensions[0]} Icon={Layers}/><Stat title={c.params} value={parameters} Icon={BrainCircuit}/><Stat title={c.engine} value="TensorFlow.js" Icon={Cpu}/></div>
-    <div className="grid gap-4 lg:grid-cols-2">
+    <div className="grid items-start gap-4 lg:grid-cols-2">
       <Panel title={c.demo}><p className="app-muted text-sm">{c.note}</p><p className="text-sm font-medium">{c.architecture}</p><div className="flex flex-wrap items-center gap-2">{dimensions.map((n,i)=><div key={i} className="flex items-center gap-2">{i>0&&<ArrowRight size={15} className="app-muted"/>}<span className="app-secondary-button rounded-xl border border-[var(--app-control-border)] px-4 py-3 text-xl font-semibold tabular-nums">{n}</span></div>)}</div><button type="button" onClick={onOpenLab} className="app-accent flex items-center gap-2 text-sm">{c.open}<ArrowRight size={16}/></button></Panel>
       <Panel title={c.split}>{partitions.map((n,i)=><div key={i} className="space-y-1"><div className="flex justify-between gap-2 text-sm"><span>{c.partitions[i]}</span><span className="tabular-nums">{n}</span></div><div className="h-2 rounded-full bg-[var(--app-control-hover)]"><div className="h-full rounded-full bg-sky-500" style={{width:`${total?n/total*100:0}%`}}/></div></div>)}</Panel>
       <Panel title={c.real}><p className="app-muted text-sm">{c.unavailable}</p>{readiness}</Panel>
