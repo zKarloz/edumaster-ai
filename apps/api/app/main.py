@@ -22,6 +22,7 @@ from app.routers.profile import router as profile_router
 from app.routers.profile_details import router as profile_details_router
 from app.routers.task_attachments import router as task_attachments_router
 from app.routers.task_grading import router as task_grading_router
+from app.routers.teacher_recommendations import router as teacher_recommendations_router
 from app.routers.user_administration import router as user_administration_router
 from app.routers.user_invites import router as user_invites_router
 
@@ -44,6 +45,7 @@ app.include_router(course_content_router)
 app.include_router(course_tasks_router)
 app.include_router(task_attachments_router)
 app.include_router(task_grading_router)
+app.include_router(teacher_recommendations_router)
 app.include_router(offering_content_router)
 app.include_router(lesson_revisions_router)
 app.include_router(lesson_resources_router)
