@@ -10,7 +10,7 @@ const member=(role,organization_id='a')=>({organization_id,roles:[role]});
 const visible=(global,roles,org='a')=>Object.entries(moduleAccess(global,roles,org)).filter(([,allowed])=>allowed).map(([key])=>key).sort();
 const common=['dashboard','profile','settings'];
 for(const [role,extra] of Object.entries({
- institution_admin:['organizations','users','courses','students','enrollments','activity','intelligence','security'],
+ institution_admin:['income','organizations','users','courses','students','enrollments','activity','intelligence','security'],
  coordinator:['organizations','courses','students','enrollments','activity'],
  instructor:['courses','activity'], student:['courses'], analyst:[], ml_engineer:['intelligence'],
 })) test(`módulos para ${role}`,()=>assert.deepEqual(visible([], [member(role)]),[...common,...extra].sort()));
@@ -33,4 +33,11 @@ test('sidebar y rutas directas utilizan la misma política',()=>{
  assert.match(app,/section === 'security' && !sectionPermissionDenied/);
  assert.match(app,/section === 'enrollments'\) && !sectionPermissionDenied && accessToken && <AcademicPage/);
  assert.match(app,/if \(!visible.length\) return null/);
+});
+test('Ingresos DEMO exige contexto institucional administrado',()=>{
+ const memberships=[member('institution_admin','a'),member('student','b')];
+ assert.equal(moduleAccess([],memberships,'a').income,true);
+ assert.equal(moduleAccess([],memberships,'b').income,false);
+ assert.equal(moduleAccess([],memberships,'').income,false);
+ assert.equal(moduleAccess(['superadmin'],[],'a').income,false);
 });

@@ -1,0 +1,10 @@
+const {test}=require('node:test');
+const assert=require('node:assert/strict');
+const {execFileSync}=require('node:child_process');
+const path=require('node:path');
+const fs=require('node:fs');
+const run=code=>JSON.parse(execFileSync(process.execPath,['--experimental-strip-types','-e',`const m=require(${JSON.stringify(path.join(__dirname,'../src/modules/income/demoIncome.ts'))}); console.log(JSON.stringify(${code}))`],{encoding:'utf8',stdio:['ignore','pipe','ignore']}));
+test('DEMO sums paid and pending separately in cents',()=>assert.deepEqual(run('m.summarize(m.seedIncome.filter(r=>r.date.startsWith(m.demoMonth)))'),{paid:65000,pending:38000,count:3}));
+test('positive decimal validation',()=>assert.deepEqual(run("['0','-1','1.005','12.34','0.01','1e3','12'].map(m.amountToCents)"),[null,null,null,1234,1,null,1200]));
+test('calendar validation',()=>assert.deepEqual(run("['2026-02-30','2026-11-26','2026-13-01','bad'].map(m.validDate)"),[false,true,false,false]));
+test('DEMO page is guarded and has no persistence or network requests',()=>{const s=fs.readFileSync(path.join(__dirname,'../src/modules/income/IncomeDemoPage.tsx'),'utf8');const app=fs.readFileSync(path.join(__dirname,'../src/App.tsx'),'utf8');assert.match(app,/section === 'income' && !sectionPermissionDenied/);assert.doesNotMatch(s,/\b(fetch|localStorage|sessionStorage|supabase)\s*[.(]/);assert.match(s,/DEMO/);});

@@ -4,7 +4,7 @@ export const sectionPaths = {
   courses: '/academico/cursos', students: '/academico/estudiantes',
   enrollments: '/academico/matriculas', activity: '/academico/actividad',
   security: '/sistema/seguridad', settings: '/sistema/configuracion',
-  profile: '/cuenta/perfil',
+  profile: '/cuenta/perfil', income: '/gestion/ingresos',
 } as const;
 export type Section = keyof typeof sectionPaths;
 
@@ -123,7 +123,7 @@ export function legacyRedirect(pathname: string): string | null {
     const old: Record<Section, string> = {
       dashboard: '/app/inicio', intelligence: '/app/inteligencia-artificial', organizations: '/app/instituciones', users: '/app/usuarios',
       courses: '/app/cursos', students: '/app/estudiantes', enrollments: '/app/matriculas',
-      activity: '/app/actividad', security: '/app/seguridad', settings: '/app/configuracion', profile: '/app/perfil',
+      activity: '/app/actividad', security: '/app/seguridad', settings: '/app/configuracion', profile: '/app/perfil', income: '/app/ingresos',
     };
     return old[key as Section] === path;
   });

@@ -17,6 +17,7 @@ export function moduleAccess(globalRoles: readonly string[], memberships: readon
     settings: true,
     organizations: globalAdmin || memberships.some(m => m.roles.some(role => role === 'institution_admin' || role === 'coordinator')),
     users: globalAdmin || institutionAdmin,
+    income: Boolean(organizationId) && institutionAdmin,
     courses: globalAdmin || has('institution_admin', 'coordinator', 'instructor', 'student'),
     students: manager,
     enrollments: manager,

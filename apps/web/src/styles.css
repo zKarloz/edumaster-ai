@@ -1215,3 +1215,8 @@ html.black-theme .app-recommendation-high {
 .app-notification-unread { background: color-mix(in srgb, var(--app-panel-bg), #0ea5e9 9%); }
 html[data-motion="off"] .app-notification-inbox { transition: none !important; }
 @media (prefers-reduced-motion: reduce) { .app-notification-inbox { transition: none !important; } }
+
+/* Estados financieros DEMO: contraste en los tres temas. */
+.income-paid { background:#dcfce7; border-color:#86efac; color:#166534; }
+html.dark .income-paid { background:#173b30; border-color:#356a50; color:#a7e7bd; }
+html.black-theme .income-paid { background:#212d25; border-color:#49644f; color:#a5d3af; }
