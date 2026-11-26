@@ -3,15 +3,18 @@
  * No consulta APIs ni utiliza registros académicos personales.
  */
 import { useEffect, useMemo, useState } from 'react';
-import { BrainCircuit, CircleHelp, Pause, Play, RotateCcw, Sparkles } from 'lucide-react';
+import { BrainCircuit, CircleHelp, Pause, Play, RotateCcw, Sparkles, Network, Cpu, ChartNoAxesCombined, ScanSearch, Database } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { normalizeLocale } from '../../i18n';
 import { useSettings } from '../../providers/SettingsProvider';
 import type { WorkerEvent } from './ml/protocol';
 import { TrainedNetwork } from './components/TrainedNetwork';
+import { type LabTab, LAB_TABS } from './ml/labTabs';
 import { LocalTrainingPanel } from './components/LocalTrainingPanel';
 import { NeuralNetworkVisualizer } from './NeuralNetworkVisualizer';
 import { NEURAL_INPUTS, NEURAL_OUTPUTS, NEURAL_TEXT, type InputId } from './neuralNetworkConfig';
+
+const tabLabels={es:['Arquitectura','Entrenamiento','Evaluación','Inspección','Modelos'],en:['Architecture','Training','Evaluation','Inspection','Models'],pt:['Arquitetura','Treinamento','Avaliação','Inspeção','Modelos']} as const;
 
 const PHASE_DURATION_MS = 850;
 
@@ -19,6 +22,7 @@ export function NeuralNetworkPage() {
   const { i18n } = useTranslation();
   const locale = normalizeLocale(i18n.language);
   const labels = NEURAL_TEXT[locale];
+  const [tab, setTab] = useState<LabTab>('architecture');
   const [mode, setMode] = useState<'concept' | 'trained'>('concept');
   const [result, setResult] = useState<Extract<WorkerEvent,{type:'done'}> | null>(null);
   const [sampleIndex, setSampleIndex] = useState(0);
@@ -45,10 +49,10 @@ export function NeuralNetworkPage() {
   // cancelan el anterior. Nunca se anima ni se hace inferencia en el backend.
   useEffect(() => {
     if (selected === null || !playing || phase >= 3) return;
-    if (mode !== 'concept') return;
+    if (tab !== 'architecture' || mode !== 'concept') return;
     const timer = window.setTimeout(() => setPhase(previous => Math.min(3, previous + 1)), allowMotion ? PHASE_DURATION_MS : 0);
     return () => window.clearTimeout(timer);
-  }, [selected, playing, phase, replayKey, allowMotion, mode]);
+  }, [selected, playing, phase, replayKey, allowMotion, mode, tab]);
 
   const selectedInput = useMemo(() => NEURAL_INPUTS.find(item => item.id === selected), [selected]);
   const outputs = NEURAL_OUTPUTS.filter(output => selectedInput?.demoOutputs.includes(output.id));
@@ -73,6 +77,32 @@ export function NeuralNetworkPage() {
   }
 
   return <section className="space-y-5" aria-label={labels.visualTitle}>
+    {/* Navegación única; el laboratorio permanece montado al cambiar de pestaña. */}
+    <nav role="tablist" aria-label={labels.visualTitle} className="app-editor-section-tabs flex gap-2 overflow-x-auto rounded-xl p-2">
+      {LAB_TABS.map((id,i)=>{
+        const Icon=[Network,Cpu,ChartNoAxesCombined,ScanSearch,Database][i]!;
+        return <button key={id} id={`neural-tab-${id}`} type="button" role="tab" aria-selected={tab===id}
+          aria-controls="neural-tab-content" tabIndex={tab===id?0:-1} onClick={()=>setTab(id)}
+          onKeyDown={event=>{
+            // Navegación horizontal accesible, sin recrear el laboratorio.
+            let next=i;
+            if(event.key==='ArrowRight')next=(i+1)%LAB_TABS.length;
+            else if(event.key==='ArrowLeft')next=(i+LAB_TABS.length-1)%LAB_TABS.length;
+            else if(event.key==='Home')next=0;
+            else if(event.key==='End')next=LAB_TABS.length-1;
+            else return;
+            event.preventDefault();
+            const target=LAB_TABS[next]!;
+            setTab(target);
+            document.getElementById(`neural-tab-${target}`)?.focus();
+          }} className="app-editor-section-tab flex shrink-0 items-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold">
+          <Icon size={17}/>{tabLabels[locale][i]}
+        </button>;
+      })}
+    </nav>
+    <div id="neural-tab-content" role="tabpanel" aria-labelledby={`neural-tab-${tab}`} tabIndex={0} className="min-w-0">
+    <LocalTrainingPanel tab={tab} onTab={setTab} locale={locale} sampleIndex={sampleIndex} onSample={setSampleIndex} onResult={value=>{setResult(value);setSampleIndex(0);}}>
+    {tab==='architecture' && <div className="space-y-5">
     <div role="group" aria-label={labels.visualTitle} className="flex flex-wrap gap-2">
       {(['concept','trained'] as const).map((view,i)=><button key={view} type="button" aria-pressed={mode===view} onClick={()=>setMode(view)} className="app-secondary-button rounded-xl border border-[var(--app-control-border)] px-4 py-2 text-sm font-semibold" style={mode===view?{borderColor:'var(--neural-active)',background:'var(--neural-focus)'}:undefined}>{views[i]}</button>)}
     </div>
@@ -161,6 +191,8 @@ export function NeuralNetworkPage() {
     </div>
     </>}
     {mode==='trained' && (result ? <TrainedNetwork locale={locale} result={result} sampleIndex={sampleIndex} onSample={setSampleIndex} allowMotion={allowMotion}/> : <div className="app-panel rounded-xl border border-[var(--app-panel-border)] p-5 text-sm">{views[2]}</div>)}
-    <LocalTrainingPanel locale={locale} sampleIndex={sampleIndex} onSample={setSampleIndex} onResult={value=>{setResult(value);setSampleIndex(0);}}/>
+    </div>}
+    </LocalTrainingPanel>
+    </div>
   </section>;
 }

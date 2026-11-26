@@ -1,5 +1,5 @@
 /** Laboratorio local separado del visualizador conceptual. No realiza llamadas a API. */
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { flushSync } from 'react-dom';
 import { BrainCircuit, Play, Square, Save, FolderOpen, Trash2 } from 'lucide-react';
 import { Spinner } from '../../../components/shared/Spinner';
@@ -11,6 +11,7 @@ import dataset from '../ml/demoDataset.json';
 import { fitScaler } from '../ml/core';
 import { validCheckpoint, type LocalCheckpoint } from '../ml/checkpoint';
 import { saveCheckpoint, readCheckpoint, deleteCheckpoint } from '../ml/checkpointStorage';
+import type { LabTab } from '../ml/labTabs';
 import { ExperimentDetails, TrainingHistory, ConfigEditor } from './ExperimentDetails';
 const labels = {
   es: {metric:'Métrica',title:'Laboratorio neuronal local',note:'Modelo experimental entrenado con datos sintéticos. No válido para decisiones académicas.',start:'Entrenar modelo DEMO',stop:'Cancelar',busy:'Procesando en tu dispositivo',epoch:'Época',engine:'Motor',loss:'Pérdida',val:'Validación',done:'Entrenamiento completado',best:'Mejor época',error:'No se pudo entrenar. Revisa la compatibilidad del navegador.',cancel:'Entrenamiento cancelado',test:'Evaluación de prueba',sample:'Inferencia de ejemplo sintético',acts:'Activaciones reales del ejemplo',base:'Regresión logística',network:'Red neuronal',idle:'Preparado para iniciar',layer:'Capa'},
@@ -24,7 +25,7 @@ const storageLabels={
 } as const;
 type Result = Extract<WorkerEvent,{type:'done'}>;
 type Epoch = Extract<WorkerEvent,{type:'epoch'}>;
-export function LocalTrainingPanel({locale,onResult,sampleIndex,onSample}:{locale:Locale;onResult:(r:Result|null)=>void;sampleIndex:number;onSample:(i:number)=>void}) {
+export function LocalTrainingPanel({locale,onResult,sampleIndex,onSample,tab,onTab,children}:{children?:ReactNode;tab:LabTab;onTab:(tab:LabTab)=>void;locale:Locale;onResult:(r:Result|null)=>void;sampleIndex:number;onSample:(i:number)=>void}) {
   const t=labels[locale];const st=storageLabels[locale];const {notify}=useToast();
   const worker=useRef<Worker|null>(null);
   const [status,setStatus]=useState<'idle'|'busy'|'done'|'error'|'cancel'>('idle');
@@ -85,10 +86,21 @@ export function LocalTrainingPanel({locale,onResult,sampleIndex,onSample}:{local
     }catch{worker.current?.terminate();worker.current=null;setStatus('error');}
   }
   const format=(v:number|null|undefined)=>v==null?'—':v.toFixed(4);
-  return <section className="app-panel space-y-4 rounded-2xl border border-[var(--app-panel-border)] p-5" aria-label={t.title}>
+  // El trabajador y su estado viven aquí, no en los paneles condicionales.
+  const statusText=status==='idle'?t.idle:status==='done'?t.done:status==='error'?t.error:status==='cancel'?t.cancel:t.busy;
+  const goTraining={es:'Ir a Entrenamiento',en:'Go to Training',pt:'Ir para Treinamento'}[locale];
+  return <section className={tab==='architecture'?'space-y-4':'app-panel space-y-4 rounded-2xl border border-[var(--app-panel-border)] p-5'} aria-label={t.title}>
+    <div className="app-panel flex flex-wrap items-center justify-between gap-2 rounded-xl border border-[var(--app-panel-border)] px-3 py-2 text-sm">
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="neural-demo-pill rounded-full px-2.5 py-1 text-[10px] font-bold">SYNTHETIC DEMO</span>
+        <span role="status">{statusText}{status==='busy'&&epoch?` · ${t.epoch} ${epoch.epoch}/${runEpochs}`:''}{backend?` · ${backend}`:''}</span>
+      </div>
+      {tab!=='training'&&<button type="button" className="app-secondary-button rounded-lg border border-[var(--app-control-border)] px-3 py-2" onClick={()=>onTab('training')}>{goTraining}</button>}
+    </div>
+    {children}
+    {tab==='training'&&<>
     <header className="flex flex-wrap items-start justify-between gap-3">
       <div><h3 className="flex items-center gap-2 font-bold"><BrainCircuit className="app-accent" size={21}/>{t.title}</h3><p className="app-muted mt-2 text-sm">{t.note}</p></div>
-      <span className="neural-demo-pill rounded-full px-3 py-1 text-xs font-bold">SYNTHETIC DEMO</span>
     </header>
     <p className="app-muted text-sm">TensorFlow.js · Web Worker · 13 → 8 → 4 → 1 · 150 / 50 / 50 (train / validation / test)</p>
     <ConfigEditor locale={locale} config={config} onChange={setConfig} busy={status==='busy'||storageBusy}/>
@@ -97,21 +109,23 @@ export function LocalTrainingPanel({locale,onResult,sampleIndex,onSample}:{local
       {status==='busy'&&<button type="button" onClick={stop} className="app-secondary-button inline-flex items-center gap-2 rounded-xl border border-[var(--app-control-border)] px-4 py-2 text-sm"><Square size={15}/>{t.stop}</button>}
       {status==='busy'&&<Spinner label={t.busy}/>}
     </div>
-    <div role="status" aria-live="polite" className="text-sm">{status==='idle'?t.idle:status==='done'?t.done:status==='error'?t.error:status==='cancel'?t.cancel:''}</div>
     <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
       {[[t.engine,backend||'—'],[t.epoch,epoch?`${epoch.epoch}/${runEpochs}`:'—'],[t.loss,format(epoch?.loss)],[t.val,format(epoch?.validationLoss)]].map(([name,value])=><div key={name} className="app-secondary-button rounded-xl border border-[var(--app-control-border)] p-3"><p className="app-muted text-xs">{name}</p><p className="mt-1 font-semibold tabular-nums">{value}</p></div>)}
     </div>
-    <section className="space-y-2 rounded-xl border border-[var(--app-panel-border)] p-4">
+    <TrainingHistory locale={locale} history={history} best={result?.epoch??epoch?.bestEpoch}/>
+    {result&&<p className="app-muted text-sm">{result.stopReason==='earlyStopping'?({es:'Detención anticipada: sin mejora en validación.',en:'Early stopping: no validation improvement.',pt:'Parada antecipada: sem melhora na validação.'}[locale]):({es:'Se alcanzó el máximo de épocas.',en:'Maximum epochs reached.',pt:'Máximo de épocas atingido.'}[locale])} · {t.best}: {result.epoch}</p>}
+    </>}
+    {tab==='models'&&<section className="space-y-2 rounded-xl border border-[var(--app-panel-border)] p-4">
       <h4 className="font-semibold">{st.title}</h4><p className="app-muted text-sm">{st.note}</p>
       <div className="flex flex-wrap gap-2">{([{action:'save',icon:Save},{action:'load',icon:FolderOpen},{action:'remove',icon:Trash2}] as const).map(({action,icon:Icon})=><button key={action} type="button" className="app-secondary-button inline-flex items-center gap-2 rounded-lg border border-[var(--app-control-border)] px-3 py-2 text-sm" disabled={storageBusy||status==='busy'||(action==='save'&&!result)} onClick={()=>{if(action==='remove')setConfirmDelete(true);else void storage(action);}}><Icon size={16}/>{st[action]}</button>)}</div>
       {savedAt&&<p className="app-muted text-xs">{new Date(savedAt).toLocaleString(locale)}</p>}
       <Modal open={confirmDelete} title={st.remove} onClose={()=>setConfirmDelete(false)}><p className="text-sm">{st.confirm}</p><div className="mt-4 flex justify-end gap-2"><button type="button" className="app-secondary-button rounded-lg border border-[var(--app-control-border)] px-3 py-2 text-sm" onClick={()=>setConfirmDelete(false)}>{st.cancel}</button><button type="button" className="app-secondary-button rounded-lg border border-[var(--app-control-border)] px-3 py-2 text-sm" onClick={()=>{setConfirmDelete(false);void storage('remove');}}>{st.remove}</button></div></Modal>
       {storageBusy&&<Spinner label={t.busy}/>}<p role="status" aria-live="polite" className="text-sm">{storageMessage?st[storageMessage]:''}</p>
-    </section>
-    <TrainingHistory locale={locale} history={history} best={result?.epoch??epoch?.bestEpoch}/>
-    {result&&<div className="space-y-3"><p className="app-info rounded-lg border p-3 text-sm">{result.stopReason==='earlyStopping'?({es:'Detención anticipada: sin mejora en validación.',en:'Early stopping: no validation improvement.',pt:'Parada antecipada: sem melhora na validação.'}[locale]):({es:'Se alcanzó el máximo de épocas.',en:'Maximum epochs reached.',pt:'Máximo de épocas atingido.'}[locale])} {result.completedEpochs}/{result.config.epochs} · {t.best}: {result.epoch}</p><h4 className="font-semibold">{t.test} · {t.best}: {result.epoch}</h4>
-      <div className="overflow-x-auto"><table className="w-full text-left text-sm"><thead><tr><th scope="col">{t.metric}</th><th scope="col">{t.network}</th><th scope="col">{t.base}</th></tr></thead><tbody>{(['f1','roc_auc','brier','log_loss'] as const).map(key=><tr key={key} className="app-divider border-b border-[var(--app-panel-border)]"><th scope="row" className="py-2 font-medium">{key}</th><td>{format(result.metrics[key])}</td><td>{format(result.baseline[key])}</td></tr>)}</tbody></table></div>
-      <ExperimentDetails locale={locale} result={result} sampleIndex={sampleIndex} onSample={onSample}/> 
+    </section>}
+    {tab==='evaluation'&&result&&<div className="space-y-3"><p className="app-info rounded-lg border p-3 text-sm">{result.stopReason==='earlyStopping'?({es:'Detención anticipada: sin mejora en validación.',en:'Early stopping: no validation improvement.',pt:'Parada antecipada: sem melhora na validação.'}[locale]):({es:'Se alcanzó el máximo de épocas.',en:'Maximum epochs reached.',pt:'Máximo de épocas atingido.'}[locale])} {result.completedEpochs}/{result.config.epochs} · {t.best}: {result.epoch}</p><h4 className="font-semibold">{t.test} · {t.best}: {result.epoch}</h4>
+      <ExperimentDetails tab="evaluation" locale={locale} result={result} sampleIndex={sampleIndex} onSample={onSample}/> 
     </div>}
+    {tab==='inspection'&&result&&<ExperimentDetails tab="inspection" locale={locale} result={result} sampleIndex={sampleIndex} onSample={onSample}/>}
+    {(tab==='evaluation'||tab==='inspection')&&!result&&<p className="app-muted text-sm">{{es:'Entrena o recupera un modelo DEMO para consultar los resultados.',en:'Train or restore a DEMO model to view results.',pt:'Treine ou recupere um modelo DEMO para consultar os resultados.'}[locale]}</p>}
   </section>;
 }
