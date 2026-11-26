@@ -1,10 +1,12 @@
 // Pantalla privada de acceso: sin enlaces hacia módulos antes de iniciar sesión.
 // Autenticación delegada a Supabase Auth; ningún secreto del servidor se usa aquí.
 import type { FormEvent } from 'react';
+import { Link } from 'react-router';
 import { useTranslation } from 'react-i18next';
 import { useSettings } from './providers/SettingsProvider';
 import { ArrowRight, BookOpen, BrainCircuit, Building2, GraduationCap, LockKeyhole, Moon, ShieldCheck, Sun, Contrast } from 'lucide-react';
 import type { ThemeName } from './providers/SettingsProvider';
+import { landingCopy } from './modules/landing/landingCopy';
 import { PasswordInput } from './components/shared/PasswordInput';
 
 type Props = {
@@ -75,6 +77,7 @@ export function LoginScreen({ email, password, busy, error, theme,
             {t(busy ? 'login.busy' : 'login.submit')}{!busy && <ArrowRight size={18}/>}
           </button>
         </form>
+        <Link to="/" className="mt-5 inline-block text-sm font-medium text-sky-700 dark:text-sky-300">{landingCopy[locale].home}</Link>
         <p className="app-muted mt-5 flex items-start gap-2 text-xs leading-5 text-slate-500 dark:text-slate-300"><ShieldCheck size={16} className="mt-0.5 shrink-0"/> {t('login.protected')}</p>
       </section>
     </div>

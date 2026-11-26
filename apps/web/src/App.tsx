@@ -17,6 +17,7 @@ import { moduleAccess } from './lib/moduleAccess';
 import { useSettings } from './providers/SettingsProvider';
 import { SettingsPage } from './modules/settings/SettingsPage';
 import { LoginScreen } from './LoginScreen';
+import { LandingPage } from './modules/landing/LandingPage';
 import { OrganizationsPage } from './modules/organizations/OrganizationsPage';
 import { AcademicPage } from './modules/academic/AcademicPage';
 import { CourseWorkspacePage } from './modules/academic/CourseWorkspacePage';
@@ -363,7 +364,7 @@ export default function App() {
     if (error) { notify(`No se pudo cerrar sesión: ${error.message}`); return false; }
     try { sessionStorage.removeItem('edumaster:invite-setup'); } catch { /* Sin persistencia. */ }
     setInviteSetup(false);
-    setSession(null); setIdentity(null); navigate('/iniciar-sesion', { replace: true }); setPassword(''); setAuthorizedUserId(null); setGlobalRoles([]); setMemberships([]); setAcademicOrgId(''); setAccountStatus('checking');
+    setSession(null); setIdentity(null); navigate('/login', { replace: true }); setPassword(''); setAuthorizedUserId(null); setGlobalRoles([]); setMemberships([]); setAcademicOrgId(''); setAccountStatus('checking');
     notify('Sesión cerrada correctamente.', 'success');
     return true;
   }
@@ -450,7 +451,7 @@ export default function App() {
   // controla antes de montar cada módulo; FastAPI vuelve a validar cada petición.
   const sectionPermissionDenied = !routeAccess[section];
   useEffect(() => {
-    if (!accessGranted) return;
+    if (!accessGranted || location.pathname === '/') return;
     // Solo las URLs realmente desconocidas regresan a Resumen.
     if (!sectionForPath(location.pathname) && !legacyRedirect(location.pathname)) {
       navigate(sectionPaths.dashboard, { replace: true });
@@ -468,6 +469,8 @@ export default function App() {
   }, [detailRoute?.organizationId, accessGranted, orgs, academicOrgId]);
   const cycleTheme = () => setTheme(theme === 'light' ? 'dark' : theme === 'dark' ? 'black' : 'light');
 
+  // La portada no requiere sesión; los enlaces de invitación conservan prioridad.
+  if (location.pathname === '/' && !inviteSetup && !location.search.includes('code=') && !location.hash.includes('access_token=')) return <LandingPage authenticated={Boolean(session)}/>;
   if (!supabase) return <div className="app-shell flex min-h-screen items-center justify-center p-5 dark:bg-[#06152B]">
     <div className="app-panel max-w-md rounded-xl border border-amber-400/40 bg-white p-6 text-slate-800 dark:bg-[#0A1F3D] dark:text-slate-100">
       <h1 className="text-xl font-bold">{t('legacy.k0a5b6d202d')}</h1>
@@ -480,6 +483,7 @@ export default function App() {
   if (inviteSetup && session) return <InvitePasswordSetup email={session.user.email || ''} onDone={() => {
     try { sessionStorage.removeItem('edumaster:invite-setup'); } catch { /* Sin persistencia. */ }
     setInviteSetup(false);
+    if (location.pathname === '/') navigate(sectionPaths.dashboard, { replace: true });
   }}/>;
   if (!accessGranted) return <div className="app-shell flex min-h-screen items-center justify-center bg-[#F5F7FB] p-5 text-slate-900 dark:bg-[#06152B] dark:text-slate-100">
     <div className="app-panel w-full max-w-lg rounded-2xl border border-slate-200 bg-white p-7 shadow-xl dark:border-[#23456A] dark:bg-[#0A1F3D]">

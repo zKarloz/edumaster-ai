@@ -116,7 +116,7 @@ export function enrollmentHistoryPath(organizationId: string, offeringId: string
 /** Redirige favoritos antiguos, incluso historiales individuales, sin perder parámetros. */
 export function legacyRedirect(pathname: string): string | null {
   const path = pathname.replace(/\/$/, '') || '/';
-  if (path === '/' || path === '/app') return sectionPaths.dashboard;
+  if (path === '/app') return sectionPaths.dashboard;
   const detail = oldDetail.exec(path);
   if (detail) return enrollmentHistoryPath(detail[1]!, detail[2]!, detail[3]!);
   const alias = Object.entries(sectionPaths).find(([key]) => {
