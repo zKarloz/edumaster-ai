@@ -22,3 +22,14 @@ test('comunidad pagina desde servidor y usa perfil académico mínimo',()=>{
  for(const text of ['page_size=${pageSize}','[5,10,20]','UserAvatar','useAvatar','OptionSelect','setProfile(p)','setProfile(c)'])assert.ok(panel.includes(text),text);
  assert.doesNotMatch(panel,/directory\/users|UserDetailModal/);
 });
+
+test('perfil académico comparte diseño administrativo sin consultar directorio',()=>{
+ const profile=read('modules/academic/AcademicParticipantProfile.tsx');
+ const modal=read('modules/users/UserDetailModal.tsx');
+ assert.match(modal,/export function UserProfileLayout/);
+ assert.match(profile,/<UserProfileLayout/);
+ assert.match(profile,/community\/participants/);
+ assert.doesNotMatch(profile,/directory\/users|data\.email/);
+ assert.match(read('modules/academic/CourseCommunity.tsx'),/<AcademicProfileModal/);
+ assert.match(read('modules/academic/CourseWorkspacePage.tsx'),/offeringId && <AssignedInstructor/);
+});

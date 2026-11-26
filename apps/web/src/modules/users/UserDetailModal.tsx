@@ -1,6 +1,6 @@
 // Vista compartida de fichas de usuarios. El backend decide el alcance visible.
 // No se presentan datos íntimos al administrador sin un fundamento de acceso.
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Building2, Globe2, Languages, Mail, ShieldCheck } from 'lucide-react';
 import { Modal } from '../../components/shared/Modal';
@@ -47,19 +47,28 @@ export function UserDetailModal({ open, userId, organizationId, token, onClose }
     {loading && <div className="flex justify-center py-8"><Spinner label="Cargando ficha del usuario..."/></div>}
     {error && <div role="alert" className="app-warning rounded-xl border p-4 text-sm">{error}</div>}
     {data && !loading && <div className="space-y-5">
-      <div className="flex flex-col items-center gap-2 pb-2 text-center">
-        <UserAvatar userId={data.auth_user_id} name={data.name} photo={avatar.photo} loading={avatar.loading} large/>
-        <h3 className="mt-2 text-lg font-semibold">{data.name}</h3>
-        <span className="app-muted text-xs">{data.membership_status === 'active' ? 'Membresía activa' : `Estado: ${data.membership_status}`}</span>
-      </div>
-      <dl className="app-divider space-y-4 border-t pt-4 text-sm">
+      <UserProfileLayout name={data.name} authId={data.auth_user_id} photo={avatar.photo} loading={avatar.loading} subtitle={data.membership_status === 'active' ? 'Membresía activa' : `Estado: ${data.membership_status}`}>
         <div className="flex items-start gap-3"><Mail size={17} className="app-muted mt-0.5"/><div><dt className="app-muted text-xs">{t('legacy.k59a16700ff')}</dt><dd className="break-all font-medium">{data.email}</dd></div></div>
         <div className="flex items-start gap-3"><Building2 size={17} className="app-muted mt-0.5"/><div><dt className="app-muted text-xs">{t('legacy.kc342a804db')}</dt><dd className="font-medium">{data.organization_name}</dd></div></div>
         <div className="flex items-start gap-3"><ShieldCheck size={17} className="app-muted mt-0.5"/><div><dt className="app-muted text-xs">{t('legacy.k47dcc27d6e')}</dt><dd className="mt-1 flex flex-wrap gap-2">{data.roles.length ? data.roles.map(role => <span key={role} className="app-secondary-button rounded-lg border px-2 py-1 text-xs">{NAMES[role] ?? role}</span>) : 'Sin rol asignado'}</dd></div></div>
         <div className="flex items-start gap-3"><Globe2 size={17} className="app-muted mt-0.5"/><div><dt className="app-muted text-xs">{t('legacy.k0c664fca6d')}</dt><dd>{data.country_code ? countryName(data.country_code) : 'No compartido'}</dd></div></div>
         <div className="flex items-start gap-3"><Languages size={17} className="app-muted mt-0.5"/><div><dt className="app-muted text-xs">{t('legacy.k9064d03618')}</dt><dd>{data.language_code ?? 'No compartido'}</dd></div></div>
-      </dl>
+      </UserProfileLayout>
       <p className="app-info rounded-lg border p-3 text-xs">{t('legacy.k210ce54f78')}</p>
     </div>}
   </Modal>;
+}
+
+/** Presentación compartida; cada contexto decide qué campos autorizados entrega. */
+export function UserProfileLayout({name, authId, photo, loading, subtitle, children}: {
+  name: string; authId: string | null; photo: string | null; loading: boolean; subtitle?: string; children: ReactNode;
+}) {
+  return <div className="space-y-5">
+    <div className="flex flex-col items-center gap-2 pb-2 text-center">
+      <UserAvatar userId={authId ?? name} name={name} photo={photo} loading={loading} large/>
+      <h3 className="mt-2 text-lg font-semibold break-words">{name}</h3>
+      {subtitle && <span className="app-muted text-xs">{subtitle}</span>}
+    </div>
+    <dl className="app-divider space-y-4 border-t pt-4 text-sm">{children}</dl>
+  </div>;
 }

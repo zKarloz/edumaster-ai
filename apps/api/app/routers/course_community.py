@@ -179,3 +179,41 @@ async def hide_comment(organization_id: UUID, offering_id: UUID, post_id: UUID, 
             raise HTTPException(404, 'Comentario no disponible')
         await _audit(conn, organization_id, ctx['actor'], 'hide', 'community_comment', row)
         return {'id': row}
+
+
+@router.get(PATH + '/participants')
+async def participants(organization_id: UUID, offering_id: UUID,
+                       auth_id: UUID = Depends(authenticated_user_id), engine: AsyncEngine = Depends(require_engine),
+                       target: UUID | None = None) -> dict:
+    """Ficha académica mínima: docente asignado o autor visible de esta oferta."""
+    async with engine.begin() as conn:
+        await _context(conn, auth_id, organization_id, offering_id)
+        rows = (await conn.execute(text("""
+            SELECT u.full_name AS name, u.auth_user_id AS auth_user_id,
+                   o.name AS organization_name, c.title AS course_name,
+                   CASE WHEN i.id IS NOT NULL THEN 'instructor'
+                        WHEN EXISTS (SELECT 1 FROM app.enrollments e JOIN app.students s
+                          ON s.id=e.student_id AND s.organization_id=e.organization_id
+                          WHERE e.organization_id=o.id AND e.offering_id=off.id
+                            AND s.membership_id=m.id AND s.status='active'
+                            AND e.status IN ('active','completed')) THEN 'student'
+                        ELSE 'participant' END AS academic_role
+            FROM app.course_offerings off
+            JOIN app.organizations o ON o.id=off.organization_id
+            JOIN app.courses c ON c.id=off.course_id AND c.organization_id=o.id
+            JOIN app.organization_memberships m ON m.organization_id=o.id AND m.status='active'
+            JOIN app.users u ON u.id=m.user_id AND u.status='active'
+            LEFT JOIN app.instructors i ON i.id=off.instructor_id AND i.organization_id=o.id
+                AND i.membership_id=m.id AND i.status='active'
+            WHERE off.organization_id=:org AND off.id=:off
+              AND (CAST(:target AS uuid) IS NULL OR u.auth_user_id=:target)
+              AND (i.id IS NOT NULL OR (CAST(:target AS uuid) IS NOT NULL AND EXISTS (
+                SELECT 1 FROM app.community_posts p WHERE p.organization_id=o.id AND p.offering_id=off.id
+                AND p.hidden_at IS NULL AND (p.author_id=u.id OR EXISTS (
+                  SELECT 1 FROM app.community_comments cm WHERE cm.organization_id=o.id
+                    AND cm.offering_id=off.id AND cm.post_id=p.id AND cm.hidden_at IS NULL AND cm.author_id=u.id))))
+              ) ORDER BY u.full_name
+        """), {'org': organization_id, 'off': offering_id, 'target': target})).mappings().all()
+        if target is not None and not rows:
+            raise HTTPException(404, 'Perfil académico no disponible')
+        return {'items': [dict(row) for row in rows]}

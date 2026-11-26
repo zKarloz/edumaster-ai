@@ -114,3 +114,30 @@ def test_feed_pagination(scoped):
 
 def test_invalid_page_size(scoped):
     assert TestClient(app).get(PATH, params={'page_size': 7}).status_code == 422
+
+
+def test_participant_profile_requires_authentication():
+    assert TestClient(app).get(f'{PATH}/participants').status_code == 401
+
+
+def test_participant_profile_scoped(scoped):
+    conn, _ = scoped
+    row = {'name': 'Docente', 'auth_user_id': ID, 'organization_name': 'Institución',
+           'course_name': 'Curso', 'academic_role': 'instructor'}
+    conn.execute.return_value.mappings.return_value.all.return_value = [row]
+    response = TestClient(app).get(f'{PATH}/participants?target={ID}')
+    assert response.status_code == 200
+    assert set(response.json()['items'][0]) == set(row)
+    sql, params = conn.execute.await_args.args
+    assert params == {'org': ID, 'off': ID, 'target': ID}
+    assert 'p.hidden_at IS NULL' in str(sql)
+    assert 'cm.hidden_at IS NULL' in str(sql)
+    assert 'email' not in str(sql)
+    community._context.assert_awaited_once()
+
+
+def test_participant_not_visible(scoped):
+    conn, _ = scoped
+    conn.execute.return_value.mappings.return_value.all.return_value = []
+    assert TestClient(app).get(f'{PATH}/participants?target={ID}').status_code == 404
+    assert TestClient(app).get(f'{PATH}/participants').json() == {'items': []}

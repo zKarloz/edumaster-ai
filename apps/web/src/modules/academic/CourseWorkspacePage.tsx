@@ -17,6 +17,7 @@ import { Spinner } from '../../components/shared/Spinner';
 import { useToast } from '../../components/shared/Toast';
 import { lessonEditorPath, newLessonPath, sectionPaths } from '../../routes';
 import { courseCardStyle, courseIcon } from './courseAppearance';
+import { AssignedInstructor } from './AcademicParticipantProfile';
 
 const PublishedLessonView = lazy(() => import('./PublishedLessonView').then(module=>({default:module.PublishedLessonView})));
 const CourseTasksPanel = lazy(() => import('./CourseTasksPanel').then(module=>({default:module.CourseTasksPanel})));
@@ -240,7 +241,8 @@ export function CourseWorkspacePage({organizationId, offeringId, courseId, token
           <p className="app-muted mt-2 whitespace-pre-wrap text-sm leading-relaxed">{workspace.course.description || t('workspace.noDescription')}</p>
           <p className="app-muted mt-4 text-xs">{t(isBase?'workspace.baseNote':workspace.role==='student'?'workspace.studentNote':'workspace.offeringNote')}</p>
         </div>
-        {/* Inicio conserva solo el resumen; las tareas tienen su propia pestaña. */}
+        {/* El docente pertenece a la oferta, no al curso base. */}
+        {offeringId && <AssignedInstructor key={`${organizationId}:${offeringId}`} organizationId={organizationId} offeringId={offeringId} token={token}/> }
       </section> : tab==='tasks' && offeringId ? <Suspense fallback={<Spinner label={t('common.loading')}/>}>
         <CourseTasksPanel organizationId={organizationId} offeringId={offeringId} token={token}/>
       </Suspense> : tab==='community' && offeringId ? <Suspense fallback={<Spinner label={t('common.loading')}/>}><CourseCommunity key={`${organizationId}:${offeringId}`} organizationId={organizationId} offeringId={offeringId} token={token}/></Suspense> : tab==='recommendations' && offeringId ? <Suspense fallback={<Spinner label={t('common.loading')}/>}><TeacherRecommendations key={`${organizationId}:${offeringId}`} organizationId={organizationId} offeringId={offeringId} token={token}/></Suspense> : <section className="space-y-3" role="tabpanel">

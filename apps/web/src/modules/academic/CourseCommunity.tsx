@@ -8,6 +8,7 @@ import { useToast } from '../../components/shared/Toast';
 import { UserAvatar } from '../../components/shared/UserAvatar';
 import { OptionSelect } from '../../components/shared/OptionSelect';
 import { useAvatar } from '../profile/useAvatar';
+import { AcademicProfileModal } from './AcademicParticipantProfile';
 
 type Author = {author:string;author_auth_id:string|null};
 type Post = Author & {id:string;kind:'announcement'|'question';title:string;body:string;author:string;created_at:string;likes:number;liked:boolean};
@@ -63,7 +64,7 @@ export function CourseCommunity({organizationId,offeringId,token}:{organizationI
     <button type="button" aria-label={translate('common.previous')} className={secondary} disabled={data.page<=1||busy} onClick={()=>{setPage(data.page-1);setOpened(null);}}><ChevronLeft size={16}/></button>
     <button type="button" aria-label={translate('common.next')} className={secondary} disabled={data.page*pageSize>=data.total||busy} onClick={()=>{setPage(data.page+1);setOpened(null);}}><ChevronRight size={16}/></button></div>
   </footer>}
-  <Modal open={!!profile} title={translate('labels.k90b46990b3')} onClose={()=>setProfile(null)} mobileSheet>{profile&&<CommunityAuthor author={profile} large/>}</Modal>
+  {profile&&<AcademicProfileModal scope={{organizationId,offeringId,token}} target={profile.author_auth_id} name={profile.author} onClose={()=>setProfile(null)}/>}
   <Modal open={create} title={t.new} mobileSheet onClose={()=>{if(!busy)setCreate(false);}}><form className="space-y-3" onSubmit={publish}><select aria-label={t.new} className={control} value={kind} onChange={e=>setKind(e.target.value==='announcement'?'announcement':'question')}><option value="question">{t.question}</option>{data?.editor&&<option value="announcement">{t.announcement}</option>}</select><label className="block text-sm">{t.title}<input className={control} required minLength={3} maxLength={150} value={title} onChange={e=>setTitle(e.target.value)}/></label><label className="block text-sm">{t.body}<textarea className={control} required minLength={5} maxLength={3000} rows={5} value={body} onChange={e=>setBody(e.target.value)}/></label><button className={primary} type="submit" disabled={busy}>{busy&&<Spinner compact/>}{t.send}</button></form></Modal>
   <Modal open={!!hide} title={t.hide} onClose={()=>{if(!busy)setHide(null);}} mobileSheet><p className="text-sm">{t.confirm}</p><div className="mt-4 flex justify-end gap-2"><button className={secondary} disabled={busy} onClick={()=>setHide(null)}>{t.cancel}</button><button className={primary} disabled={busy} onClick={()=>{if(hide)void mutate(hide.path,'PATCH',undefined,()=>{if(hide.post)setOpened(null);setHide(null);});}}>{t.hide}</button></div></Modal>
  </section>;
