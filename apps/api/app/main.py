@@ -17,6 +17,7 @@ from app.routers.lesson_resources import router as lesson_resources_router
 from app.routers.lesson_revisions import router as lesson_revisions_router
 from app.routers.neural_demo import router as neural_demo_router
 from app.routers.neural_readiness import router as neural_readiness_router
+from app.routers.notifications import router as notifications_router
 from app.routers.offering_content import router as offering_content_router
 from app.routers.organizations import router as organizations_router
 from app.routers.profile import router as profile_router
@@ -48,6 +49,7 @@ app.include_router(course_tasks_router)
 app.include_router(task_attachments_router)
 app.include_router(task_grading_router)
 app.include_router(teacher_recommendations_router)
+app.include_router(notifications_router)
 app.include_router(offering_content_router)
 app.include_router(lesson_revisions_router)
 app.include_router(lesson_resources_router)

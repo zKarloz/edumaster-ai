@@ -33,6 +33,7 @@ import { UsersPage } from './modules/users/UsersPage';
 import { UsersCsvImportPage } from './modules/users/UsersCsvImportPage';
 import { InvitePasswordSetup } from './modules/users/InvitePasswordSetup';
 import { InstitutionalUsersPage } from './modules/users/InstitutionalUsersPage';
+import { NotificationInbox } from './components/shared/NotificationInbox';
 import { AccountMenu } from './components/shared/AccountMenu';
 import { ProfilePage } from './modules/profile/ProfilePage';
 import { useAvatar } from './modules/profile/useAvatar';
@@ -622,7 +623,8 @@ export default function App() {
                 </p>}</div>
           </div>
           <div className="flex items-center gap-2">
-            <AccountMenu key={session.user.id} identity={accountIdentity} roleLabel={accountRoleLabel} userId={session.user.id} photo={avatar.photo} photoLoading={avatar.loading}
+            {accessToken && <NotificationInbox key={`notifications:${session.user.id}`} token={accessToken}/>}
+            <AccountMenu key={`account:${session.user.id}`} identity={accountIdentity} roleLabel={accountRoleLabel} userId={session.user.id} photo={avatar.photo} photoLoading={avatar.loading}
               onProfile={() => navTo('profile')} onSignOut={signOut}/>
           </div>
         </header>
@@ -701,7 +703,7 @@ export default function App() {
           {section === 'courses' && !sectionPermissionDenied && taskReviewRoute && accessToken && <Suspense fallback={<Spinner label="Cargando entrega..."/>}>
             <TaskSubmissionReviewPage {...taskReviewRoute} token={accessToken}/>
           </Suspense>}
-          {section === 'courses' && !sectionPermissionDenied && courseRoute && accessToken && <CourseWorkspacePage
+          {section === 'courses' && !sectionPermissionDenied && courseRoute && accessToken && <CourseWorkspacePage key={location.pathname+(new URLSearchParams(location.search).has('recommendation')?location.key:'')}
             organizationId={courseRoute.organizationId} courseId={courseRoute.courseId} offeringId={courseRoute.offeringId} token={accessToken}/>}
           {((section === 'courses' && !courseRoute && !lessonRoute && !newLessonRoute && !taskReviewRoute && !taskSubmissionsRoute && !myTaskSubmissionsRoute && !courseTaskRoute) || section === 'students' || section === 'enrollments') && !sectionPermissionDenied && accessToken && <AcademicPage
             mode={section} organizations={orgs} organizationId={academicOrgId}

@@ -1,7 +1,7 @@
 /** Recomendaciones humanas; los permisos definitivos siempre se verifican en FastAPI. */
-import { useEffect, useState, type FormEvent } from 'react';
+import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { CheckCircle2, Lightbulb, Plus, RefreshCw } from 'lucide-react';
-import { Link } from 'react-router';
+import { Link, useLocation } from 'react-router';
 import { remainingTime } from './recommendationDeadline';
 import { courseTaskPath } from '../../routes';
 import { useTranslation } from 'react-i18next';
@@ -35,6 +35,9 @@ export function TeacherRecommendations({organizationId,offeringId,token}:{organi
  const {i18n}=useTranslation(); const t=copy[i18n.language.startsWith('pt')?'pt':i18n.language.startsWith('en')?'en':'es'];
  const rules=ruleCopy[i18n.language.startsWith('pt')?'pt':i18n.language.startsWith('en')?'en':'es'];
  const {notify}=useToast();
+ const location=useLocation();
+ const focus=new URLSearchParams(location.search).get('recommendation');
+ const consumed=useRef<string|null>(null);
  const [suggestions,setSuggestions]=useState<Suggestion[]>([]),[rulesLoading,setRulesLoading]=useState(false),[rulesError,setRulesError]=useState(false);
  const [data,setData]=useState<Result|null>(null),[loading,setLoading]=useState(true),[error,setError]=useState(false),[revision,setRevision]=useState(0);
  const [busy,setBusy]=useState(false),[create,setCreate]=useState(false),[selected,setSelected]=useState<Item|null>(null);
@@ -42,13 +45,15 @@ export function TeacherRecommendations({organizationId,offeringId,token}:{organi
  const url=`${import.meta.env.VITE_API_URL||'http://localhost:8000'}/api/v1/academic/organizations/${organizationId}/course-offerings/${offeringId}/recommendations`;
  useEffect(()=>{
   const controller=new AbortController();setLoading(true);setError(false);setData(null);
-  void fetch(url,{headers:{Authorization:`Bearer ${token}`},cache:'no-store',signal:controller.signal})
+  void fetch(focus?`${url}?focus=${encodeURIComponent(focus)}`:url,{headers:{Authorization:`Bearer ${token}`},cache:'no-store',signal:controller.signal})
    .then(async response=>{if(!response.ok)throw new Error('load');return await response.json() as Result;})
    .then(result=>{if(!controller.signal.aborted)setData(result);})
    .catch(()=>{if(!controller.signal.aborted)setError(true);})
    .finally(()=>{if(!controller.signal.aborted)setLoading(false);});
   return()=>controller.abort();
- },[url,token,revision]);
+ },[url,token,revision,focus]);
+ // Abrir exactamente el registro notificado una vez, sin reabrir al actualizar.
+ useEffect(()=>{if(!focus||!data||consumed.current===focus)return;consumed.current=focus;const item=data.items.find(r=>r.id===focus);if(item)setSelected(item);else notify(t.error,'info');},[focus,data,notify,t.error]);
  // Consulta independiente: un fallo de las reglas no oculta recomendaciones docentes.
  const studentView=data?.editor===false;
  const [now,setNow]=useState(Date.now);

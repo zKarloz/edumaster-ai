@@ -1210,3 +1210,8 @@ html.black-theme .app-recommendation-high {
 .institution-statistics-popup a.leaflet-popup-close-button {
   color: var(--app-text);
 }
+
+/* Bandeja del topbar: reutiliza transición y tokens del menú de cuenta. */
+.app-notification-unread { background: color-mix(in srgb, var(--app-panel-bg), #0ea5e9 9%); }
+html[data-motion="off"] .app-notification-inbox { transition: none !important; }
+@media (prefers-reduced-motion: reduce) { .app-notification-inbox { transition: none !important; } }

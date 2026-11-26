@@ -38,13 +38,13 @@ RECIPIENTS = """
 
 @router.get(PATH)
 async def list_recommendations(
-    organization_id: UUID, offering_id: UUID,
+    organization_id: UUID, offering_id: UUID, focus: UUID | None = None,
     auth_id: UUID = Depends(authenticated_user_id), engine: AsyncEngine = Depends(require_engine),
 ) -> dict:
     async with engine.begin() as conn:
         ctx = await _context(conn, auth_id, organization_id, offering_id)
         params = {"org": organization_id, "off": offering_id, "editor": ctx["editor"],
-                  "enrollment": ctx["enrollment_id"]}
+                  "enrollment": ctx["enrollment_id"], "focus": focus}
         recipients = []
         if ctx["editor"]:
             recipients = (await conn.execute(text(RECIPIENTS + " ORDER BY u.full_name LIMIT 500"), params)).mappings().all()
@@ -59,7 +59,7 @@ async def list_recommendations(
             JOIN app.users author ON author.id=r.created_by
             WHERE r.organization_id=:org AND e.offering_id=:off
               AND (:editor OR r.enrollment_id=:enrollment)
-            ORDER BY r.created_at DESC,r.id LIMIT 200
+            ORDER BY (r.id=CAST(:focus AS uuid)) DESC NULLS LAST,r.created_at DESC,r.id LIMIT 200
         """), params)).mappings().all()
         return {"editor": ctx["editor"], "recipients": [dict(row) for row in recipients],
                 "items": [dict(row) for row in rows]}

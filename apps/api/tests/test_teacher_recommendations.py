@@ -116,3 +116,13 @@ def test_suggestions_scoped_to_pending_published_tasks(scoped):
                       'NOT EXISTS', "interval '48 hours'", 't.due_at >= now()'):
         assert condition in str(sql)
     assert params == {'org': ID, 'off': ID, 'enrollment': ID}
+
+
+def test_focus_preserves_enrollment_scope(scoped):
+    conn, _ = scoped
+    conn.execute.return_value.mappings.return_value.all.return_value = []
+    assert TestClient(app).get(f'{PATH}?focus={ID}').status_code == 200
+    sql, params = conn.execute.await_args.args
+    assert 'r.enrollment_id=:enrollment' in str(sql)
+    assert 'r.id=CAST(:focus AS uuid)' in str(sql)
+    assert params['focus'] == ID
