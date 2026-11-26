@@ -163,3 +163,15 @@ async def archive(model_id: UUID,auth_id: UUID=Depends(authenticated_user_id),en
         if found is None: raise HTTPException(404,'Modelo no disponible')
         await audit(conn,actor,'archive',model_id)
         return {'id':model_id}
+
+
+@router.patch('/{model_id}/restore')
+async def restore(model_id: UUID, auth_id: UUID = Depends(authenticated_user_id), engine: AsyncEngine = Depends(require_engine)):
+    # Restaurar el mismo registro y auditar en una sola transacción.
+    async with engine.begin() as conn:
+        actor = await _require_superadmin(conn, auth_id)
+        found = (await conn.execute(text('UPDATE app.neural_demo_models SET archived_at=NULL WHERE id=:id AND archived_at IS NOT NULL RETURNING id'), {'id': model_id})).scalar_one_or_none()
+        if found is None:
+            raise HTTPException(404, 'Modelo archivado no disponible')
+        await audit(conn, actor, 'restore', model_id)
+        return {'id': model_id}

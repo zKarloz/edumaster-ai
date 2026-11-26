@@ -28,5 +28,5 @@ class NeuralRegistryTests(unittest.TestCase):
         client=TestClient(app)
         base='/api/v1/neural-demo/models'
         ident='11111111-1111-4111-8111-111111111111'
-        for method,path in [('GET',base),('POST',base),('GET',f'{base}/{ident}'),('PATCH',f'{base}/{ident}/archive')]:
+        for method,path in [('GET',base),('POST',base),('GET',f'{base}/{ident}'),('PATCH',f'{base}/{ident}/archive'),('PATCH',f'{base}/{ident}/restore')]:
             self.assertEqual(client.request(method,path).status_code,401)
