@@ -703,7 +703,7 @@ export default function App() {
           {section === 'courses' && !sectionPermissionDenied && taskReviewRoute && accessToken && <Suspense fallback={<Spinner label="Cargando entrega..."/>}>
             <TaskSubmissionReviewPage {...taskReviewRoute} token={accessToken}/>
           </Suspense>}
-          {section === 'courses' && !sectionPermissionDenied && courseRoute && accessToken && <CourseWorkspacePage key={location.pathname+(new URLSearchParams(location.search).has('recommendation')?location.key:'')}
+          {section === 'courses' && !sectionPermissionDenied && courseRoute && accessToken && <CourseWorkspacePage key={location.pathname+((new URLSearchParams(location.search).has('recommendation')||new URLSearchParams(location.search).has('post'))?location.key:'')}
             organizationId={courseRoute.organizationId} courseId={courseRoute.courseId} offeringId={courseRoute.offeringId} token={accessToken}/>}
           {((section === 'courses' && !courseRoute && !lessonRoute && !newLessonRoute && !taskReviewRoute && !taskSubmissionsRoute && !myTaskSubmissionsRoute && !courseTaskRoute) || section === 'students' || section === 'enrollments') && !sectionPermissionDenied && accessToken && <AcademicPage
             mode={section} organizations={orgs} organizationId={academicOrgId}

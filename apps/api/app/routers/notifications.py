@@ -13,7 +13,7 @@ router = APIRouter(prefix="/api/v1/notifications", tags=["notifications"])
 # La identidad procede del JWT; no se acepta destinatario ni institución del cliente.
 VISIBLE = """
  SELECT n.id,n.organization_id,n.event_type,n.resource_id,n.created_at,n.read_at,
-        e.offering_id,r.title
+        e.offering_id,r.title,r.id AS target_id
  FROM app.notifications n
  JOIN app.users u ON u.id=n.recipient_id AND u.status='active'
  JOIN app.organizations o ON o.id=n.organization_id AND o.status='active'
@@ -27,6 +27,15 @@ VISIBLE = """
  AND s.status='active' AND e.status IN ('active','completed')
  AND off.status<>'cancelled' AND c.status='published'
  AND n.event_type='recommendation_created'
+ UNION ALL
+ SELECT DISTINCT n.id,n.organization_id,n.event_type,n.resource_id,n.created_at,n.read_at,
+        v.offering_id,v.title,v.target_id
+ FROM app.notifications n
+ JOIN app.users u ON u.id=n.recipient_id AND u.status='active'
+ JOIN app.notification_academic_events v ON v.organization_id=n.organization_id
+  AND v.resource_id=n.resource_id AND v.event_type=n.event_type
+  AND v.resource_type=n.resource_type AND v.recipient_id=n.recipient_id
+ WHERE u.auth_user_id=:auth_id
 """
 
 

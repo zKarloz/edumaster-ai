@@ -59,3 +59,14 @@ def test_read_all_scoped(conn):
     assert 'read_at IS NULL AND id IN' in str(sql)
     assert 'u.auth_user_id=:auth_id' in str(sql)
     assert params == {'auth_id': ID}
+
+
+def test_academic_notifications_revalidate_current_recipient(conn):
+    conn.execute.return_value.scalar_one.return_value = 0
+    conn.execute.return_value.mappings.return_value.all.return_value = []
+    assert TestClient(app).get(PATH).status_code == 200
+    sql = str(conn.execute.await_args.args[0])
+    for condition in ('v.organization_id=n.organization_id', 'v.resource_id=n.resource_id',
+                      'v.event_type=n.event_type', 'v.resource_type=n.resource_type',
+                      'v.recipient_id=n.recipient_id', 'u.auth_user_id=:auth_id'):
+        assert condition in sql

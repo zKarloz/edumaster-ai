@@ -54,7 +54,7 @@ async def visible_post(conn, params):
 @router.get(PATH)
 async def feed(organization_id: UUID, offering_id: UUID,
                auth_id: UUID = Depends(authenticated_user_id), engine: AsyncEngine = Depends(require_engine),
-               page: int = Query(1, ge=1, le=1000000), page_size: int = Query(5, ge=5, le=20)) -> dict:
+               page: int = Query(1, ge=1, le=1000000), page_size: int = Query(5, ge=5, le=20), focus: UUID | None = Query(None)) -> dict:
     async with engine.begin() as conn:
         ctx = await _context(conn, auth_id, organization_id, offering_id)
         params = {'org': organization_id, 'off': offering_id, 'actor': ctx['actor']}
@@ -62,6 +62,18 @@ async def feed(organization_id: UUID, offering_id: UUID,
             raise HTTPException(422, 'Tamaño de página no admitido')
         total = (await conn.execute(text('''SELECT count(*) FROM app.community_posts p
             WHERE p.organization_id=:org AND p.offering_id=:off AND p.hidden_at IS NULL'''), params)).scalar_one()
+        # Buscar la página del aviso sin revelar publicaciones ocultas ni de otra oferta.
+        if focus is not None:
+            position = (await conn.execute(text('''
+                SELECT position FROM (
+                    SELECT id,row_number() OVER (ORDER BY created_at DESC,id) AS position
+                    FROM app.community_posts WHERE organization_id=:org AND offering_id=:off
+                      AND hidden_at IS NULL
+                ) ranked WHERE id=:focus
+            '''), {**params, 'focus': focus})).scalar_one_or_none()
+            if position is None:
+                raise HTTPException(404, 'Publicación no disponible')
+            page = (position - 1) // page_size + 1
         page = min(page, max(1, (total + page_size - 1) // page_size))
         params.update(limit=page_size, offset=(page - 1) * page_size)
         posts = (await conn.execute(text('''

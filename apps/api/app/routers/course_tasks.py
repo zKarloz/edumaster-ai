@@ -226,9 +226,10 @@ async def publish_task(organization_id: UUID, offering_id: UUID, task_id: UUID,
             if task["status"] != "draft":
                 raise HTTPException(status_code=409, detail="La tarea no está en borrador")
             await conn.execute(text("""
-                UPDATE app.course_tasks SET status='published', published_at=now(), updated_at=now()
+                UPDATE app.course_tasks SET status='published', published_at=now(), published_by=:actor, updated_at=now()
                 WHERE organization_id=:org AND offering_id=:offering_id AND id=:task_id
-            """), {"org": organization_id, "offering_id": offering_id, "task_id": task_id})
+            """), {"org": organization_id, "offering_id": offering_id, "task_id": task_id,
+                   "actor": ctx["actor"]})
             await _audit(conn, organization_id, ctx["actor"], "task.publish", "course_tasks", task_id)
         return {"ok": True, "status": "published"}
     except SQLAlchemyError as exc:

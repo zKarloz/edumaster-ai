@@ -17,3 +17,12 @@ test('navegación a recomendación específica',()=>{
 });
 
 test("claves distintas para hermanos del topbar",()=>{const app=read("App.tsx");assert.ok(app.includes("<NotificationInbox key={`notifications:${session.user.id}`}"));assert.ok(app.includes("<AccountMenu key={`account:${session.user.id}`}"));});
+
+test('avisos académicos usan rutas internas y enfocan Comunidad',()=>{
+ const inbox=read('components/shared/NotificationInbox.tsx');
+ for(const event of ['task_published','task_submitted','grade_issued','community_announcement','community_question','community_reply'])assert.ok(inbox.includes(event));
+ assert.match(inbox,/taskSubmissionsPath\(item.organization_id,item.offering_id,item.target_id\)/);
+ assert.match(inbox,/courseTaskPath\(item.organization_id,item.offering_id,item.target_id\)/);
+ assert.match(inbox,/tab=community&post=/);
+ assert.match(read('modules/academic/CourseCommunity.tsx'),/focus=\$\{encodeURIComponent\(focus\)\}/);
+});

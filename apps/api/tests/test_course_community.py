@@ -141,3 +141,23 @@ def test_participant_not_visible(scoped):
     conn.execute.return_value.mappings.return_value.all.return_value = []
     assert TestClient(app).get(f'{PATH}/participants?target={ID}').status_code == 404
     assert TestClient(app).get(f'{PATH}/participants').json() == {'items': []}
+
+
+def test_notification_focus_page(scoped):
+    conn, _ = scoped
+    conn.execute.return_value.scalar_one.return_value = 30
+    conn.execute.return_value.scalar_one_or_none.return_value = 12
+    conn.execute.return_value.mappings.return_value.all.return_value = []
+    result = TestClient(app).get(PATH, params={'focus': str(ID), 'page_size': 5})
+    assert result.status_code == 200
+    assert result.json()['page'] == 3
+    sql, params = conn.execute.await_args_list[1].args
+    assert 'hidden_at IS NULL' in str(sql) and params['focus'] == ID
+    assert params['org'] == params['off'] == ID
+
+
+def test_notification_focus_hidden(scoped):
+    conn, _ = scoped
+    conn.execute.return_value.scalar_one.return_value = 30
+    conn.execute.return_value.scalar_one_or_none.return_value = None
+    assert TestClient(app).get(PATH, params={'focus': str(ID)}).status_code == 404
