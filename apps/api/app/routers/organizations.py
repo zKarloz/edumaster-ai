@@ -127,11 +127,39 @@ async def my_profile(
     }
 
 
+# Los totales académicos solo se entregan a gestores de la institución o superadmin.
 ORGANIZATION_LIST_SQL = text("""
     SELECT o.id::text AS id, o.code, o.name, o.timezone, o.status,
            loc.country_code, loc.city, loc.address,
-           loc.latitude, loc.longitude
+           loc.latitude, loc.longitude,
+           CASE WHEN access.can_view_counts THEN (
+               SELECT count(*) FROM app.enrollments e
+               WHERE e.organization_id = o.id
+           ) END AS enrollment_count,
+           CASE WHEN access.can_view_counts THEN (
+               SELECT count(*) FROM app.students s
+               WHERE s.organization_id = o.id
+           ) END AS student_count
     FROM app.organizations o
+    CROSS JOIN LATERAL (
+        SELECT EXISTS (
+            SELECT 1 FROM app.users u
+            WHERE u.auth_user_id = :auth_id AND u.status = 'active'
+              AND (
+                EXISTS (
+                    SELECT 1 FROM app.global_role_assignments gra
+                    JOIN app.roles r ON r.id = gra.role_id
+                    WHERE gra.user_id = u.id AND r.code = 'superadmin' AND r.scope = 'global'
+                ) OR EXISTS (
+                    SELECT 1 FROM app.organization_memberships m
+                    JOIN app.membership_roles mr ON mr.membership_id = m.id
+                    JOIN app.roles r ON r.id = mr.role_id
+                    WHERE m.user_id = u.id AND m.organization_id = o.id AND m.status = 'active'
+                      AND r.scope = 'organization' AND r.code IN ('institution_admin', 'coordinator')
+                )
+              )
+        ) AS can_view_counts
+    ) access
     LEFT JOIN app.organization_locations loc ON loc.organization_id = o.id
     WHERE o.status = 'active'
       AND EXISTS (

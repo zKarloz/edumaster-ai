@@ -1197,3 +1197,16 @@ html.black-theme .app-recommendation-high {
   --workspace-badge-border: #795056;
   --workspace-badge-text: #f4b5b5;
 }
+
+/* CAMBIOS 28: el popup de estadísticas usa los tokens de los tres temas. */
+.institution-statistics-popup .leaflet-popup-content-wrapper,
+.institution-statistics-popup .leaflet-popup-tip {
+  background: var(--app-panel-bg);
+  color: var(--app-text);
+}
+.institution-statistics-popup .leaflet-popup-content-wrapper {
+  border: 1px solid var(--app-panel-border);
+}
+.institution-statistics-popup a.leaflet-popup-close-button {
+  color: var(--app-text);
+}

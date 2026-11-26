@@ -2,6 +2,7 @@
 // Sin geolocalización del visitante; solo sedes registradas y autorizadas.
 import { useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
+import { normalizeLocale } from '../../i18n';
 import { divIcon, latLngBounds } from 'leaflet';
 import { MapContainer, Marker, Popup, TileLayer, ZoomControl, useMap } from 'react-leaflet';
 import type { Organization } from './types';
@@ -46,7 +47,14 @@ function MapNavigation({ organizations, selectedId }: Pick<Props, 'organizations
 }
 
 export function InstitutionMap({ organizations, selectedId, onSelect }: Props) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
+  const locale = normalizeLocale(i18n.language);
+  const labels = {
+    es: { enrollments: 'Cantidad de matrículas', students: 'Cantidad de alumnos', scope: 'Totales registrados (todos los estados)' },
+    en: { enrollments: 'Enrollment count', students: 'Student count', scope: 'Registered totals (all statuses)' },
+    pt: { enrollments: 'Quantidade de matrículas', students: 'Quantidade de alunos', scope: 'Totais registrados (todos os estados)' },
+  }[locale];
+  const format = new Intl.NumberFormat(locale);
   const located = organizations.filter(org => org.latitude !== null && org.longitude !== null);
   return (
     <div className="institution-map relative h-full min-h-[360px] w-full overflow-hidden rounded-2xl border border-slate-200 dark:border-[#23456A]">
@@ -57,14 +65,25 @@ export function InstitutionMap({ organizations, selectedId, onSelect }: Props) {
         <MapNavigation organizations={organizations} selectedId={selectedId}/>
         {located.map(org => <Marker key={org.id} position={[org.latitude!, org.longitude!]}
           icon={markerIcon} eventHandlers={{ click: () => onSelect(org.id) }}>
-          <Popup>
-            <div className="space-y-1 text-slate-800">
+          <Popup className="institution-statistics-popup">
+            <div className="min-w-[190px] space-y-1">
               <strong>{org.name}</strong>
               <div>{org.city}, {countryName(org.country_code)}</div>
               <div className="text-xs">{t('legacy.k943f7c6233')} {org.code}</div>
-              <button className="text-sm font-semibold text-blue-700 underline" type="button" onClick={() => onSelect(org.id)}>
-                {t('legacy.k140bbf9e62')}
-              </button>
+              {/* No confundir cero registros con estadísticas no autorizadas o aún no disponibles. */}
+              {org.enrollment_count != null && org.student_count != null && (
+                <div className="mt-2 border-t pt-2" style={{ borderColor: 'var(--app-panel-border)' }}>
+                  <dl className="space-y-1 text-xs">
+                    <div className="flex items-center justify-between gap-4">
+                      <dt>{labels.enrollments}</dt><dd className="font-semibold tabular-nums">{format.format(org.enrollment_count)}</dd>
+                    </div>
+                    <div className="flex items-center justify-between gap-4">
+                      <dt>{labels.students}</dt><dd className="font-semibold tabular-nums">{format.format(org.student_count)}</dd>
+                    </div>
+                  </dl>
+                  <div className="mt-2 text-[10px] opacity-75">{labels.scope}</div>
+                </div>
+              )}
             </div>
           </Popup>
         </Marker>)}

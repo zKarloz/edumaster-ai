@@ -11,6 +11,9 @@ export interface Organization {
   address: string | null;
   latitude: number | null;
   longitude: number | null;
+  // Totales históricos; null indica falta de permiso, no ausencia de registros.
+  enrollment_count?: number | null;
+  student_count?: number | null;
 }
 
 export interface OrganizationInput {
