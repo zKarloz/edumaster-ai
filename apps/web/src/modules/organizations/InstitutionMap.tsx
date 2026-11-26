@@ -1,6 +1,6 @@
-// Visualización geográfica con React Leaflet + OpenStreetMap.
+// Visualización geográfica con React Leaflet + MapTiler, con respaldo OpenStreetMap.
 // Sin geolocalización del visitante; solo sedes registradas y autorizadas.
-import { useEffect, useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { normalizeLocale } from '../../i18n';
 import { divIcon, latLngBounds } from 'leaflet';
@@ -9,6 +9,8 @@ import type { Organization } from './types';
 import { countryName } from './types';
 import 'leaflet/dist/leaflet.css';
 import { useSettings } from '../../providers/SettingsProvider';
+import { MapLayerControl } from '../../components/shared/MapLayerControl';
+import { MAP_LAYER_STORAGE, mapTilerUrl, parseMapLayer, resolveMapLayer, type MapLayer } from '../../lib/mapLayers';
 
 interface Props {
   organizations: Organization[];
@@ -49,6 +51,22 @@ function MapNavigation({ organizations, selectedId }: Pick<Props, 'organizations
 export function InstitutionMap({ organizations, selectedId, onSelect }: Props) {
   const { t, i18n } = useTranslation();
   const locale = normalizeLocale(i18n.language);
+  const { theme } = useSettings();
+  const apiKey = import.meta.env.VITE_MAPTILER_API_KEY?.trim() ?? '';
+  const [layer, setLayer] = useState<MapLayer>(() => {
+    try { return parseMapLayer(window.localStorage.getItem(MAP_LAYER_STORAGE)); }
+    catch { return 'auto'; }
+  });
+  const resolved = resolveMapLayer(layer, theme);
+  // Vincular el fallo a la capa activa permite reintentar otra cartografía.
+  const [failedLayer, setFailedLayer] = useState<string | null>(null);
+  const failed = failedLayer === resolved;
+  const useMapTiler = Boolean(apiKey) && !failed;
+  const changeLayer = (next: MapLayer) => {
+    setLayer(next);
+    setFailedLayer(null);
+    try { window.localStorage.setItem(MAP_LAYER_STORAGE, next); } catch { /* Preferencia no persistente. */ }
+  };
   const labels = {
     es: { enrollments: 'Cantidad de matrículas', students: 'Cantidad de alumnos', scope: 'Totales registrados (todos los estados)' },
     en: { enrollments: 'Enrollment count', students: 'Student count', scope: 'Registered totals (all statuses)' },
@@ -60,8 +78,12 @@ export function InstitutionMap({ organizations, selectedId, onSelect }: Props) {
     <div className="institution-map relative h-full min-h-[360px] w-full overflow-hidden rounded-2xl border border-slate-200 dark:border-[#23456A]">
       <MapContainer center={[-7, -69]} zoom={3} minZoom={2} zoomControl={false} className="h-full w-full" scrollWheelZoom={true}>
         <ZoomControl position="bottomleft"/>
-        <TileLayer url="https://tile.openstreetmap.org/{z}/{x}/{y}.png"
-          attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors' />
+        {/* Solo se sustituye la capa base; el mapa, zoom y marcadores permanecen montados. */}
+        {useMapTiler ? <TileLayer key={resolved} url={mapTilerUrl(resolved, apiKey)} maxNativeZoom={20}
+          attribution='&copy; <a href="https://www.maptiler.com/copyright/">MapTiler</a> &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+          eventHandlers={{ tileerror: () => setFailedLayer(resolved) }}/>
+          : <TileLayer key="osm" url="https://tile.openstreetmap.org/{z}/{x}/{y}.png"
+            attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors' />}
         <MapNavigation organizations={organizations} selectedId={selectedId}/>
         {located.map(org => <Marker key={org.id} position={[org.latitude!, org.longitude!]}
           icon={markerIcon} eventHandlers={{ click: () => onSelect(org.id) }}>
@@ -88,7 +110,9 @@ export function InstitutionMap({ organizations, selectedId, onSelect }: Props) {
           </Popup>
         </Marker>)}
       </MapContainer>
-      {located.length === 0 && <div className="pointer-events-none absolute left-4 right-4 top-4 z-[400] rounded-lg border border-slate-200 bg-white/95 px-4 py-3 text-sm font-medium text-slate-700 shadow-md sm:left-auto sm:max-w-sm">
+      {useMapTiler && <a href="https://www.maptiler.com/" target="_blank" rel="noopener noreferrer" className="absolute bottom-5 left-14 z-[400] rounded bg-white/90 p-1" aria-label="MapTiler"><img src="https://api.maptiler.com/resources/logo.svg" alt="MapTiler" className="h-5 w-auto"/></a>}
+      <MapLayerControl value={layer} onChange={changeLayer} locale={locale} configured={Boolean(apiKey)} failed={failed} onRetry={() => setFailedLayer(null)}/>
+      {located.length === 0 && <div className="pointer-events-none absolute left-4 right-4 bottom-20 z-[400] rounded-lg border border-slate-200 bg-white/95 px-4 py-3 text-sm font-medium text-slate-700 shadow-md sm:left-auto sm:max-w-sm">
         {t('legacy.k22a4df9911')}
       </div>}
     </div>
