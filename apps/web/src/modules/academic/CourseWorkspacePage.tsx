@@ -8,7 +8,7 @@ import { useTranslation } from 'react-i18next';
 import {
   ArrowDown, ArrowLeft, ArrowUp, BookOpen,
   ClipboardList, FileCheck2, FileText, FolderOpen, LayoutDashboard,
-  Eye, Lightbulb, Pencil, Plus,
+  Eye, Lightbulb, MessageCircle, Pencil, Plus,
 } from 'lucide-react';
 import { Modal } from '../../components/shared/Modal';
 import { Accordion } from '../../components/shared/Accordion';
@@ -22,6 +22,8 @@ const PublishedLessonView = lazy(() => import('./PublishedLessonView').then(modu
 const CourseTasksPanel = lazy(() => import('./CourseTasksPanel').then(module=>({default:module.CourseTasksPanel})));
 
 const TeacherRecommendations = lazy(() => import('./TeacherRecommendations').then(module=>({default:module.TeacherRecommendations})));
+
+const CourseCommunity = lazy(() => import('./CourseCommunity').then(module=>({default:module.CourseCommunity})));
 
 type State = 'draft' | 'published' | 'archived';
 type Direction = 'up' | 'down';
@@ -77,10 +79,11 @@ export function CourseWorkspacePage({organizationId, offeringId, courseId, token
   const [loading,setLoading] = useState(true);
   const [error,setError] = useState('');
   const [revision,setRevision] = useState(0);
-  const [tab,setTab] = useState<'overview'|'content'|'tasks'|'recommendations'>(()=>{
+  const [tab,setTab] = useState<'overview'|'content'|'tasks'|'recommendations'|'community'>(()=>{
     const requested=new URLSearchParams(location.search).get('tab');
     if(requested==='content')return 'content';
     if(requested==='tasks'&&offeringId)return 'tasks';
+    if(requested==='community'&&offeringId)return 'community';
     if(requested==='recommendations'&&offeringId)return 'recommendations';
     return 'overview';
   });
@@ -211,7 +214,7 @@ export function CourseWorkspacePage({organizationId, offeringId, courseId, token
             <p className="mt-1 text-sm text-white/90">{workspace.course.code}{workspace.course.period ? ` · ${workspace.course.period}`:''}</p>
           </div>
         </div>
-        <div className={`app-course-tabs-scroll flex min-w-0 gap-2 overflow-x-auto p-3 sm:grid sm:overflow-visible sm:p-4 ${offeringId?'sm:grid-cols-4':'sm:grid-cols-2'}`} role="tablist" aria-label={t('workspace.sections')}>
+        <div className={`app-course-tabs-scroll flex min-w-0 gap-2 overflow-x-auto p-3 lg:grid lg:overflow-visible sm:p-4 ${offeringId?'lg:grid-cols-5':'lg:grid-cols-2'}`} role="tablist" aria-label={t('workspace.sections')}>
           <button role="tab" aria-selected={tab==='overview'} className={`${secondary} app-course-tab shrink-0 whitespace-nowrap sm:min-w-0 ${tab==='overview'?'app-workspace-active':''}`}
             onClick={()=>setTab('overview')} type="button"><LayoutDashboard size={17}/>{t('workspace.overview')}</button>
           <button role="tab" aria-selected={tab==='content'} className={`${secondary} app-course-tab shrink-0 whitespace-nowrap sm:min-w-0 ${tab==='content'?'app-workspace-active':''}`}
@@ -219,6 +222,7 @@ export function CourseWorkspacePage({organizationId, offeringId, courseId, token
           {offeringId&&<button role="tab" aria-selected={tab==='tasks'} className={`${secondary} app-course-tab shrink-0 whitespace-nowrap sm:min-w-0 ${tab==='tasks'?'app-workspace-active':''}`}
             onClick={()=>setTab('tasks')} type="button"><ClipboardList size={17}/>{t('workspace.tasks')}</button>}
           {offeringId&&<button role="tab" aria-selected={tab==='recommendations'} className={`${secondary} app-course-tab shrink-0 whitespace-nowrap sm:min-w-0 ${tab==='recommendations'?'app-workspace-active':''}`} onClick={()=>setTab('recommendations')} type="button"><Lightbulb size={17}/>{t('workspace.recommendations')}</button>}
+          {offeringId&&<button role="tab" aria-selected={tab==='community'} className={`${secondary} app-course-tab shrink-0 whitespace-nowrap sm:min-w-0 ${tab==='community'?'app-workspace-active':''}`} onClick={()=>setTab('community')} type="button"><MessageCircle size={17}/>{t('workspace.community')}</button>}
         </div>
       </section>
 
@@ -246,7 +250,7 @@ export function CourseWorkspacePage({organizationId, offeringId, courseId, token
         </div>
       </section> : tab==='tasks' && offeringId ? <Suspense fallback={<Spinner label={t('common.loading')}/>}>
         <CourseTasksPanel organizationId={organizationId} offeringId={offeringId} token={token}/>
-      </Suspense> : tab==='recommendations' && offeringId ? <Suspense fallback={<Spinner label={t('common.loading')}/>}><TeacherRecommendations key={`${organizationId}:${offeringId}`} organizationId={organizationId} offeringId={offeringId} token={token}/></Suspense> : <section className="space-y-3" role="tabpanel">
+      </Suspense> : tab==='community' && offeringId ? <Suspense fallback={<Spinner label={t('common.loading')}/>}><CourseCommunity key={`${organizationId}:${offeringId}`} organizationId={organizationId} offeringId={offeringId} token={token}/></Suspense> : tab==='recommendations' && offeringId ? <Suspense fallback={<Spinner label={t('common.loading')}/>}><TeacherRecommendations key={`${organizationId}:${offeringId}`} organizationId={organizationId} offeringId={offeringId} token={token}/></Suspense> : <section className="space-y-3" role="tabpanel">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div><h2 className="font-semibold">{t('workspace.unitsAndLessons')}</h2>
             <p className="app-muted mt-1 text-xs">{t(editing?'workspace.editorHint':workspace.role==='student'?'workspace.publishedOnly':'workspace.previewHint')}</p>

@@ -1,0 +1,5 @@
+# CAMBIOS 25 v1.0 — Comunidad académica
+
+Comunidad de texto plano por oferta de curso. Docentes asignados y gestores autorizados publican anuncios; estudiantes activos y docentes pueden preguntar, comentar y reaccionar. Ofertas cerradas son de lectura. Moderadores pueden ocultar publicaciones y comentarios con confirmación y auditoría. No se eliminan físicamente. El listado muestra las últimas 50 publicaciones y 100 comentarios por publicación; no incluye chat, adjuntos, edición, restauración, búsqueda ni notificaciones de recepción. Los mensajes son visibles a los participantes autorizados de la oferta, no son privados.
+
+Aplicar migración 016 después de 015, probar con dos cuentas de la misma oferta y una de otra oferta, comprobar que los anuncios y moderación están restringidos. Ejecutar `python -m ruff check app tests`, `python -m pytest -q`, `node --test tests/*.test.cjs`, `npm run build`. Desplegar backend y frontend. No hay dependencias nuevas. Pruebas locales: 412 Python, 132 Node; sintaxis TSX comprobada. Ruff, build completo, SQL real y navegador pendientes. Las pruebas SQL usan mocks.

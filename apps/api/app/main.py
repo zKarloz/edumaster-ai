@@ -7,6 +7,7 @@ from app.core.config import get_settings
 from app.routers.academic import router as academic_router
 from app.routers.academic_activity import router as academic_activity_router
 from app.routers.course_appearance import router as course_appearance_router
+from app.routers.course_community import router as course_community_router
 from app.routers.course_content import router as course_content_router
 from app.routers.course_tasks import router as course_tasks_router
 from app.routers.institutional_users import router as institutional_users_router
@@ -42,6 +43,7 @@ app.include_router(neural_readiness_router)
 app.include_router(academic_activity_router)
 app.include_router(course_appearance_router)
 app.include_router(course_content_router)
+app.include_router(course_community_router)
 app.include_router(course_tasks_router)
 app.include_router(task_attachments_router)
 app.include_router(task_grading_router)
