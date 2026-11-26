@@ -1,14 +1,13 @@
 // Shell de Sprint 1: navegación, estado API, tema, componentes y Auth opcional.
 // Los ejemplos académicos están rotulados DEMO; nunca simulan datos reales.
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, type FormEvent, type PointerEvent as ReactPointerEvent } from 'react';
-import { Activity, ArrowRight, BookOpen, Building2, CheckCircle2, ChevronDown, Database,
+import { BookOpen, Building2, CheckCircle2, ChevronDown,
   GraduationCap, LayoutDashboard, LockKeyhole, Menu, Users, ClipboardList, BrainCircuit,
-  Server, ShieldCheck, XCircle, Settings, PanelLeftClose, PanelLeftOpen, Wallet, X } from 'lucide-react';
+  ShieldCheck, Settings, PanelLeftClose, PanelLeftOpen, Wallet, X } from 'lucide-react';
 import type { Session } from '@supabase/supabase-js';
 import { useLocation, useNavigate } from 'react-router';
 import { useTranslation } from 'react-i18next';
 import { activityDetail, courseWorkspaceDetail, lessonEditorDetail, newLessonDetail, taskReviewDetail, taskSubmissionsDetail, myTaskSubmissionsDetail, courseTaskDetail, enrollmentHistoryPath, legacyRedirect, sectionForPath, sectionPaths, isUsersCsvImportPath, type Section } from './routes';
-import { DataTable, type Column } from './components/shared/DataTable';
 import { Modal } from './components/shared/Modal';
 import { Spinner } from './components/shared/Spinner';
 import { useToast } from './components/shared/Toast';
@@ -41,15 +40,10 @@ import { useAvatar } from './modules/profile/useAvatar';
 import { UserAvatar } from './components/shared/UserAvatar';
 import type { ProfileIdentity } from './modules/profile/types';
 import type { Organization, OrganizationInput } from './modules/organizations/types';
-import { countryName } from './modules/organizations/types';
+import { DashboardPage } from './modules/dashboard/DashboardPage';
 
 type Connection = 'checking' | 'online' | 'offline';
 const API = import.meta.env.VITE_API_URL || 'http://localhost:8000';
-const columns: Column<Organization>[] = [
-  { header: 'Código', key: 'code' }, { header: 'Institución', key: 'name' },
-  { header: 'País', key: 'country_code', render: item => countryName(item.country_code) },
-  { header: 'Ciudad', key: 'city' },
-];
 const nav = [
   { id: 'dashboard' as const, title: 'Resumen', icon: LayoutDashboard },
   { id: 'intelligence' as const, title: 'Inteligencia artificial', icon: BrainCircuit },
@@ -435,8 +429,6 @@ export default function App() {
   const currentCategoryKey = section === 'profile'
     ? 'nav.account'
     : navGroups.find(group => group.sections.some(id => id === section))?.label ?? 'nav.platform';
-  const isDemo = false;
-  const rows = orgs;
   // Los permisos proceden de /me, no del catálogo de instituciones que carga después.
   const navigationAccess = moduleAccess(globalRoles, memberships, academicOrgId);
   // Las rutas profundas se evalúan contra su propia institución, no una preferencia anterior.
@@ -631,37 +623,7 @@ export default function App() {
           </div>
         </header>
         <main key={section} className="module-enter mx-auto w-full app-content-container space-y-6 py-6">
-          {section === 'dashboard' && <>
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-              {[
-                { label: t('dashboard.architecture'), value: 'Multi-tenant', icon: Building2, help: t('dashboard.multi') },
-                { label: t('dashboard.database'), value: 'PostgreSQL', icon: Database, help: t('dashboard.databaseHelp') },
-                { label: t('dashboard.backend'), value: 'FastAPI', icon: Server, help: t('dashboard.backendHelp') },
-                { label: t('dashboard.dataMode'), value: isDemo ? t('dashboard.demo') : t('dashboard.connected'), icon: Activity, help: t('dashboard.dataHelp') },
-              ].map(card => <div key={card.label} className="app-panel app-indicator-card rounded-2xl border border-slate-200 bg-white p-5 dark:border-[#23456A] dark:bg-[#0A1F3D]">
-                <div className="flex items-center justify-between text-sm app-muted text-slate-500 dark:text-slate-300"><span>{card.label}</span><card.icon size={20} className="app-accent text-[#087FE5] dark:text-[#20C8F5]"/></div>
-                <p className="mt-4 text-2xl font-bold">{card.value}</p><p className="mt-2 app-meta-text text-xs text-slate-400">{card.help}</p>
-              </div>)}
-            </div>
-            <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-              <div className="app-panel rounded-2xl border border-slate-200 bg-white p-6 dark:border-[#23456A] dark:bg-[#0A1F3D]">
-                <h3 className="font-semibold">{t('dashboard.foundation')}</h3>
-                <div className="mt-5 space-y-4">{[
-                  ['React, TypeScript y Tailwind', true],['Tema claro/oscuro', true],['FastAPI · /health', true],['Supabase Auth y PostgreSQL', true],['RBAC/ABAC por institución', false]
-                ].map(([label, ready]) => <div key={String(label)} className="flex items-center gap-3 text-sm">{ready ? <CheckCircle2 size={18} className="text-emerald-500"/> : <XCircle size={18} className="text-slate-400"/>}<span>{label}</span></div>)}</div>
-              </div>
-              <div className="app-panel rounded-2xl border border-slate-200 bg-white p-6 dark:border-[#23456A] dark:bg-[#0A1F3D]">
-                <h3 className="font-semibold">{t('dashboard.nextSteps')}</h3>
-                <p className="mt-3 text-sm leading-7 app-muted text-slate-500 dark:text-slate-300">{t('dashboard.nextDescription')}</p>
-                {navigationAccess.security && <button onClick={() => navTo('security')} className="app-accent mt-5 flex items-center gap-2 text-sm font-semibold text-[#087FE5] dark:text-[#20C8F5]">{t('dashboard.checkSecurity')} <ArrowRight size={15}/></button>}
-              </div>
-            </div>
-          </>}
-          {section === 'dashboard' && <>
-            {loadingOrgs && <Spinner label="Consultando instituciones autorizadas..."/>}
-            {orgError && <div role="alert" className="app-warning rounded-xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900">{orgError}{t('legacy.k7644712905')}</div>}
-            <DataTable<Organization> rows={rows} columns={columns} label={t('dashboard.organizations')} />
-          </>}
+          {section === 'dashboard' && <DashboardPage key={`${session.user.id}:${academicOrgId}`} name={accountIdentity.name} token={accessToken} globalRoles={globalRoles} memberships={memberships} organizationId={academicOrgId} organizations={orgs} loading={loadingOrgs} error={orgError} apiStatus={apiStatus} access={navigationAccess} onNavigate={navTo}/>}
           {sectionPermissionDenied && <section role="alert" className="app-warning rounded-2xl border p-6">
             <div className="flex items-center gap-2 font-semibold"><ShieldCheck size={20}/> {({es:'Acceso restringido',en:'Access restricted',pt:'Acesso restrito'})[academicLanguage]}</div>
             <p className="mt-2 text-sm">{({es:'No tienes permisos para acceder a este módulo. Consulta al administrador de tu institución.',en:'You do not have permission to access this module. Contact your institution administrator.',pt:'Você não tem permissão para acessar este módulo. Consulte o administrador da sua instituição.'})[academicLanguage]}</p>
