@@ -26,7 +26,7 @@ export function LoginScreen({ email, password, busy, error, theme,
   onEmailChange, onPasswordChange, onThemeChange, onSubmit }: Props) {
   const { t } = useTranslation();
   const { locale, setLocale } = useSettings();
-  return <main className="app-shell flex min-h-screen flex-col bg-[#F5F7FB] text-slate-900 dark:bg-[#06152B] dark:text-slate-100">
+  return <main className="app-shell login-shell flex min-h-screen flex-col bg-[#F5F7FB] text-slate-900 dark:bg-[#06152B] dark:text-slate-100">
     <header className="app-header flex items-center justify-between border-b border-slate-200 bg-white/90 px-5 py-4 dark:border-[#23456A] dark:bg-[#081B35]/95 sm:px-9">
       <div className="flex items-center gap-3">
         <span className="app-brand-symbol rounded-xl bg-[#087FE5] p-2.5 text-white"><GraduationCap size={24}/></span>

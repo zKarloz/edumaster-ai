@@ -23,3 +23,16 @@ test('carrusel hacia la derecha, pausa y movimiento reducido',()=>{
   assert.match(showcase,/aria-hidden=\{group===1\?true:undefined\}/);
   assert.match(showcase,/hidden pb-8 lg:block/);
 });
+
+test('fusión del fondo por tema y elevación accesible del carrusel',()=>{
+  const css=read('src/styles.css');
+  const login=read('src/LoginScreen.tsx');
+  const showcase=read('src/modules/auth/LoginShowcase.tsx');
+  assert.match(login,/app-shell login-shell/);
+  assert.match(showcase,/login-showcase-background absolute inset-0/);
+  assert.match(css,/mask-image: linear-gradient\(to right, #000 0%, #000 75%, transparent 100%\)/);
+  for(const color of ['#f5f7fb','#06152b','#080808']) assert.ok(css.includes(`--login-surface: ${color}`));
+  assert.match(css,/login-feature-card:hover \{\s*transform: translateY\(-5px\)/);
+  assert.match(css,/html\[data-motion='off'\] \.login-feature-card \{ transition: none; transform: none/);
+  assert.match(css,/padding-block: 12px 20px/);
+});

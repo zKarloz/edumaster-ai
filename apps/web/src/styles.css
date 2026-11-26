@@ -1242,3 +1242,32 @@ html[data-motion='off'] .login-carousel-toggle { display: none; }
   .login-carousel-track { animation: none !important; transform: none; }
   .login-carousel-clone, .login-carousel-toggle { display: none; }
 }
+
+/* CAMBIOS 32 v1.1.1: fusionar el fondo fotográfico con la superficie del Login.
+   La máscara afecta solo al fondo; los textos conservan su contraste. */
+.login-shell { --login-surface: #f5f7fb; background: var(--login-surface); }
+html.dark:not(.black-theme) .login-shell { --login-surface: #06152b; }
+html.black-theme .login-shell { --login-surface: #080808; background: var(--login-surface); }
+@media (min-width: 1024px) {
+  .login-showcase-background {
+    mask-image: linear-gradient(to right, #000 0%, #000 75%, transparent 100%);
+  }
+  /* Evita que las tarjetas se corten contra el borde fusionado. */
+  .login-carousel-window { margin-right: clamp(2rem, 7vw, 7rem); }
+}
+/* Espacio vertical para que la elevación y la sombra no queden recortadas. */
+.login-carousel-window { padding-block: 12px 20px; }
+.login-feature-card {
+  transition: transform 190ms ease, box-shadow 190ms ease, border-color 190ms ease;
+}
+@media (hover: hover) and (pointer: fine) {
+  html[data-motion='on'] .login-feature-card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 12px 24px rgb(0 0 0 / 32%);
+    border-color: rgb(125 211 252 / 65%);
+  }
+}
+html[data-motion='off'] .login-feature-card { transition: none; transform: none; }
+@media (prefers-reduced-motion: reduce) {
+  .login-feature-card { transition: none !important; transform: none !important; }
+}
