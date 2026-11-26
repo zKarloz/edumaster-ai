@@ -7,6 +7,11 @@ const source=fs.readFileSync(path.join(__dirname,'../src/modules/intelligence/co
 test('pulso entrenado usa estela, brillo, núcleo y respeta el movimiento',()=>{
  for(const name of ['neural-signal-tail','neural-signal-glow','neural-signal-core','trained-neural-pulse-blur']) assert.ok(source.includes(name));
  assert.match(source,/repeatCount="1" rotate="auto"/);
+ assert.match(source,/motion.current\?\.beginElement\(\)/);
+ assert.match(source,/fade.current\?\.beginElement\(\)/);
+ assert.match(source,/begin="indefinite"/);
+ assert.match(source,/values="0;1;1;0"/);
+ assert.match(source,/opacity 260ms ease/);
  assert.match(source,/allowMotion&&playing&&focused&&stage===e.layer/);
  assert.match(source,/PHASE_DURATION_MS=PULSE_MAX_MS\+80/);
  assert.match(source,/setReplayKey\(k=>k\+1\)/);
